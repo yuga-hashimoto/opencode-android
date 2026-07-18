@@ -4,8 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.opencode.android.runtime.RuntimeConnectionStore
 
-class SecureSettingsRepository(context: Context) {
+class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
@@ -19,19 +20,19 @@ class SecureSettingsRepository(context: Context) {
     )
 
     @Synchronized
-    fun connections(): List<ConnectionProfile> = runCatching {
+    override fun connections(): List<ConnectionProfile> = runCatching {
         ConnectionProfileCodec.decode(preferences.getString(KEY_CONNECTIONS, "[]").orEmpty())
     }.getOrDefault(emptyList())
 
     @Synchronized
-    fun upsertConnection(profile: ConnectionProfile) {
+    override fun upsertConnection(profile: ConnectionProfile) {
         val updated = connections().filterNot { it.id == profile.id } + profile
         preferences.edit().putString(KEY_CONNECTIONS, ConnectionProfileCodec.encode(updated)).apply()
         if (selectedConnectionId.isNullOrBlank()) selectedConnectionId = profile.id
     }
 
     @Synchronized
-    fun deleteConnection(id: String) {
+    override fun deleteConnection(id: String) {
         val updated = connections().filterNot { it.id == id }
         preferences.edit().putString(KEY_CONNECTIONS, ConnectionProfileCodec.encode(updated)).apply()
         if (selectedConnectionId == id) selectedConnectionId = updated.firstOrNull()?.id
@@ -40,6 +41,12 @@ class SecureSettingsRepository(context: Context) {
     var selectedConnectionId: String?
         get() = preferences.getString(KEY_SELECTED_CONNECTION, null)
         set(value) = preferences.edit().putString(KEY_SELECTED_CONNECTION, value).apply()
+
+    override var selectedRuntimeId: String?
+        get() = selectedConnectionId
+        set(value) {
+            selectedConnectionId = value
+        }
 
     fun selectedConnection(): ConnectionProfile? =
         selectedConnectionId?.let { selected -> connections().firstOrNull { it.id == selected } }

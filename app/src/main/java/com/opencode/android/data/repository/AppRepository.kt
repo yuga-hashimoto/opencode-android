@@ -1,39 +1,29 @@
 package com.opencode.android.data.repository
 
 import com.opencode.android.data.connection.ConnectionProfile
-import com.opencode.android.data.connection.SecureSettingsRepository
-import com.opencode.android.runtime.OpenCodeBackend
-import com.opencode.android.runtime.remote.RemoteOpenCodeBackend
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.RuntimeTarget
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Temporary compatibility facade while feature ViewModels migrate to RuntimeRegistry directly.
+ */
 class AppRepository(
-    private val settings: SecureSettingsRepository
+    val runtimeRegistry: RuntimeRegistry
 ) {
-    private val _selectedBackend = MutableStateFlow(createSelectedBackend())
-    val selectedBackend: StateFlow<OpenCodeBackend?> = _selectedBackend.asStateFlow()
+    val selectedBackend: StateFlow<RuntimeTarget?> = runtimeRegistry.selected
 
-    fun connections(): List<ConnectionProfile> = settings.connections()
+    fun connections(): List<ConnectionProfile> = runtimeRegistry.remoteProfiles()
 
     fun selectConnection(id: String?) {
-        settings.selectedConnectionId = id
-        _selectedBackend.value = createSelectedBackend()
+        runtimeRegistry.select(id)
     }
 
     fun upsertConnection(profile: ConnectionProfile) {
-        settings.upsertConnection(profile)
-        if (settings.selectedConnectionId == profile.id || settings.selectedConnectionId == null) {
-            settings.selectedConnectionId = profile.id
-            _selectedBackend.value = RemoteOpenCodeBackend(profile)
-        }
+        runtimeRegistry.upsertRemote(profile)
     }
 
     fun deleteConnection(id: String) {
-        settings.deleteConnection(id)
-        _selectedBackend.value = createSelectedBackend()
+        runtimeRegistry.deleteRemote(id)
     }
-
-    private fun createSelectedBackend(): OpenCodeBackend? =
-        settings.selectedConnection()?.let(::RemoteOpenCodeBackend)
 }
