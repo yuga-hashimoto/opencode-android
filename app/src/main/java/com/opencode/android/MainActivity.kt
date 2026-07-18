@@ -1,6 +1,7 @@
 package com.opencode.android
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -67,6 +68,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openAssistantSettings() {
+        val roleOpened = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (roleManager?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true) {
+                runCatching {
+                    startActivity(roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
+                    true
+                }.getOrDefault(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+
+        if (roleOpened) return
+
         val candidates = listOf(
             Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
             Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)

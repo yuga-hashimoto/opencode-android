@@ -1,113 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OpenCode Android</string>
-    <string name="notification_channel_name">ホットワード検知</string>
-    <string name="notification_channel_description">常時音声検知サービス</string>
-    <string name="notification_title">OpenCode Android</string>
-    <string name="notification_text">「Open Code」と話しかけて起動</string>
-    <string name="settings_title">設定</string>
-    <string name="webhook_url_label">Webhook URL</string>
-    <string name="webhook_url_hint">https://your-server/hooks/voice</string>
-    <string name="auth_token_label">認証トークン（任意）</string>
-    <string name="auth_token_hint">任意</string>
-    <string name="session_id_label">セッションID</string>
-    <string name="user_id_label">ユーザーID</string>
-    <string name="save_button">保存</string>
-    <string name="test_connection_button">接続テスト</string>
-    <string name="hotword_enabled_label">ホットワード検知を有効化</string>
-    <string name="picovoice_key_label">Picovoice アクセスキー</string>
-    <string name="picovoice_key_hint">無料アカウントで取得</string>
-    <string name="back_button">戻る</string>
-    <string name="mic_permission_required">マイクの権限が必要です</string>
-    <string name="processing">処理中…</string>
-    <string name="error_label">エラー</string>
-    <string name="try_again_button">もう一度試す</string>
-    <string name="ask_hint">OpenCodeに質問…</string>
-    <string name="send_description">送信</string>
-    <string name="stop_description">停止</string>
-    <string name="listening">聞いています…</string>
-    <string name="thinking">考え中…</string>
-    <string name="speaking">読み上げ中…</string>
-    <string name="ready">準備完了</string>
-    <string name="error_no_webhook">Webhook URLを設定してください</string>
-    <string name="error_network">ネットワークエラー</string>
-    <string name="error_speech">音声認識エラー</string>
-    
-    <!-- Main Screen -->
-    <string name="activation_methods">起動方法</string>
-    <string name="home_button">ホームボタン</string>
-    <string name="active">有効</string>
-    <string name="not_set">未設定</string>
-    <string name="disabled">無効</string>
-    <string name="open_chat">チャットを開く</string>
-    <string name="setup_required">設定が必要</string>
-    <string name="connected_to_opencode">OpenCodeに接続済み</string>
-    <string name="permissions_required">権限が必要です</string>
-    <string name="could_not_open_settings">設定を開けませんでした</string>
-    <string name="hotword_started">ホットワード検知を開始しました</string>
-    <string name="hotword_stopped">ホットワード検知を停止しました</string>
-    <string name="saved">保存しました</string>
-    
-    <!-- How to Use -->
-    <string name="how_to_use">使い方</string>
-    <string name="got_it">了解</string>
-    <string name="step_1">ホームボタン長押し、またはウェイクワードを話す</string>
-    <string name="step_2">質問やリクエストを話す</string>
-    <string name="step_3">OpenCodeが音声で応答</string>
-    <string name="step_4">会話を続ける（セッション維持）</string>
-    
-    <!-- Troubleshooting -->
-    <string name="assist_gesture_not_working">アシストジェスチャーが動作しない？</string>
-    <string name="troubleshooting_intro">デフォルトに設定しても、一部のシステム機能が長押しジェスチャーを上書きする場合があります。</string>
-    <string name="circle_to_search_title">Circle to Search（長押しを上書き）</string>
-    <string name="circle_to_search_desc">ホームボタン長押しで検索画面が表示される場合:\n• Pixel: 設定 → システム → ナビゲーションモード → 歯車アイコン → Circle to Searchをオフ\n• Samsung: 設定 → ディスプレイ → ナビゲーションバー → Circle to Searchをオフ</string>
-    <string name="gesture_navigation_title">ジェスチャーナビゲーション（コーナースワイプ）</string>
-    <string name="gesture_navigation_desc">ホームボタンがない場合（スワイプナビゲーション）、左下または右下の角から斜め上にスワイプしてアシスタントを起動します。</string>
-    <string name="google_app_setting_title">Googleアプリの設定</string>
-    <string name="google_app_setting_desc">Googleアプリを開く → プロフィールをタップ → 設定 → Googleアシスタント → 一般 → 干渉が続く場合は「Googleアシスタント」をオフにする</string>
-    <string name="refresh_binding_title">バインドの更新</string>
-    <string name="refresh_binding_desc">ステータスが「有効」なのに動作しない場合、「デジタルアシスタントアプリ」を「なし」に変更してから「OpenCode Android」に戻してみてください。</string>
-    <string name="debug_force_start">デバッグ: 強制セッション開始</string>
-    
-    <!-- Settings Screen -->
-    <string name="connection">接続</string>
-    <string name="voice">音声</string>
-    <string name="wake_word">ウェイクワード</string>
-    <string name="voice_output">音声出力</string>
-    <string name="read_ai_responses">AIの応答を読み上げる</string>
-    <string name="continuous_conversation">連続会話</string>
-    <string name="auto_start_mic">AI発話後に自動でマイクを起動</string>
-    <string name="activation_phrase">起動フレーズ</string>
-    <string name="custom_wake_word">カスタムウェイクワード</string>
-    <string name="custom_wake_word_hint">例: ねえバディ</string>
-    <string name="custom_wake_word_help">2〜3語、小文字で入力</string>
-    <string name="testing">テスト中…</string>
-    <string name="connected">接続成功！</string>
-    <string name="failed">失敗: %s</string>
-    <string name="error">エラー: %s</string>
-    
-    <!-- Wake Word Presets -->
-    <string name="wake_word_opencode">OpenCode</string>
-    <string name="wake_word_hey_assistant">Hey Assistant</string>
-    <string name="wake_word_jarvis">Jarvis</string>
-    <string name="wake_word_computer">Computer</string>
-    <string name="wake_word_custom">カスタム…</string>
-    <!-- OpenCode Android navigation and screens -->
+    <string name="unofficial_client">非公式オープンソースクライアント</string>
+
     <string name="nav_home">ホーム</string>
     <string name="nav_chat">チャット</string>
     <string name="nav_connections">接続</string>
     <string name="nav_sessions">セッション</string>
     <string name="nav_settings">設定</string>
-    <string name="unofficial_client">非公式オープンソースクライアント</string>
-    <string name="connection_ready">OpenCodeを利用できます</string>
+
     <string name="connection_missing">PCを接続して始めましょう</string>
-    <string name="new_chat">新しいチャット</string>
-    <string name="recent_sessions">最近のセッション</string>
-    <string name="view_all">すべて表示</string>
-    <string name="no_sessions">セッションはまだありません</string>
-    <string name="remote_runtime">PCリモート実行</string>
-    <string name="local_runtime">Androidローカル実行</string>
-    <string name="experimental_not_installed">実験機能・未インストール</string>
+    <string name="connected_version">接続済み・%s</string>
+    <string name="connection_help">PC側でパスワード付きのopencode serveを起動し、LANまたはTailscaleのアドレスを入力します。</string>
     <string name="add_connection">接続先を追加</string>
     <string name="edit_connection">接続先を編集</string>
     <string name="connection_name">表示名</string>
@@ -116,27 +20,52 @@
     <string name="password">サーバーパスワード</string>
     <string name="allow_lan_http">LAN・Tailscale内のHTTP接続を許可</string>
     <string name="test_connection">接続テスト</string>
+    <string name="select">選択</string>
+    <string name="active">有効</string>
+    <string name="not_set">未設定</string>
     <string name="delete">削除</string>
     <string name="cancel">キャンセル</string>
     <string name="save">保存</string>
-    <string name="select">選択</string>
-    <string name="connected_version">接続済み・%s</string>
+    <string name="refresh">更新</string>
+
+    <string name="new_chat">新しいチャット</string>
+    <string name="message_hint">OpenCodeへメッセージ…</string>
+    <string name="send_description">メッセージを送信</string>
+    <string name="stop_run">停止</string>
+    <string name="thinking">考え中…</string>
+    <string name="processing">処理中…</string>
+    <string name="no_connection_chat">チャットを始める前にPC接続先を追加して選択してください。</string>
     <string name="model">モデル</string>
     <string name="agent">エージェント</string>
     <string name="permission_required">操作の承認が必要です</string>
     <string name="allow_once">今回だけ許可</string>
     <string name="always_allow">常に許可</string>
     <string name="reject">拒否</string>
-    <string name="stop_run">停止</string>
-    <string name="message_hint">OpenCodeへメッセージ…</string>
-    <string name="no_connection_chat">チャットを始める前にPC接続先を追加して選択してください。</string>
-    <string name="refresh">更新</string>
+
+    <string name="recent_sessions">最近のセッション</string>
+    <string name="view_all">すべて表示</string>
+    <string name="no_sessions">セッションはまだありません</string>
+
+    <string name="remote_runtime">PCリモート実行</string>
+    <string name="local_runtime">Androidローカル実行</string>
+    <string name="experimental_not_installed">実験機能・未インストール</string>
+    <string name="local_runtime_note">Androidローカル実行は実験用バックエンドとして分離されています。このビルドではPC上のOpenCodeを利用します。</string>
+
     <string name="home_assistant">ホームアシスト</string>
     <string name="set_default_assistant">既定のデジタルアシスタントに設定</string>
     <string name="wake_word_detection">ウェイクワード検知</string>
     <string name="wake_word_phrase">ウェイクワード</string>
+    <string name="voice">音声</string>
     <string name="voice_response">応答を音声で読み上げる</string>
+    <string name="continuous_conversation">連続会話</string>
+    <string name="auto_start_mic">回答後に自動で聞き取りを再開する</string>
+    <string name="could_not_open_settings">アシスタント設定を開けませんでした</string>
+    <string name="hotword_started">ウェイクワード検知を開始しました</string>
+    <string name="hotword_stopped">ウェイクワード検知を停止しました</string>
+
+    <string name="notification_channel_name">ウェイクワード</string>
+    <string name="notification_channel_description">設定したOpenCodeのウェイクワードを端末内で検知します</string>
+    <string name="notification_title">OpenCode Androidが聞き取り中です</string>
+
     <string name="about">このアプリについて</string>
-    <string name="local_runtime_note">Androidローカル実行は実験用バックエンドとして分離されています。このビルドではPC上のOpenCodeを利用します。</string>
-    <string name="connection_help">PC側でパスワード付きのopencode serveを起動し、LANまたはTailscaleのアドレスを入力します。</string>
 </resources>

@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.opencode.android.MainActivity
 import com.opencode.android.OpenCodeApplication
 import com.opencode.android.R
@@ -59,12 +60,12 @@ class HotwordService : Service(), RecognitionListener {
             addAction(ACTION_PAUSE_HOTWORD)
             addAction(ACTION_RESUME_HOTWORD)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(controlReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(controlReceiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            controlReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

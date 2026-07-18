@@ -1,22 +1,18 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    
-    <!-- Lobster Body (Orange) -->
-    <path
-        android:fillColor="#FF5722"
-        android:pathData="M12,2 C9,2 7,5 7,10 L7,16 C7,19 9,21 12,21 C15,21 17,19 17,16 L17,10 C17,5 15,2 12,2 Z"/>
-        
-    <!-- Tail Segments (Darker Orange) -->
-    <path
-        android:fillColor="#D84315"
-        android:pathData="M8,16 L16,16 L16,17 L8,17 Z M9,18 L15,18 L15,19 L9,19 Z M10,20 L14,20 L14,21 L10,21 Z"/>
-        
-    <!-- Claws (Left and Right - Pop Style) -->
-    <path
-        android:fillColor="#FF5722"
-        android:pathData="M6,6 C4,4 2,6 2,8 C2,9.5 3.5,10 5,10 L7,10 L7,9 C7,7.5 6.5,6.5 6,6 Z M18,6 C20,4 22,6 22,8 C22,9.5 20.5,10 19,10 L17,10 L17,9 C17,7.5 17.5,6.5 18,6 Z"/>
+    android:viewportWidth="108"
+    android:viewportHeight="108">
 
+    <path
+        android:fillColor="#6EA8FE"
+        android:pathData="M24,24 L84,24 C90.6,24 96,29.4 96,36 L96,72 C96,78.6 90.6,84 84,84 L24,84 C17.4,84 12,78.6 12,72 L12,36 C12,29.4 17.4,24 24,24 Z" />
+
+    <path
+        android:fillColor="#0B1017"
+        android:pathData="M31,41 L43,53 L31,65 L36.7,70.7 L54.4,53 L36.7,35.3 Z" />
+
+    <path
+        android:fillColor="#55C6C1"
+        android:pathData="M55,64 L79,64 L79,72 L55,72 Z" />
 </vector>
