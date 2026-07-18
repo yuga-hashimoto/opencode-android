@@ -7,6 +7,7 @@ import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.local.LocalRuntimeAccessCoordinator
 import com.opencode.android.runtime.local.LocalRuntimeCommandRunner
 import com.opencode.android.runtime.local.LocalRuntimeDiagnosticsCollector
 import com.opencode.android.runtime.local.LocalRuntimeInstaller
@@ -54,7 +55,13 @@ class OpenCodeApplication : Application() {
         preferences = AppPreferencesRepository(settings)
         val runtimeDirectory = File(filesDir, "runtime")
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
-        val installer = LocalRuntimeInstaller(this, runtimeDirectory, abi)
+        val accessCoordinator = LocalRuntimeAccessCoordinator()
+        val installer = LocalRuntimeInstaller(
+            context = this,
+            runtimeDirectory = runtimeDirectory,
+            abi = abi,
+            accessCoordinator = accessCoordinator
+        )
         val launcher = LocalRuntimeProcessLauncher(
             runtimeDirectory = runtimeDirectory,
             portProbe = LocalRuntimeManager::defaultPortProbe
@@ -67,7 +74,8 @@ class OpenCodeApplication : Application() {
         )
         val commandRunner = LocalRuntimeCommandRunner(
             runtimeDirectory = runtimeDirectory,
-            installedRuntimeProvider = installer::installedRuntime
+            installedRuntimeProvider = installer::installedRuntime,
+            accessCoordinator = accessCoordinator
         )
         localRuntimeDiagnosticsCollector = LocalRuntimeDiagnosticsCollector(
             runtimeDirectory = runtimeDirectory,

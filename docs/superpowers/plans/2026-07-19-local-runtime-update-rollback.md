@@ -55,13 +55,13 @@ Interfaces:
 - `runShell(command, timeoutSeconds)`
 
 Steps:
-- [ ] Test insufficient space before download, SHA mismatch, candidate version mismatch, successful rotation, failure restoration, and manual rollback.
-- [ ] Confirm tests fail.
-- [ ] Download to `.partial`, verify, then rename.
-- [ ] Extract to `opencode.candidate` and validate in PRoot.
-- [ ] Rotate `opencode`, `opencode.rollback`, `metadata.json`, and `metadata.rollback.json` with swap files and restoration on failure.
-- [ ] Run tests.
-- [ ] Commit `feat: add atomic local runtime updater`.
+- [x] Test insufficient space before download, SHA mismatch, candidate version mismatch, successful rotation, failure restoration, and manual rollback.
+- [x] Confirm tests fail.
+- [x] Download to `.partial`, verify, then rename.
+- [x] Extract to a versioned `opencode.candidate` and expose PRoot-backed version validation for production wiring in Task 3.
+- [x] Rotate `opencode`, `opencode.rollback`, `metadata.json`, and `metadata.rollback.json` with journals, swap files, crash recovery, and restoration on failure.
+- [x] Run Unit Test, Lint, Debug APK, Release APK/R8, and independent Critical/Important review.
+- [x] Commit `feat: add atomic local runtime updater`.
 
 ## Task 3: Manager and service
 

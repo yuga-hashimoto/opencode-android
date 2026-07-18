@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit
 class LocalRuntimeCommandRunner(
     private val runtimeDirectory: File,
     private val installedRuntimeProvider: () -> LocalRuntimeInstaller.InstalledRuntime?,
+    private val accessCoordinator: LocalRuntimeAccessCoordinator = LocalRuntimeAccessCoordinator(),
     private val timeoutSeconds: Long = 15L,
     private val maxOutputCharacters: Int = 4_000
 ) {
@@ -14,13 +15,20 @@ class LocalRuntimeCommandRunner(
         require(maxOutputCharacters > 0)
     }
 
+    fun run(definition: LocalRuntimeToolDefinition): LocalRuntimeCommandResult =
+        runShell(definition.command)
+
     @Synchronized
-    fun run(definition: LocalRuntimeToolDefinition): LocalRuntimeCommandResult {
+    fun runShell(
+        commandText: String,
+        timeoutSeconds: Long = this.timeoutSeconds
+    ): LocalRuntimeCommandResult = accessCoordinator.read {
+        require(timeoutSeconds > 0L)
         val runtime = installedRuntimeProvider()
-            ?: return LocalRuntimeCommandResult(127, "未インストール")
+            ?: return@read LocalRuntimeCommandResult(127, "未インストール")
         val prootTmp = File(runtimeDirectory, "proot-tmp").apply { mkdirs() }
         val outputFile = File.createTempFile("diagnostic-", ".log", File(runtimeDirectory, "logs").apply { mkdirs() })
-        return try {
+        try {
             val command = listOf(
                 runtime.commandSuite.proot.absolutePath,
                 "--kill-on-exit",
@@ -38,7 +46,7 @@ class LocalRuntimeCommandRunner(
                 "/root",
                 "/bin/sh",
                 "-lc",
-                definition.command
+                commandText
             )
             val process = ProcessBuilder(command)
                 .redirectErrorStream(true)

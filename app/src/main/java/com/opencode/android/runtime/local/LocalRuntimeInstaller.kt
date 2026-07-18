@@ -6,14 +6,15 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 
 class LocalRuntimeInstaller(
     private val context: Context,
     private val runtimeDirectory: File,
     private val abi: String,
     private val httpClient: OkHttpClient = OkHttpClient(),
-    private val manifestReader: LocalRuntimeManifestReader = LocalRuntimeManifestReader(context)
+    private val manifestReader: LocalRuntimeManifestReader = LocalRuntimeManifestReader(context),
+    private val downloader: VerifiedRuntimeDownloader = VerifiedRuntimeDownloader(httpClient),
+    private val accessCoordinator: LocalRuntimeAccessCoordinator = LocalRuntimeAccessCoordinator()
 ) {
     data class InstalledRuntime(
         val metadata: LocalRuntimeMetadata,
@@ -33,6 +34,13 @@ class LocalRuntimeInstaller(
             val staging = File(runtimeDirectory, "environment.staging")
             val active = File(runtimeDirectory, "environment")
             val rollback = File(runtimeDirectory, "environment.rollback")
+            accessCoordinator.write {
+                recoverInterruptedRuntimeEnvironment(
+                    active = active,
+                    rollback = rollback,
+                    topLevelMetadata = File(runtimeDirectory, METADATA_FILE)
+                )
+            }
             staging.deleteRecursively()
             staging.mkdirs()
 
@@ -88,11 +96,19 @@ class LocalRuntimeInstaller(
                 )
                 File(staging, METADATA_FILE).writeText(Gson().toJson(metadata))
                 onProgress(0.96f, "ランタイムを有効化しています")
-                rollback.deleteRecursively()
-                if (active.exists()) require(active.renameTo(rollback)) { "Unable to create runtime rollback" }
-                require(staging.renameTo(active)) { "Unable to activate local runtime" }
-                File(active, METADATA_FILE).copyTo(File(runtimeDirectory, METADATA_FILE), overwrite = true)
-                rollback.deleteRecursively()
+                accessCoordinator.write {
+                    activateRuntimeEnvironment(
+                        active = active,
+                        staging = staging,
+                        rollback = rollback,
+                        finalizeActivation = { activated ->
+                            replaceFileAtomically(
+                                source = File(activated, METADATA_FILE),
+                                destination = File(runtimeDirectory, METADATA_FILE)
+                            )
+                        }
+                    )
+                }
                 onProgress(1f, "ローカルOpenCodeを導入しました")
                 InstalledRuntime(metadata, commandSuite, File(active, "rootfs"), File(active, "rootfs/usr/local/bin/opencode"))
             } catch (error: Throwable) {
@@ -101,21 +117,30 @@ class LocalRuntimeInstaller(
             }
         }
 
-    fun installedRuntime(): InstalledRuntime? {
-        val metadataFile = File(runtimeDirectory, METADATA_FILE)
-        val rootfs = File(runtimeDirectory, "environment/rootfs")
-        val openCode = File(rootfs, "usr/local/bin/opencode")
-        if (!metadataFile.isFile || !openCode.isFile) return null
-        val metadata = runCatching {
-            Gson().fromJson(metadataFile.readText(), LocalRuntimeMetadata::class.java)
-        }.getOrNull() ?: return null
-        val commandSuite = runCatching {
-            EmbeddedCommandSuite(context, runtimeDirectory, abi).ensureInstalled()
-        }.getOrNull() ?: return null
-        return InstalledRuntime(metadata, commandSuite, rootfs, openCode)
+    fun recoverInterruptedActivation(): Boolean = accessCoordinator.write {
+        recoverInterruptedRuntimeEnvironment(
+            active = File(runtimeDirectory, "environment"),
+            rollback = File(runtimeDirectory, "environment.rollback"),
+            topLevelMetadata = File(runtimeDirectory, METADATA_FILE)
+        )
     }
 
-    private fun download(
+    fun installedRuntime(): InstalledRuntime? = accessCoordinator.read {
+        val active = File(runtimeDirectory, "environment")
+        val metadataFile = File(runtimeDirectory, METADATA_FILE)
+        val rootfs = File(active, "rootfs")
+        val openCode = File(rootfs, "usr/local/bin/opencode")
+        if (!metadataFile.isFile || !openCode.isFile) return@read null
+        val metadata = runCatching {
+            Gson().fromJson(metadataFile.readText(), LocalRuntimeMetadata::class.java)
+        }.getOrNull() ?: return@read null
+        val commandSuite = runCatching {
+            EmbeddedCommandSuite(context, runtimeDirectory, abi).ensureInstalled()
+        }.getOrNull() ?: return@read null
+        InstalledRuntime(metadata, commandSuite, rootfs, openCode)
+    }
+
+    private suspend fun download(
         url: String,
         destination: File,
         expectedSha256: String,
@@ -132,33 +157,19 @@ class LocalRuntimeInstaller(
                 }
             destination.delete()
         }
-        val partial = File(destination.parentFile, destination.name + ".partial")
-        partial.delete()
-        val request = Request.Builder().url(url).get().build()
-        httpClient.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "Download failed with HTTP ${response.code}: $url" }
-            val body = requireNotNull(response.body) { "Download response had no body: $url" }
-            val expectedLength = body.contentLength()
-            partial.outputStream().buffered().use { output ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(64 * 1024)
-                    var downloaded = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        downloaded += count
-                        val fraction = if (expectedLength > 0) downloaded.toFloat() / expectedLength else null
-                        onProgress(
-                            fraction?.let { startProgress + (endProgress - startProgress) * it.coerceIn(0f, 1f) },
-                            label
-                        )
-                    }
-                }
+        downloader.download(
+            url = url,
+            destination = destination,
+            expectedSha256 = expectedSha256,
+            onProgress = { fraction ->
+                onProgress(
+                    fraction?.let {
+                        startProgress + (endProgress - startProgress) * it.coerceIn(0f, 1f)
+                    },
+                    label
+                )
             }
-        }
-        RuntimeArchive.verifySha256(partial, expectedSha256)
-        require(partial.renameTo(destination)) { "Unable to finalize ${destination.name}" }
+        )
         onProgress(endProgress, label)
     }
 

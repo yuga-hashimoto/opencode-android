@@ -116,15 +116,19 @@ class LocalRuntimeManager(
         }
     }
 
-    private suspend fun startLocked(): Result<LocalRuntimeStatus.Ready> {
+    private suspend fun startLocked(): Result<LocalRuntimeStatus.Ready> = runCatching {
         val configuredInstaller = installer
-            ?: return Result.failure(IllegalStateException("Local runtime installer is not configured"))
+            ?: error("Local runtime installer is not configured")
+        withContext(Dispatchers.IO) {
+            configuredInstaller.recoverInterruptedActivation()
+        }
         val installed = configuredInstaller.installedRuntime()
-            ?: return Result.failure(IllegalStateException("Local runtime is not installed"))
-        return runCatching { startInstalled(installed) }
-            .onFailure { error ->
-                mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルOpenCodeを起動できません")
-            }
+            ?: error("Local runtime is not installed")
+        startInstalled(installed)
+    }.onFailure { error ->
+        mutableState.value = LocalRuntimeStatus.Broken(
+            error.message ?: "ローカルOpenCodeを起動できません"
+        )
     }
 
     private suspend fun startInstalled(
