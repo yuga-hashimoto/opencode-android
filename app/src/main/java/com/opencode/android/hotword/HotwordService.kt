@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -69,13 +70,24 @@ class HotwordService : Service(), RecognitionListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, createNotification())
-        if (!settings.hotwordEnabled) {
+        val hasMicrophonePermission = ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!settings.hotwordEnabled || !hasMicrophonePermission) {
             stopSelf()
             return START_NOT_STICKY
         }
-        ensureModelAndListen()
-        return START_STICKY
+
+        return runCatching {
+            startForeground(NOTIFICATION_ID, createNotification())
+            ensureModelAndListen()
+            START_STICKY
+        }.getOrElse { error ->
+            Log.e(TAG, "Unable to start wake-word foreground service", error)
+            stopSelf()
+            START_NOT_STICKY
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
