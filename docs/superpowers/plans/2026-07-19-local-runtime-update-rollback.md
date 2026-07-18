@@ -32,11 +32,11 @@ Interfaces:
 - `compareOpenCodeVersions(left, right)`
 
 Steps:
-- [ ] Test semantic version comparison, exact asset selection, missing digest, non-HTTPS URL, unsupported ABI, and release-note truncation.
-- [ ] Confirm tests fail.
-- [ ] Implement OkHttp/Gson release parsing and validation.
-- [ ] Run targeted tests.
-- [ ] Commit `feat: add official OpenCode release checks`.
+- [x] Test semantic version comparison, exact asset selection, missing digest, non-HTTPS URL, unsupported ABI, and release-note truncation.
+- [x] Confirm tests fail.
+- [x] Implement OkHttp/Gson release parsing and validation.
+- [x] Run targeted tests.
+- [x] Commit `feat: add official OpenCode release checks`.
 
 ## Task 2: Atomic updater
 
