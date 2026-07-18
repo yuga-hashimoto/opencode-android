@@ -1,20 +1,5 @@
-# Android Studio / Gradle
-.gradle/
-.idea/
-*.iml
 local.properties
+.gradle/
 build/
-**/build/
-.externalNativeBuild/
-.cxx/
-
-# Local secrets
-keystore.properties
-*.jks
-*.keystore
-
-# OS
-.DS_Store
-
-# Worktrees
-.worktrees/
+*.iml
+.idea/

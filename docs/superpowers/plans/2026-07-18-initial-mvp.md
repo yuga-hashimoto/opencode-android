@@ -4,7 +4,7 @@
 
 **Goal:** Build an Android-only OpenCode client that connects to `opencode serve`, manages sessions, supports text/voice chat, can be selected as the Android digital assistant, and reuses offline Vosk wake-word detection.
 
-**Architecture:** The app is a native Kotlin/Jetpack Compose client. All OpenCode interaction goes through an `OpenCodeBackend` interface backed by the official REST and SSE server API. Voice and wake-word components are adapted from the existing OpenClawAssistant project, while OpenClaw webhook code and branding are removed.
+**Architecture:** The app is a native Kotlin/Jetpack Compose client. All OpenCode interaction goes through an `OpenCodeBackend` interface backed by the official REST and SSE server API. Voice and wake-word components are adapted from the existing OpenCodeAndroid project, while OpenCode webhook code and branding are removed.
 
 **Tech Stack:** Kotlin 1.9.22, Android Gradle Plugin 8.2.2, Jetpack Compose Material 3, Navigation Compose, OkHttp 4.12, OkHttp SSE, Gson, Kotlin Coroutines, EncryptedSharedPreferences, Vosk Android, JUnit 4, MockWebServer.
 
@@ -16,7 +16,7 @@
 - Package and application ID are `com.opencode.android`.
 - Minimum SDK is API 26; compile and target SDK are 34 for the first build.
 - UI is always dark, using charcoal/navy surfaces and restrained blue/teal accents.
-- OpenCode is the only agent engine; no Hermes or OpenClaw runtime integration.
+- OpenCode is the only agent engine; no Hermes or OpenCode runtime integration.
 - Remote OpenCode uses official `opencode serve` HTTP APIs.
 - Secrets must use encrypted Android storage and must not appear in logs.
 - The app must identify itself as an unofficial OpenCode client.
@@ -74,7 +74,7 @@ app/src/main/java/com/opencode/android/
 
 **Files:**
 - Create: Android Gradle project files under repository root
-- Copy mechanically from: `/Users/yu-ga/AndroidStudioProjects/OpenClawAssistant`
+- Copy mechanically from: `/Users/yu-ga/AndroidStudioProjects/OpenCodeAndroid`
 - Modify: `settings.gradle.kts`
 - Modify: `build.gradle.kts`
 - Modify: `app/build.gradle.kts`
@@ -95,7 +95,7 @@ Expected: a new worktree on `feature/initial-mvp`.
 
 - [ ] **Step 2: Copy only project scaffold and reusable assets**
 
-Copy Gradle wrapper/config, Vosk model assets, icon placeholders, voice interaction XML, and Android source tree from OpenClawAssistant. Exclude `.git`, `.gradle`, `.idea`, build outputs, `local.properties`, crash logs, and release artifacts.
+Copy Gradle wrapper/config, Vosk model assets, icon placeholders, voice interaction XML, and Android source tree from OpenCodeAndroid. Exclude `.git`, `.gradle`, `.idea`, build outputs, `local.properties`, crash logs, and release artifacts.
 
 - [ ] **Step 3: Rename project identity**
 
@@ -436,7 +436,7 @@ Store profile fields through `SecureSettingsRepository`.
 
 - [ ] **Step 3: Port speech/TTS managers**
 
-Rename packages and remove OpenClaw references. Keep Xiaomi-specific SpeechRecognizer cleanup. Replace forced speech rate 1.5 with configurable default 1.0.
+Rename packages and remove OpenCode references. Keep Xiaomi-specific SpeechRecognizer cleanup. Replace forced speech rate 1.5 with configurable default 1.0.
 
 - [ ] **Step 4: Port VoiceInteraction services**
 

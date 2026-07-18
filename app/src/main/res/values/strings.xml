@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenCode Android</string>
+    <string name="notification_channel_name">Hotword Detection</string>
+    <string name="notification_channel_description">Always-on voice detection service</string>
+    <string name="notification_title">OpenCode Android</string>
+    <string name="notification_text">Say \"Open Code\" to activate</string>
+    <string name="settings_title">Settings</string>
+    <string name="webhook_url_label">Webhook URL</string>
+    <string name="webhook_url_hint">https://your-server/hooks/voice</string>
+    <string name="auth_token_label">Auth Token (optional)</string>
+    <string name="auth_token_hint">Optional</string>
+    <string name="session_id_label">Session ID</string>
+    <string name="user_id_label">User ID</string>
+    <string name="save_button">Save</string>
+    <string name="test_connection_button">Test Connection</string>
+    <string name="hotword_enabled_label">Enable Hotword Detection</string>
+    <string name="picovoice_key_label">Picovoice Access Key</string>
+    <string name="picovoice_key_hint">Get from free account</string>
+    <string name="back_button">Back</string>
+    <string name="mic_permission_required">Microphone permission required</string>
+    <string name="processing">Processing…</string>
+    <string name="error_label">Error</string>
+    <string name="try_again_button">Try again</string>
+    <string name="ask_hint">Ask OpenCode…</string>
+    <string name="send_description">Send</string>
+    <string name="stop_description">Stop</string>
+    <string name="listening">Listening…</string>
+    <string name="thinking">Thinking…</string>
+    <string name="speaking">Speaking…</string>
+    <string name="ready">Ready</string>
+    <string name="error_no_webhook">Please configure Webhook URL</string>
+    <string name="error_network">Network error</string>
+    <string name="error_speech">Speech recognition error</string>
+    
+    <!-- Main Screen -->
+    <string name="activation_methods">Activation Methods</string>
+    <string name="home_button">Home Button</string>
+    <string name="active">Active</string>
+    <string name="not_set">Not Set</string>
+    <string name="disabled">Disabled</string>
+    <string name="open_chat">Open Chat</string>
+    <string name="setup_required">Setup Required</string>
+    <string name="connected_to_opencode">Connected to OpenCode</string>
+    <string name="permissions_required">Permissions required</string>
+    <string name="could_not_open_settings">Could not open settings</string>
+    <string name="hotword_started">Hotword detection started</string>
+    <string name="hotword_stopped">Hotword detection stopped</string>
+    <string name="saved">Saved</string>
+    
+    <!-- How to Use -->
+    <string name="how_to_use">How to Use</string>
+    <string name="got_it">Got it</string>
+    <string name="step_1">Long press Home or say Wake Word</string>
+    <string name="step_2">Ask your question or request</string>
+    <string name="step_3">OpenCode reads the response aloud</string>
+    <string name="step_4">Continue conversation (session maintained)</string>
+    
+    <!-- Troubleshooting -->
+    <string name="assist_gesture_not_working">Assist Gesture Not Working?</string>
+    <string name="troubleshooting_intro">Even if set as default, some system features might override the long-press gesture.</string>
+    <string name="circle_to_search_title">Circle to Search (Overrides Long-Press)</string>
+    <string name="circle_to_search_desc">If holding the home button triggers a search screen:\n• Pixel: Settings → System → Navigation mode → Tap Gear icon → Turn off Circle to Search.\n• Samsung: Settings → Display → Navigation bar → Turn off Circle to Search.</string>
+    <string name="gesture_navigation_title">Gesture Navigation (Corner Swipe)</string>
+    <string name="gesture_navigation_desc">If you don\'t have a home button (swipe navigation), swipe up diagonally from either the bottom-left or bottom-right corner to launch the assistant.</string>
+    <string name="google_app_setting_title">Google App Setting</string>
+    <string name="google_app_setting_desc">Open Google App → Tap Profile → Settings → Google Assistant → General → Turn off \'Google Assistant\' if it still interferes.</string>
+    <string name="refresh_binding_title">Refresh Binding</string>
+    <string name="refresh_binding_desc">If status is \'Active\' but it still won\'t work, try changing \'Digital assistant app\' to \'None\' and then back to \'OpenCode Android\'.</string>
+    <string name="debug_force_start">Debug: Force Start Session</string>
+    
+    <!-- Settings Screen -->
+    <string name="connection">Connection</string>
+    <string name="voice">Voice</string>
+    <string name="wake_word">Wake Word</string>
+    <string name="voice_output">Voice Output</string>
+    <string name="read_ai_responses">Read AI responses aloud</string>
+    <string name="continuous_conversation">Continuous Conversation</string>
+    <string name="auto_start_mic">Auto-start mic after AI speaks</string>
+    <string name="activation_phrase">Activation Phrase</string>
+    <string name="custom_wake_word">Custom Wake Word</string>
+    <string name="custom_wake_word_hint">e.g., hey buddy</string>
+    <string name="custom_wake_word_help">Enter 2-3 words, lowercase</string>
+    <string name="testing">Testing…</string>
+    <string name="connected">Connected!</string>
+    <string name="failed">Failed: %s</string>
+    <string name="error">Error: %s</string>
+    
+    <!-- Wake Word Presets -->
+    <string name="wake_word_opencode">OpenCode</string>
+    <string name="wake_word_hey_assistant">Hey Assistant</string>
+    <string name="wake_word_jarvis">Jarvis</string>
+    <string name="wake_word_computer">Computer</string>
+    <string name="wake_word_custom">Custom…</string>
+</resources>

@@ -286,7 +286,7 @@ APIレスポンスの未知フィールドは無視し、OpenCode更新による
 
 - 明示的なユーザー操作で有効化する
 - Foreground Serviceと常時通知を使用する
-- 初期実装では既存OpenClawAssistantのVosk方式を再利用する
+- 初期実装では既存OpenCodeAndroidのVosk方式を再利用する
 - 初期ウェイクワード: `Open Code`
 - カスタムウェイクワードはVoskの文法制約の範囲で設定する
 - 画面消灯中の動作は端末メーカーの電池最適化に左右されるため、設定ガイドを表示する
@@ -486,7 +486,7 @@ data class AssistantProfile(
 
 ## 18. 第一実装で再利用する既存資産
 
-既存`OpenClawAssistant`から次を移植し、OpenClaw固有コードは削除する。
+既存`OpenCodeAndroid`から次を移植し、OpenCode固有コードは削除する。
 
 - Jetpack Compose・Material 3基盤
 - `VoiceInteractionService`
@@ -497,7 +497,7 @@ data class AssistantProfile(
 - 日本語・英語リソース
 - 暗号化設定保存の考え方
 
-Webhookクライアント、OpenClaw名称、OpenClaw専用データモデルは再利用しない。
+Webhookクライアント、OpenCode名称、OpenCode専用データモデルは再利用しない。
 
 ## 19. リポジトリ運用
 
