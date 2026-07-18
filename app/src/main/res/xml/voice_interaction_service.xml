@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sessionService="com.opencode.android.service.OpenCodeAndroidSessionService"
-    android:recognitionService="com.opencode.android.service.OpenCodeAndroidRecognitionService"
+    android:sessionService="com.opencode.android.assistant.OpenCodeSessionService"
+    android:recognitionService="com.opencode.android.assistant.OpenCodeRecognitionService"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="true"
     android:supportsLocalInteraction="true" />

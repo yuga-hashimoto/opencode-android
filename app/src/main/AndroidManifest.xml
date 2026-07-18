@@ -2,28 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 音声認識 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    
-    <!-- ネットワーク通信 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- フォアグラウンドサービス（常時聴取） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- バッテリー最適化除外リクエスト -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    
-    <!-- 起動時サービス開始 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".OpenCodeApplication"
         android:allowBackup="false"
-        android:usesCleartextTraffic="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
@@ -31,9 +30,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.OpenCodeAndroid"
+        android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
-        <!-- メインActivity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -44,21 +43,8 @@
             </intent-filter>
         </activity>
 
-        <!-- 設定Activity -->
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="false"
-            android:theme="@style/Theme.OpenCodeAndroid" />
-
-        <!-- チャットActivity -->
-        <activity
-            android:name=".ChatActivity"
-            android:exported="false"
-            android:theme="@style/Theme.OpenCodeAndroid" />
-
-        <!-- Voice Interaction Service (ホームボタン長押し) -->
         <service
-            android:name=".service.OpenCodeAndroidService"
+            android:name=".assistant.OpenCodeVoiceInteractionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <meta-data
@@ -71,12 +57,12 @@
         </service>
 
         <service
-            android:name=".service.OpenCodeAndroidSessionService"
+            android:name=".assistant.OpenCodeSessionService"
+            android:exported="false"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
-        <!-- Recognition Service (Required for VoiceInteraction) -->
         <service
-            android:name=".service.OpenCodeAndroidRecognitionService"
+            android:name=".assistant.OpenCodeRecognitionService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_RECOGNITION_SERVICE">
@@ -85,21 +71,18 @@
             </intent-filter>
         </service>
 
-        <!-- Hotword Detection Service (常時聴取) -->
         <service
-            android:name=".service.HotwordService"
+            android:name=".hotword.HotwordService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Boot Receiver -->
         <receiver
-            android:name=".receiver.BootReceiver"
+            android:name=".hotword.BootReceiver"
+            android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
-
     </application>
-
 </manifest>

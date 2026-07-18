@@ -1,25 +1,30 @@
 package com.opencode.android.ui
 
+import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -31,12 +36,17 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.opencode.android.R
 import com.opencode.android.backend.OpenCodeBackend
+import com.opencode.android.hotword.HotwordService
+import com.opencode.android.speech.SpeechRecognizerManager
+import com.opencode.android.speech.SpeechResult
 import com.opencode.android.ui.chat.ChatViewModel
 import com.opencode.android.ui.chat.OpenCodeChatScreen
 import com.opencode.android.ui.connections.ConnectionsScreen
 import com.opencode.android.ui.home.HomeScreen
 import com.opencode.android.ui.sessions.SessionsScreen
 import com.opencode.android.ui.settings.SettingsScreen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 private enum class Destination(
     val route: String,
@@ -46,7 +56,7 @@ private enum class Destination(
     HOME("home", R.string.nav_home, Icons.Default.Home),
     CHAT("chat", R.string.nav_chat, Icons.AutoMirrored.Filled.Chat),
     CONNECTIONS("connections", R.string.nav_connections, Icons.Default.Link),
-    SESSIONS("sessions", R.string.nav_sessions, Icons.Default.ViewList),
+    SESSIONS("sessions", R.string.nav_sessions, Icons.AutoMirrored.Filled.ViewList),
     SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
@@ -54,8 +64,7 @@ private enum class Destination(
 fun OpenCodeApp(
     appViewModel: AppViewModel,
     onOpenAssistantSettings: () -> Unit,
-    onHotwordChanged: (Boolean) -> Unit,
-    onMicRequested: () -> Unit
+    onHotwordChanged: (Boolean) -> Unit
 ) {
     val appState by appViewModel.uiState.collectAsState()
     val navController = rememberNavController()
@@ -68,6 +77,56 @@ fun OpenCodeApp(
         factory = ChatViewModelFactory(backend)
     )
     val chatState by chatViewModel.uiState.collectAsState()
+
+    val context = LocalContext.current
+    val speechManager = remember { SpeechRecognizerManager(context.applicationContext) }
+    val voiceScope = rememberCoroutineScope()
+    var voiceJob by remember { mutableStateOf<Job?>(null) }
+
+    DisposableEffect(speechManager) {
+        onDispose {
+            voiceJob?.cancel()
+            speechManager.destroy()
+        }
+    }
+
+    val requestVoiceInput: () -> Unit = {
+        if (voiceJob?.isActive == true) {
+            voiceJob?.cancel()
+            chatViewModel.stopListening()
+            context.sendBroadcast(
+                Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName)
+            )
+        } else {
+            context.sendBroadcast(
+                Intent(HotwordService.ACTION_PAUSE_HOTWORD).setPackage(context.packageName)
+            )
+            chatViewModel.startListening()
+            voiceJob = voiceScope.launch {
+                try {
+                    speechManager.startListening("ja-JP").collect { result ->
+                        when (result) {
+                            SpeechResult.Ready,
+                            SpeechResult.Listening,
+                            SpeechResult.Processing,
+                            is SpeechResult.RmsChanged -> Unit
+                            is SpeechResult.PartialResult -> chatViewModel.updateSpeechPartial(result.text)
+                            is SpeechResult.Result -> {
+                                chatViewModel.stopListening()
+                                chatViewModel.sendMessage(result.text)
+                            }
+                            is SpeechResult.Error -> chatViewModel.reportSpeechError(result.message)
+                        }
+                    }
+                } finally {
+                    chatViewModel.stopListening()
+                    context.sendBroadcast(
+                        Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName)
+                    )
+                }
+            }
+        }
+    }
 
     LaunchedEffect(
         appState.selectedProviderId,
@@ -108,7 +167,7 @@ fun OpenCodeApp(
         NavHost(
             navController = navController,
             startDestination = Destination.HOME.route,
-            modifier = androidx.compose.ui.Modifier.padding(paddingValues)
+            modifier = Modifier.padding(paddingValues)
         ) {
             composable(Destination.HOME.route) {
                 HomeScreen(
@@ -146,7 +205,7 @@ fun OpenCodeApp(
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
-                    onMic = onMicRequested
+                    onMic = requestVoiceInput
                 )
             }
             composable(Destination.CONNECTIONS.route) {

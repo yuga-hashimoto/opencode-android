@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import com.opencode.android.hotword.HotwordService
 import com.opencode.android.ui.AppViewModel
 import com.opencode.android.ui.OpenCodeApp
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
@@ -21,7 +22,13 @@ class MainActivity : ComponentActivity() {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { }
+    ) { result ->
+        if (result[Manifest.permission.RECORD_AUDIO] == true &&
+            (application as OpenCodeApplication).settings.hotwordEnabled
+        ) {
+            runCatching { HotwordService.start(this) }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,14 +39,7 @@ class MainActivity : ComponentActivity() {
                 OpenCodeApp(
                     appViewModel = appViewModel,
                     onOpenAssistantSettings = ::openAssistantSettings,
-                    onHotwordChanged = ::setHotwordServiceEnabled,
-                    onMicRequested = {
-                        Toast.makeText(
-                            this,
-                            getString(R.string.mic_permission_required),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                    onHotwordChanged = ::setHotwordServiceEnabled
                 )
             }
         }
@@ -83,6 +83,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setHotwordServiceEnabled(enabled: Boolean) {
+        if (enabled) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                runCatching { HotwordService.start(this) }
+                    .onFailure {
+                        Toast.makeText(this, it.message ?: "Unable to start wake word", Toast.LENGTH_LONG).show()
+                    }
+            } else {
+                permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            }
+        } else {
+            HotwordService.stop(this)
+        }
+
         Toast.makeText(
             this,
             if (enabled) R.string.hotword_started else R.string.hotword_stopped,

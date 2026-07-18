@@ -38,7 +38,7 @@ class TTSManager(context: Context) {
                     tts?.setLanguage(Locale.getDefault())
                 }
                 // 読み上げ速度調整
-                tts?.setSpeechRate(1.5f)
+                tts?.setSpeechRate(1.0f)
                 tts?.setPitch(1.0f)
                 
                 // 初期化待ちの発話があれば実行
@@ -62,7 +62,7 @@ class TTSManager(context: Context) {
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts?.setLanguage(Locale.getDefault())
                 }
-                tts?.setSpeechRate(1.5f)
+                tts?.setSpeechRate(1.0f)
                 tts?.setPitch(1.0f)
                 pendingSpeak?.invoke()
                 pendingSpeak = null

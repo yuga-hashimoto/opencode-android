@@ -317,7 +317,15 @@ class ChatViewModel(
     }
 
     fun startListening() {
-        _uiState.update { it.copy(isListening = true) }
+        _uiState.update { it.copy(isListening = true, partialText = "", error = null) }
+    }
+
+    fun updateSpeechPartial(text: String) {
+        _uiState.update { it.copy(isListening = true, partialText = text) }
+    }
+
+    fun reportSpeechError(message: String) {
+        _uiState.update { it.copy(isListening = false, partialText = "", error = message) }
     }
 
     fun stopListening() {
