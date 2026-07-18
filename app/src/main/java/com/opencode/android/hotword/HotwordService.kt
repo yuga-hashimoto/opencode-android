@@ -69,11 +69,11 @@ class HotwordService : Service(), RecognitionListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, createNotification())
         if (!settings.hotwordEnabled) {
             stopSelf()
             return START_NOT_STICKY
         }
-        startForeground(NOTIFICATION_ID, createNotification())
         ensureModelAndListen()
         return START_STICKY
     }

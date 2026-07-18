@@ -33,8 +33,15 @@ class OpenCodeUrlTest {
     }
 
     @Test
-    fun `allows localhost and local domains`() {
+    fun `allows localhost local domains and ipv6 ula literals`() {
         assertTrue(OpenCodeUrl.normalize("http://127.0.0.1:4096").isSuccess)
         assertTrue(OpenCodeUrl.normalize("http://opencode.local:4096").isSuccess)
+        assertTrue(OpenCodeUrl.normalize("http://[fd00::1]:4096").isSuccess)
+    }
+
+    @Test
+    fun `does not mistake public hostnames beginning with fc or fd for ipv6 ula`() {
+        assertTrue(OpenCodeUrl.normalize("http://fcbarcelona.com:4096").isFailure)
+        assertTrue(OpenCodeUrl.normalize("http://fdupdates.example.com:4096").isFailure)
     }
 }

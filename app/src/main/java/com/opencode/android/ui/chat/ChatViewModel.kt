@@ -55,6 +55,7 @@ class ChatViewModel(
 
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
+    private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
 
     init {
         if (backend != null) {
@@ -94,6 +95,7 @@ class ChatViewModel(
 
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
+        streamedParts.clear()
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -123,6 +125,7 @@ class ChatViewModel(
     }
 
     fun newSession() {
+        streamedParts.clear()
         _uiState.update {
             it.copy(
                 sessionId = null,
@@ -243,7 +246,10 @@ class ChatViewModel(
                 val part = event.part
                 if (part.sessionId != activeSession || part.type != "text") return
                 val messageId = part.messageId ?: part.id ?: return
-                val text = part.text.orEmpty()
+                val partId = part.id ?: messageId
+                val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
+                messageParts[partId] = part.text.orEmpty()
+                val text = messageParts.values.joinToString("")
                 _uiState.update { state ->
                     val index = state.messages.indexOfFirst { it.id == messageId }
                     val updated = if (index >= 0) {
@@ -276,6 +282,7 @@ class ChatViewModel(
             }
             is OpenCodeEvent.SessionIdle -> {
                 if (event.sessionId != activeSession) return
+                streamedParts.clear()
                 _uiState.update { state ->
                     state.copy(
                         messages = state.messages.map { message ->

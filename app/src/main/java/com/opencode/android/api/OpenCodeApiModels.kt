@@ -1,5 +1,6 @@
 package com.opencode.android.api
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 data class OpenCodeHealth(
@@ -96,7 +97,7 @@ data class PermissionRequest(
     val sessionId: String,
     val permission: String,
     val patterns: List<String> = emptyList(),
-    val metadata: Map<String, Any?> = emptyMap()
+    val metadata: Map<String, JsonElement> = emptyMap()
 )
 
 sealed interface OpenCodeEvent {

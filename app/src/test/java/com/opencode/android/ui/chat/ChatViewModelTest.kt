@@ -104,6 +104,42 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `multiple streamed text parts are combined into one assistant message`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+        viewModel.sendMessage("Hello")
+        advanceUntilIdle()
+
+        backend.events.emit(
+            OpenCodeEvent.MessagePartUpdated(
+                OpenCodePart(
+                    id = "part-1",
+                    sessionId = "s1",
+                    messageId = "m-assistant",
+                    type = "text",
+                    text = "First paragraph."
+                )
+            )
+        )
+        backend.events.emit(
+            OpenCodeEvent.MessagePartUpdated(
+                OpenCodePart(
+                    id = "part-2",
+                    sessionId = "s1",
+                    messageId = "m-assistant",
+                    type = "text",
+                    text = "\nSecond paragraph."
+                )
+            )
+        )
+        advanceUntilIdle()
+
+        val assistantMessages = viewModel.uiState.value.messages.filterNot { it.isUser }
+        assertEquals(1, assistantMessages.size)
+        assertEquals("First paragraph.\nSecond paragraph.", assistantMessages.single().text)
+    }
+
+    @Test
     fun `permission event becomes approval card and successful response removes it`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)

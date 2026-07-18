@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import com.opencode.android.hotword.HotwordService
+import com.opencode.android.hotword.HotwordStartupPolicy
 import com.opencode.android.ui.AppViewModel
 import com.opencode.android.ui.OpenCodeApp
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
@@ -24,10 +25,15 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        if (result[Manifest.permission.RECORD_AUDIO] == true &&
-            (application as OpenCodeApplication).settings.hotwordEnabled
-        ) {
-            runCatching { HotwordService.start(this) }
+        val microphoneGranted = result[Manifest.permission.RECORD_AUDIO] == true ||
+            hasMicrophonePermission()
+        val hotwordEnabled = (application as OpenCodeApplication).settings.hotwordEnabled
+
+        if (HotwordStartupPolicy.canStartFromForeground(hotwordEnabled, microphoneGranted)) {
+            startHotwordAndReport()
+        } else if (hotwordEnabled && !microphoneGranted) {
+            appViewModel.setHotwordEnabled(false)
+            Toast.makeText(this, R.string.mic_permission_required, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -46,13 +52,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPostResume() {
+        super.onPostResume()
+        restoreHotwordIfEnabled()
+    }
+
     private fun requestRuntimePermissions() {
         val permissions = buildList {
-            if (ContextCompat.checkSelfPermission(
-                    this@MainActivity,
-                    Manifest.permission.RECORD_AUDIO
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
+            if (!hasMicrophonePermission()) {
                 add(Manifest.permission.RECORD_AUDIO)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -100,25 +107,44 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setHotwordServiceEnabled(enabled: Boolean) {
-        if (enabled) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                runCatching { HotwordService.start(this) }
-                    .onFailure {
-                        Toast.makeText(this, it.message ?: "Unable to start wake word", Toast.LENGTH_LONG).show()
-                    }
-            } else {
-                permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
-            }
-        } else {
+        if (!enabled) {
             HotwordService.stop(this)
+            Toast.makeText(this, R.string.hotword_stopped, Toast.LENGTH_SHORT).show()
+            return
         }
 
-        Toast.makeText(
-            this,
-            if (enabled) R.string.hotword_started else R.string.hotword_stopped,
-            Toast.LENGTH_SHORT
-        ).show()
+        if (!hasMicrophonePermission()) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            return
+        }
+
+        startHotwordAndReport()
     }
+
+    private fun restoreHotwordIfEnabled() {
+        val enabled = (application as OpenCodeApplication).settings.hotwordEnabled
+        if (HotwordStartupPolicy.canStartFromForeground(enabled, hasMicrophonePermission())) {
+            runCatching { HotwordService.start(this) }
+                .onFailure { appViewModel.setHotwordEnabled(false) }
+        }
+    }
+
+    private fun startHotwordAndReport() {
+        runCatching { HotwordService.start(this) }
+            .onSuccess {
+                Toast.makeText(this, R.string.hotword_started, Toast.LENGTH_SHORT).show()
+            }
+            .onFailure { error ->
+                appViewModel.setHotwordEnabled(false)
+                Toast.makeText(
+                    this,
+                    error.message ?: getString(R.string.hotword_start_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+    }
+
+    private fun hasMicrophonePermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
 }

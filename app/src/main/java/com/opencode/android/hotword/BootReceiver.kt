@@ -10,6 +10,7 @@ import com.opencode.android.OpenCodeApplication
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (!HotwordStartupPolicy.canStartFromBoot(android.os.Build.VERSION.SDK_INT)) return
         val app = context.applicationContext as? OpenCodeApplication ?: return
         if (!app.settings.hotwordEnabled) return
         if (ContextCompat.checkSelfPermission(

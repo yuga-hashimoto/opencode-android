@@ -2,11 +2,15 @@ package com.opencode.android.api
 
 import com.google.gson.JsonParser
 import com.opencode.android.data.ConnectionProfile
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -87,14 +91,38 @@ class OpenCodeApiClientTest {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()
 
-        val result = client.respondPermission("s1", "perm1", "once", remember = false)
+        val result = client.respondPermission("s1", "perm1", "once")
 
         assertTrue(result)
         val request = server.takeRequest()
         assertEquals("/session/s1/permissions/perm1", request.path)
         val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
         assertEquals("once", json["response"].asString)
-        assertEquals(false, json["remember"].asBoolean)
+        assertTrue(!json.has("remember"))
+    }
+
+    @Test
+    fun `event stream reconnects after the server closes the connection`() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody("data: {\"type\":\"server.connected\",\"properties\":{}}\n\n")
+                .setSocketPolicy(SocketPolicy.DISCONNECT_AT_END)
+        )
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody("data: {\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"s1\"}}\n\n")
+        )
+
+        val events = withTimeout(3_000) {
+            client().events().take(2).toList()
+        }
+
+        assertTrue(events[0] is OpenCodeEvent.ServerConnected)
+        assertEquals("s1", (events[1] as OpenCodeEvent.SessionIdle).sessionId)
+        assertEquals("/event", server.takeRequest().path)
+        assertEquals("/event", server.takeRequest().path)
     }
 
     @Test

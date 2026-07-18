@@ -7,8 +7,10 @@ import com.google.gson.reflect.TypeToken
 import com.opencode.android.data.ConnectionProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.HttpUrl
@@ -75,12 +77,10 @@ class OpenCodeApiClient(
     suspend fun respondPermission(
         sessionId: String,
         permissionId: String,
-        response: String,
-        remember: Boolean
+        response: String
     ): Boolean {
         val json = JsonObject().apply {
             addProperty("response", response)
-            addProperty("remember", remember)
         }
         return post(
             "session/${encodePath(sessionId)}/permissions/${encodePath(permissionId)}",
@@ -89,7 +89,17 @@ class OpenCodeApiClient(
         )
     }
 
-    fun events(): Flow<OpenCodeEvent> = callbackFlow {
+    fun events(): Flow<OpenCodeEvent> = singleEventStream().retryWhen { cause, attempt ->
+        val retryable = cause !is OpenCodeApiException || cause.statusCode >= 500
+        if (!retryable) return@retryWhen false
+
+        val backoffMillis = (500L * (1L shl attempt.toInt().coerceAtMost(5)))
+            .coerceAtMost(15_000L)
+        delay(backoffMillis)
+        true
+    }
+
+    private fun singleEventStream(): Flow<OpenCodeEvent> = callbackFlow {
         val eventClient = httpClient.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .build()
@@ -106,14 +116,21 @@ class OpenCodeApiClient(
                     trySend(eventParser.parse(data))
                 }
 
+                override fun onClosed(eventSource: EventSource) {
+                    close(IOException("OpenCode event stream closed"))
+                }
+
                 override fun onFailure(
                     eventSource: EventSource,
-                    throwable: Throwable?,
+                    t: Throwable?,
                     response: Response?
                 ) {
-                    val error = throwable ?: IOException(
-                        "OpenCode event stream closed${response?.code?.let { " (HTTP $it)" }.orEmpty()}"
-                    )
+                    val error = response?.let {
+                        OpenCodeApiException(
+                            statusCode = it.code,
+                            message = "OpenCode event stream failed (HTTP ${it.code})"
+                        )
+                    } ?: t ?: IOException("OpenCode event stream failed")
                     close(error)
                 }
             }

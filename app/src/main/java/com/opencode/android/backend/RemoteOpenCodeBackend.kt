@@ -33,6 +33,6 @@ class RemoteOpenCodeBackend(
         permissionId: String,
         response: PermissionResponse,
         remember: Boolean
-    ): Boolean = client.respondPermission(sessionId, permissionId, response.apiValue, remember)
+    ): Boolean = client.respondPermission(sessionId, permissionId, response.apiValue)
     override fun events(): Flow<OpenCodeEvent> = client.events()
 }

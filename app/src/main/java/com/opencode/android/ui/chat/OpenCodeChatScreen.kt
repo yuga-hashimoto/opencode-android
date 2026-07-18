@@ -439,17 +439,26 @@ private fun PermissionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TextButton(onClick = { onPermission(permission.id, PermissionResponse.REJECT, false) }) {
+                OutlinedButton(
+                    onClick = { onPermission(permission.id, PermissionResponse.REJECT, false) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.reject))
                 }
-                FilledTonalButton(onClick = { onPermission(permission.id, PermissionResponse.ONCE, false) }) {
+                FilledTonalButton(
+                    onClick = { onPermission(permission.id, PermissionResponse.ONCE, false) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.allow_once))
                 }
-                Button(onClick = { onPermission(permission.id, PermissionResponse.ALWAYS, true) }) {
+                Button(
+                    onClick = { onPermission(permission.id, PermissionResponse.ALWAYS, true) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(stringResource(R.string.always_allow))
                 }
             }

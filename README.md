@@ -113,6 +113,8 @@ http://your-mac.tailnet-name.ts.net:4096
 
 Android・端末メーカーの省電力制御により、画面消灯後にサービスが停止される場合があります。長時間利用する場合は、OpenCode Androidをバッテリー最適化の対象外にしてください。
 
+Android 11以降では、再起動直後のバックグラウンド状態からマイク用Foreground Serviceを開始できません。端末を再起動した後は、OpenCode Androidを一度開くとウェイクワード検知が再開します。
+
 ## Androidローカル実行について
 
 リポジトリには、Android内OpenCodeをリモート実行と同じAPIとして扱うための次の境界を実装しています。

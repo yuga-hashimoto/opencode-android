@@ -1,15 +1,6 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-}
-
-// Load local.properties
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -27,13 +18,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        
-        // Picovoice Access Key from local.properties
-        buildConfigField(
-            "String",
-            "PICOVOICE_ACCESS_KEY",
-            "\"${localProperties.getProperty("PICOVOICE_ACCESS_KEY", "")}\""
-        )
     }
 
     buildTypes {
@@ -57,7 +41,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

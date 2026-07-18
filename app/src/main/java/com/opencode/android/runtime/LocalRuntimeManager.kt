@@ -1,15 +1,16 @@
 package com.opencode.android.runtime
 
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import com.opencode.android.backend.LocalRuntimeStatus
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
 
 data class LocalRuntimeMetadata(
-    val version: String,
-    val port: Int,
-    val installedAt: Long
+    @SerializedName("version") val version: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("installedAt") val installedAt: Long
 )
 
 class LocalRuntimeManager(

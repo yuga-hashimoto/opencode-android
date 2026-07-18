@@ -28,7 +28,8 @@ class OpenCodeEventParser(
                             ?.mapNotNull { element -> element.takeIf { it.isJsonPrimitive }?.asString }
                             .orEmpty(),
                         metadata = properties.getAsJsonObject("metadata")
-                            ?.let { gson.fromJson(it, Map::class.java) as Map<String, Any?> }
+                            ?.entrySet()
+                            ?.associate { (key, value) -> key to value }
                             .orEmpty()
                     )
                 )

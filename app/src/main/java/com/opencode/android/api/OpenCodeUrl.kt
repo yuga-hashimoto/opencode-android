@@ -38,7 +38,9 @@ object OpenCodeUrl {
     internal fun isTrustedCleartextHost(host: String): Boolean {
         val normalized = host.lowercase().removeSurrounding("[", "]")
         if (normalized == "localhost" || normalized.endsWith(".local")) return true
-        if (normalized == "::1" || normalized.startsWith("fc") || normalized.startsWith("fd")) return true
+        if (":" in normalized &&
+            (normalized == "::1" || normalized.startsWith("fc") || normalized.startsWith("fd"))
+        ) return true
 
         val octets = normalized.split('.').mapNotNull { it.toIntOrNull() }
         if (octets.size != 4 || octets.any { it !in 0..255 }) return false

@@ -89,6 +89,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
     private var eventJob: Job? = null
     private var listeningJob: Job? = null
     private var sessionId: String? = null
+    private val responseParts = linkedMapOf<String, String>()
 
     private val assistantState = mutableStateOf(VoiceState.IDLE)
     private val userText = mutableStateOf("")
@@ -177,7 +178,9 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                     when (event) {
                         is OpenCodeEvent.MessagePartUpdated -> {
                             if (event.part.sessionId == sessionId && event.part.type == "text") {
-                                responseText.value = event.part.text.orEmpty()
+                                val partKey = event.part.id ?: event.part.messageId ?: "text"
+                                responseParts[partKey] = event.part.text.orEmpty()
+                                responseText.value = responseParts.values.joinToString("")
                                 assistantState.value = VoiceState.THINKING
                             }
                         }
@@ -206,6 +209,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         if (backend == null) return
         listeningJob?.cancel()
         userText.value = ""
+        responseParts.clear()
         responseText.value = ""
         partialText.value = ""
         errorText.value = null
@@ -400,10 +404,22 @@ private fun VoiceAssistantSurface(
                     request.patterns.forEach {
                         Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { onPermission(PermissionResponse.REJECT) }) { Text("拒否") }
-                        FilledTonalButton(onClick = { onPermission(PermissionResponse.ONCE) }) { Text("今回だけ許可") }
-                        Button(onClick = { onPermission(PermissionResponse.ALWAYS) }) { Text("常に許可") }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { onPermission(PermissionResponse.REJECT) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("拒否") }
+                        FilledTonalButton(
+                            onClick = { onPermission(PermissionResponse.ONCE) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("今回だけ許可") }
+                        Button(
+                            onClick = { onPermission(PermissionResponse.ALWAYS) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("常に許可") }
                     }
                 }
             }
