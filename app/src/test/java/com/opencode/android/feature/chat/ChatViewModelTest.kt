@@ -72,6 +72,19 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `selected workspace is used when creating a new session`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+
+        viewModel.selectWorkspace("/root/demo")
+        viewModel.sendMessage("Work here")
+        advanceUntilIdle()
+
+        assertEquals("/root/demo", backend.lastCreateDirectory)
+        assertEquals("/root/demo", viewModel.uiState.value.selectedWorkspacePath)
+    }
+
+    @Test
     fun `streamed text is finalized when session becomes idle`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)
@@ -187,15 +200,22 @@ class ChatViewModelTest {
         override val kind: BackendKind = BackendKind.REMOTE
         val events = MutableSharedFlow<OpenCodeEvent>(extraBufferCapacity = 20)
         var createSessionCalls = 0
+        var lastCreateDirectory: String? = null
         val sentPrompts = mutableListOf<Pair<String, PromptRequest>>()
         val permissionResponses = mutableListOf<PermissionRecord>()
         val abortedSessions = mutableListOf<String>()
 
         override suspend fun health(): OpenCodeHealth = OpenCodeHealth(true, "test")
-        override suspend fun listSessions(): List<OpenCodeSession> = emptyList()
-        override suspend fun createSession(title: String?): OpenCodeSession {
+        override suspend fun listSessions(directory: String?): List<OpenCodeSession> = emptyList()
+        override suspend fun createSession(title: String?, directory: String?): OpenCodeSession {
             createSessionCalls++
-            return OpenCodeSession(id = "s1", title = title ?: "", time = OpenCodeTime(created = 1))
+            lastCreateDirectory = directory
+            return OpenCodeSession(
+                id = "s1",
+                title = title ?: "",
+                directory = directory,
+                time = OpenCodeTime(created = 1)
+            )
         }
         override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = emptyList()
         override suspend fun listProviders(): ProviderCatalog = ProviderCatalog()

@@ -149,10 +149,10 @@ class RuntimeCatalogRepositoryTest {
             ?: Result.success(OpenCodeHealth(true, version))
         override fun disconnect() = Unit
         override suspend fun health(): OpenCodeHealth = OpenCodeHealth(true, version)
-        override suspend fun listSessions(): List<OpenCodeSession> = listOf(
+        override suspend fun listSessions(directory: String?): List<OpenCodeSession> = listOf(
             OpenCodeSession(id = "s1", title = "Test", directory = "/workspace/app", time = OpenCodeTime(created = 1))
         )
-        override suspend fun createSession(title: String?): OpenCodeSession = error("unused")
+        override suspend fun createSession(title: String?, directory: String?): OpenCodeSession = error("unused")
         override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = emptyList()
         override suspend fun listProviders(): ProviderCatalog = ProviderCatalog(
             all = listOf(

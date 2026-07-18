@@ -51,14 +51,14 @@ class OpenCodeApiClientTest {
         server.enqueue(MockResponse().setBody("""{"id":"s2","title":"New","directory":"/repo","time":{"created":3,"updated":3}}"""))
         val client = client()
 
-        val sessions = client.sessions()
-        val created = client.createSession("New")
+        val sessions = client.sessions("/repo with space")
+        val created = client.createSession("New", "/repo with space")
 
         assertEquals("s1", sessions.single().id)
         assertEquals("s2", created.id)
-        assertEquals("/session", server.takeRequest().path)
+        assertEquals("/session?directory=%2Frepo%20with%20space", server.takeRequest().path)
         val createRequest = server.takeRequest()
-        assertEquals("/session", createRequest.path)
+        assertEquals("/session?directory=%2Frepo%20with%20space", createRequest.path)
         assertEquals("New", JsonParser.parseString(createRequest.body.readUtf8()).asJsonObject["title"].asString)
     }
 
@@ -99,6 +99,87 @@ class OpenCodeApiClientTest {
         val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
         assertEquals("once", json["response"].asString)
         assertTrue(!json.has("remember"))
+    }
+
+    @Test
+    fun `lists and reads files for a workspace directory`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"name":"src","path":"src","absolute":"/repo/src","type":"directory","ignored":false},{"name":"README.md","path":"README.md","absolute":"/repo/README.md","type":"file","ignored":false}]"""
+            )
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """{"type":"text","content":"# Hello","mimeType":"text/markdown"}"""
+            )
+        )
+        val client = client()
+
+        val files = client.files(directory = "/repo with space", path = ".")
+        val content = client.fileContent(directory = "/repo with space", path = "README.md")
+
+        assertEquals(listOf("src", "README.md"), files.map { it.name })
+        assertEquals("directory", files.first().type)
+        assertEquals("# Hello", content.content)
+        assertEquals("/file?directory=%2Frepo%20with%20space&path=.", server.takeRequest().path)
+        assertEquals(
+            "/file/content?directory=%2Frepo%20with%20space&path=README.md",
+            server.takeRequest().path
+        )
+    }
+
+    @Test
+    fun `searches text and file paths in a workspace`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"path":{"text":"src/Main.kt"},"lines":{"text":"fun main()"},"line_number":7,"absolute_offset":42,"submatches":[{"match":{"text":"main"},"start":4,"end":8}]}]"""
+            )
+        )
+        server.enqueue(MockResponse().setBody("""["src/Main.kt","src/MainTest.kt"]"""))
+        val client = client()
+
+        val textMatches = client.searchText("/repo", "main\\(")
+        val fileMatches = client.findFiles("/repo", "Main", type = "file", limit = 20)
+
+        assertEquals("src/Main.kt", textMatches.single().path.text)
+        assertEquals(7, textMatches.single().lineNumber)
+        assertEquals(listOf("src/Main.kt", "src/MainTest.kt"), fileMatches)
+        assertEquals("/find?directory=%2Frepo&pattern=main%5C%28", server.takeRequest().path)
+        assertEquals(
+            "/find/file?directory=%2Frepo&query=Main&type=file&limit=20",
+            server.takeRequest().path
+        )
+    }
+
+    @Test
+    fun `loads vcs status session diff and todo`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"file":"src/Main.kt","additions":3,"deletions":1,"status":"modified"}]"""
+            )
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"file":"src/Main.kt","patch":"@@ -1 +1 @@","additions":3,"deletions":1,"status":"modified"}]"""
+            )
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """[{"content":"Run tests","status":"in_progress","priority":"high"}]"""
+            )
+        )
+        val client = client()
+
+        val status = client.vcsStatus("/repo")
+        val diff = client.sessionDiff("ses_123", "/repo")
+        val todo = client.sessionTodo("ses_123", "/repo")
+
+        assertEquals("modified", status.single().status)
+        assertEquals(3.0, diff.single().additions, 0.0)
+        assertEquals("Run tests", todo.single().content)
+        assertEquals("/vcs/status?directory=%2Frepo", server.takeRequest().path)
+        assertEquals("/session/ses_123/diff?directory=%2Frepo", server.takeRequest().path)
+        assertEquals("/session/ses_123/todo?directory=%2Frepo", server.takeRequest().path)
     }
 
     @Test

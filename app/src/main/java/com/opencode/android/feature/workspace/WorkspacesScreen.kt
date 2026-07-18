@@ -44,6 +44,7 @@ import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeState
 import com.opencode.android.runtime.RuntimeType
+import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
@@ -55,6 +56,7 @@ fun WorkspacesScreen(
     onDeleteConnection: (String) -> Unit,
     onTestConnection: suspend (ConnectionFormState) -> Result<OpenCodeHealth>,
     onRefresh: () -> Unit,
+    onOpenWorkspace: (WorkspaceRef) -> Unit,
     onSetupLocal: () -> Unit,
     onStartLocal: () -> Unit,
     onStopLocal: () -> Unit,
@@ -222,7 +224,7 @@ fun WorkspacesScreen(
                 }
             } else {
                 items(state.workspaces, key = { it.id }) { workspace ->
-                    SectionCard {
+                    SectionCard(modifier = Modifier.clickable { onOpenWorkspace(workspace) }) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)

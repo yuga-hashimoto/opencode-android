@@ -84,6 +84,97 @@ data class OpenCodeAgent(
     val native: Boolean = false
 )
 
+data class OpenCodeProject(
+    val id: String,
+    val worktree: String,
+    val name: String? = null
+)
+
+data class OpenCodePathInfo(
+    val home: String,
+    val state: String,
+    val config: String,
+    val worktree: String,
+    val directory: String
+)
+
+data class OpenCodeFileNode(
+    val name: String,
+    val path: String,
+    val absolute: String,
+    val type: String,
+    val ignored: Boolean = false
+)
+
+data class OpenCodePatchHunk(
+    val oldStart: Int,
+    val oldLines: Int,
+    val newStart: Int,
+    val newLines: Int,
+    val lines: List<String> = emptyList()
+)
+
+data class OpenCodeFilePatch(
+    val oldFileName: String,
+    val newFileName: String,
+    val oldHeader: String? = null,
+    val newHeader: String? = null,
+    val hunks: List<OpenCodePatchHunk> = emptyList(),
+    val index: String? = null
+)
+
+data class OpenCodeFileContent(
+    val type: String,
+    val content: String,
+    val diff: String? = null,
+    val patch: OpenCodeFilePatch? = null,
+    val encoding: String? = null,
+    val mimeType: String? = null
+)
+
+data class OpenCodeSearchText(
+    val text: String
+)
+
+data class OpenCodeSearchSubmatch(
+    val match: OpenCodeSearchText,
+    val start: Int,
+    val end: Int
+)
+
+data class OpenCodeSearchMatch(
+    val path: OpenCodeSearchText,
+    val lines: OpenCodeSearchText,
+    @SerializedName("line_number") val lineNumber: Int,
+    @SerializedName("absolute_offset") val absoluteOffset: Int,
+    val submatches: List<OpenCodeSearchSubmatch> = emptyList()
+)
+
+data class OpenCodeFileChange(
+    val file: String? = null,
+    val path: String? = null,
+    val patch: String? = null,
+    val additions: Double = 0.0,
+    val deletions: Double = 0.0,
+    val added: Int = 0,
+    val removed: Int = 0,
+    val status: String? = null
+) {
+    val displayPath: String
+        get() = file ?: path.orEmpty()
+}
+
+data class OpenCodeTodo(
+    val content: String,
+    val status: String,
+    val priority: String
+)
+
+data class OpenCodeVcsInfo(
+    val branch: String? = null,
+    @SerializedName("default_branch") val defaultBranch: String? = null
+)
+
 data class PromptRequest(
     val text: String,
     val providerId: String? = null,

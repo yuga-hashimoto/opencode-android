@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
@@ -57,6 +58,7 @@ import com.opencode.android.core.api.OpenCodeModel
 import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.runtime.PermissionResponse
+import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeWarning
@@ -66,11 +68,13 @@ fun OpenCodeChatScreen(
     state: ChatUiState,
     providers: List<OpenCodeProvider>,
     agents: List<OpenCodeAgent>,
+    workspaces: List<WorkspaceRef>,
     selectedProviderId: String?,
     selectedModelId: String?,
     selectedAgentId: String?,
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
+    onSelectWorkspace: (String?) -> Unit,
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
@@ -89,11 +93,13 @@ fun OpenCodeChatScreen(
             state = state,
             providers = providers,
             agents = agents,
+            workspaces = workspaces,
             selectedProviderId = selectedProviderId,
             selectedModelId = selectedModelId,
             selectedAgentId = selectedAgentId,
             onSelectModel = onSelectModel,
-            onSelectAgent = onSelectAgent
+            onSelectAgent = onSelectAgent,
+            onSelectWorkspace = onSelectWorkspace
         )
 
         if (state.backendName.isBlank()) {
@@ -218,11 +224,13 @@ private fun ChatHeader(
     state: ChatUiState,
     providers: List<OpenCodeProvider>,
     agents: List<OpenCodeAgent>,
+    workspaces: List<WorkspaceRef>,
     selectedProviderId: String?,
     selectedModelId: String?,
     selectedAgentId: String?,
     onSelectModel: (String, String) -> Unit,
-    onSelectAgent: (String) -> Unit
+    onSelectAgent: (String) -> Unit,
+    onSelectWorkspace: (String?) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -251,6 +259,12 @@ private fun ChatHeader(
                 active = state.isConnected
             )
         }
+        WorkspaceSelector(
+            workspaces = workspaces,
+            selectedPath = state.selectedWorkspacePath,
+            enabled = state.sessionId == null,
+            onSelect = onSelectWorkspace
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ModelSelector(
                 providers = providers,
@@ -265,6 +279,73 @@ private fun ChatHeader(
                 onSelect = onSelectAgent,
                 modifier = Modifier.weight(1f)
             )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSelector(
+    workspaces: List<WorkspaceRef>,
+    selectedPath: String?,
+    enabled: Boolean,
+    onSelect: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = workspaces.firstOrNull { it.path == selectedPath }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = enabled && workspaces.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Folder, contentDescription = null)
+            Spacer(Modifier.padding(horizontal = 4.dp))
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text("作業フォルダ", style = MaterialTheme.typography.labelSmall)
+                Text(
+                    selected?.name ?: selectedPath ?: "既定のフォルダ",
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text("既定のフォルダ")
+                        Text(
+                            "OpenCodeサーバーの現在位置を使用",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            workspaces.forEach { workspace ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(workspace.name, maxLines = 1)
+                            Text(
+                                workspace.path,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelect(workspace.path)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }

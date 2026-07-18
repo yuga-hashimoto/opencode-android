@@ -38,8 +38,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.opencode.android.OpenCodeApplication
 import com.opencode.android.R
+import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.feature.activity.ActivityScreen
 import com.opencode.android.feature.activity.ActivityViewModel
+import com.opencode.android.feature.activity.SessionDetailScreen
+import com.opencode.android.feature.activity.SessionDetailViewModel
 import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
 import com.opencode.android.feature.chat.ChatViewModel
@@ -48,8 +51,11 @@ import com.opencode.android.feature.home.HomeScreen
 import com.opencode.android.feature.home.HomeViewModel
 import com.opencode.android.feature.settings.SettingsScreen
 import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
+import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
 import com.opencode.android.feature.workspace.WorkspacesScreen
+import com.opencode.android.runtime.WorkspaceRef
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -65,6 +71,9 @@ private enum class Destination(
     SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
+private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
+private const val SESSION_DETAIL_ROUTE = "session-detail"
+
 @Composable
 fun OpenCodeApp(
     onOpenAssistantSettings: () -> Unit
@@ -74,6 +83,8 @@ fun OpenCodeApp(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingSession by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selectedWorkspace by remember { mutableStateOf<WorkspaceRef?>(null) }
+    var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
     val preferences by app.preferences.state.collectAsState()
@@ -198,9 +209,22 @@ fun OpenCodeApp(
         )
     }
 
+    LaunchedEffect(selectedRuntime?.id, workspaceState.workspaces, chatState.sessionId) {
+        if (chatState.sessionId != null) return@LaunchedEffect
+        val currentPath = chatState.selectedWorkspacePath
+        val available = workspaceState.workspaces
+        if (available.isNotEmpty() && available.none { it.path == currentPath }) {
+            chatViewModel.selectWorkspace(available.first().path)
+        }
+    }
+
+    val showBottomBar = Destination.entries.any { destination ->
+        destination.route == backStackEntry?.destination?.route
+    }
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            if (showBottomBar) NavigationBar {
                 Destination.entries.forEach { destination ->
                     val selected = backStackEntry?.destination?.hierarchy
                         ?.any { it.route == destination.route } == true
@@ -254,11 +278,13 @@ fun OpenCodeApp(
                     state = chatState,
                     providers = settingsState.providers,
                     agents = settingsState.agents,
+                    workspaces = workspaceState.workspaces,
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
+                    onSelectWorkspace = chatViewModel::selectWorkspace,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
@@ -274,6 +300,10 @@ fun OpenCodeApp(
                     onDeleteConnection = workspaceViewModel::deleteConnection,
                     onTestConnection = workspaceViewModel::testConnection,
                     onRefresh = workspaceViewModel::refresh,
+                    onOpenWorkspace = { workspace ->
+                        selectedWorkspace = workspace
+                        navController.navigate(WORKSPACE_DETAIL_ROUTE)
+                    },
                     onSetupLocal = workspaceViewModel::setupLocalRuntime,
                     onStartLocal = workspaceViewModel::startLocalRuntime,
                     onStopLocal = workspaceViewModel::stopLocalRuntime,
@@ -281,15 +311,70 @@ fun OpenCodeApp(
                 )
             }
 
+            composable(WORKSPACE_DETAIL_ROUTE) {
+                val workspace = selectedWorkspace
+                val runtime = selectedRuntime
+                if (workspace == null || runtime == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val explorerViewModel: WorkspaceExplorerViewModel = viewModel(
+                        key = "workspace-explorer-${runtime.id}-${workspace.id}",
+                        factory = ViewModelFactory {
+                            WorkspaceExplorerViewModel(runtime, workspace)
+                        }
+                    )
+                    val explorerState by explorerViewModel.state.collectAsState()
+                    WorkspaceExplorerScreen(
+                        state = explorerState,
+                        onBack = { navController.popBackStack() },
+                        onRefresh = explorerViewModel::refresh,
+                        onOpenNode = explorerViewModel::open,
+                        onCloseFile = explorerViewModel::closeFile,
+                        onNavigateUp = explorerViewModel::navigateUp,
+                        onSearch = explorerViewModel::search,
+                        onRefreshChanges = explorerViewModel::refreshChanges
+                    )
+                }
+            }
+
             composable(Destination.ACTIVITY.route) {
                 ActivityScreen(
                     state = activityState,
                     onRefresh = activityViewModel::refresh,
+                    onInspectSession = { session ->
+                        selectedSession = session
+                        navController.navigate(SESSION_DETAIL_ROUTE)
+                    },
                     onOpenSession = { id, title ->
                         pendingSession = id to title
                         navController.navigate(Destination.CHAT.route)
                     }
                 )
+            }
+
+            composable(SESSION_DETAIL_ROUTE) {
+                val session = selectedSession
+                val runtime = selectedRuntime
+                if (session == null || runtime == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val detailViewModel: SessionDetailViewModel = viewModel(
+                        key = "session-detail-${runtime.id}-${session.id}",
+                        factory = ViewModelFactory {
+                            SessionDetailViewModel(runtime, session)
+                        }
+                    )
+                    val detailState by detailViewModel.state.collectAsState()
+                    SessionDetailScreen(
+                        state = detailState,
+                        onBack = { navController.popBackStack() },
+                        onRefresh = detailViewModel::refresh,
+                        onContinueChat = {
+                            pendingSession = session.id to session.title
+                            navController.navigate(Destination.CHAT.route)
+                        }
+                    )
+                }
             }
 
             composable(Destination.SETTINGS.route) {

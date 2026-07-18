@@ -18,12 +18,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class LocalRuntimeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var operation: Job? = null
+    private var watchdogJob: Job? = null
+    @Volatile private var autoRestartEnabled = false
     private lateinit var manager: LocalRuntimeManager
 
     override fun onCreate() {
@@ -37,21 +41,35 @@ class LocalRuntimeService : Service() {
                     .notify(NOTIFICATION_ID, notification(status))
             }
         }
+        startWatchdog()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_INSTALL_AND_START -> launchOperation { manager.installAndStart() }
-            ACTION_START -> launchOperation { manager.start() }
-            ACTION_REINSTALL -> launchOperation { manager.reinstall() }
-            ACTION_STOP -> launchOperation {
-                manager.stop()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+            ACTION_INSTALL_AND_START -> {
+                autoRestartEnabled = true
+                launchOperation { manager.installAndStart() }
+            }
+            ACTION_START -> {
+                autoRestartEnabled = true
+                launchOperation { manager.start() }
+            }
+            ACTION_REINSTALL -> {
+                autoRestartEnabled = true
+                launchOperation { manager.reinstall() }
+            }
+            ACTION_STOP -> {
+                autoRestartEnabled = false
+                launchOperation {
+                    manager.stop()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
             }
             null -> {
+                autoRestartEnabled = true
                 if (manager.status() is LocalRuntimeStatus.Stopped) {
-                    launchOperation { manager.start() }
+                    launchOperation { manager.ensureRunning() }
                 }
             }
         }
@@ -59,7 +77,9 @@ class LocalRuntimeService : Service() {
     }
 
     override fun onDestroy() {
+        autoRestartEnabled = false
         operation?.cancel()
+        watchdogJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -69,6 +89,21 @@ class LocalRuntimeService : Service() {
     private fun launchOperation(block: suspend () -> Unit) {
         operation?.cancel()
         operation = scope.launch(Dispatchers.IO) { block() }
+    }
+
+    private fun startWatchdog() {
+        watchdogJob?.cancel()
+        watchdogJob = scope.launch(Dispatchers.IO) {
+            val watchdog = LocalRuntimeWatchdog()
+            while (isActive) {
+                delay(WATCHDOG_INTERVAL_MILLIS)
+                if (!autoRestartEnabled) continue
+                val status = manager.status()
+                if (watchdog.observe(status)) {
+                    manager.ensureRunning()
+                }
+            }
+        }
     }
 
     private fun notification(status: LocalRuntimeStatus): android.app.Notification {
@@ -131,6 +166,7 @@ class LocalRuntimeService : Service() {
     companion object {
         private const val CHANNEL_ID = "local_opencode_runtime"
         private const val NOTIFICATION_ID = 4107
+        private const val WATCHDOG_INTERVAL_MILLIS = 5_000L
         const val ACTION_INSTALL_AND_START = "com.opencode.android.local.INSTALL_AND_START"
         const val ACTION_START = "com.opencode.android.local.START"
         const val ACTION_STOP = "com.opencode.android.local.STOP"

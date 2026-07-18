@@ -36,11 +36,12 @@ class LocalRuntimeManager(
     fun status(): LocalRuntimeStatus {
         val operation = mutableState.value
         if (operation is LocalRuntimeStatus.Installing || operation is LocalRuntimeStatus.Starting) return operation
-        if (operation is LocalRuntimeStatus.Ready && processLauncher?.isRunning() == true) return operation
         return computeStatus().also { mutableState.value = it }
     }
 
     fun installedPort(): Int? = readMetadata()?.port
+
+    fun isHealthy(): Boolean = installedPort()?.let(portProbe) == true
 
     suspend fun installAndStart(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
         val configuredInstaller = installer
@@ -57,14 +58,19 @@ class LocalRuntimeManager(
     }
 
     suspend fun start(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
-        val configuredInstaller = installer
-            ?: return@withLock Result.failure(IllegalStateException("Local runtime installer is not configured"))
-        val installed = configuredInstaller.installedRuntime()
+        startLocked()
+    }
+
+    suspend fun ensureRunning(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
+        val metadata = readMetadata()
             ?: return@withLock Result.failure(IllegalStateException("Local runtime is not installed"))
-        runCatching { startInstalled(installed) }
-            .onFailure { error ->
-                mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルOpenCodeを起動できません")
-            }
+        if (portProbe(metadata.port)) {
+            return@withLock Result.success(
+                LocalRuntimeStatus.Ready(metadata.version, metadata.port).also { mutableState.value = it }
+            )
+        }
+        withContext(Dispatchers.IO) { processLauncher?.stop() }
+        startLocked()
     }
 
     suspend fun stop(): Result<LocalRuntimeStatus.Stopped> = operationMutex.withLock {
@@ -90,6 +96,17 @@ class LocalRuntimeManager(
         }.onFailure { error ->
             mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルランタイムの再導入に失敗しました")
         }
+    }
+
+    private suspend fun startLocked(): Result<LocalRuntimeStatus.Ready> {
+        val configuredInstaller = installer
+            ?: return Result.failure(IllegalStateException("Local runtime installer is not configured"))
+        val installed = configuredInstaller.installedRuntime()
+            ?: return Result.failure(IllegalStateException("Local runtime is not installed"))
+        return runCatching { startInstalled(installed) }
+            .onFailure { error ->
+                mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルOpenCodeを起動できません")
+            }
     }
 
     private suspend fun startInstalled(
@@ -121,7 +138,7 @@ class LocalRuntimeManager(
         if (metadata.version.isBlank() || metadata.port !in 1..65535) {
             return LocalRuntimeStatus.Broken("Runtime metadata contains invalid values")
         }
-        return if (processLauncher?.isRunning() == true || portProbe(metadata.port)) {
+        return if (portProbe(metadata.port)) {
             LocalRuntimeStatus.Ready(metadata.version, metadata.port)
         } else {
             LocalRuntimeStatus.Stopped(metadata.version, metadata.port)

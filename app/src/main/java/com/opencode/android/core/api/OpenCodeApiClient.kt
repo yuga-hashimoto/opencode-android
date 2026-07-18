@@ -35,13 +35,22 @@ class OpenCodeApiClient(
 
     suspend fun health(): OpenCodeHealth = get("global/health", OpenCodeHealth::class.java)
 
-    suspend fun sessions(): List<OpenCodeSession> = getList("session")
+    suspend fun sessions(directory: String? = null): List<OpenCodeSession> =
+        getList("session", query("directory" to directory))
 
-    suspend fun createSession(title: String? = null): OpenCodeSession {
+    suspend fun createSession(
+        title: String? = null,
+        directory: String? = null
+    ): OpenCodeSession {
         val body = JsonObject().apply {
             title?.takeIf { it.isNotBlank() }?.let { addProperty("title", it) }
         }
-        return post("session", body, OpenCodeSession::class.java)
+        return post(
+            "session",
+            body,
+            OpenCodeSession::class.java,
+            query("directory" to directory)
+        )
     }
 
     suspend fun messages(sessionId: String): List<OpenCodeMessage> =
@@ -50,6 +59,80 @@ class OpenCodeApiClient(
     suspend fun providers(): ProviderCatalog = get("provider", ProviderCatalog::class.java)
 
     suspend fun agents(): List<OpenCodeAgent> = getList("agent")
+
+    suspend fun projects(directory: String? = null): List<OpenCodeProject> =
+        getList("project", query("directory" to directory))
+
+    suspend fun currentProject(directory: String? = null): OpenCodeProject =
+        get("project/current", OpenCodeProject::class.java, query("directory" to directory))
+
+    suspend fun pathInfo(directory: String? = null): OpenCodePathInfo =
+        get("path", OpenCodePathInfo::class.java, query("directory" to directory))
+
+    suspend fun files(directory: String, path: String): List<OpenCodeFileNode> =
+        getList("file", query("directory" to directory, "path" to path))
+
+    suspend fun fileContent(directory: String, path: String): OpenCodeFileContent =
+        get(
+            "file/content",
+            OpenCodeFileContent::class.java,
+            query("directory" to directory, "path" to path)
+        )
+
+    suspend fun fileStatus(directory: String): List<OpenCodeFileChange> =
+        getList("file/status", query("directory" to directory))
+
+    suspend fun searchText(directory: String, pattern: String): List<OpenCodeSearchMatch> =
+        getList("find", query("directory" to directory, "pattern" to pattern))
+
+    suspend fun findFiles(
+        directory: String,
+        queryText: String,
+        includeDirectories: Boolean? = null,
+        type: String? = null,
+        limit: Int? = null
+    ): List<String> = getList(
+        "find/file",
+        query(
+            "directory" to directory,
+            "query" to queryText,
+            "dirs" to includeDirectories?.toString(),
+            "type" to type,
+            "limit" to limit?.toString()
+        )
+    )
+
+    suspend fun vcsInfo(directory: String): OpenCodeVcsInfo =
+        get("vcs", OpenCodeVcsInfo::class.java, query("directory" to directory))
+
+    suspend fun vcsStatus(directory: String): List<OpenCodeFileChange> =
+        getList("vcs/status", query("directory" to directory))
+
+    suspend fun vcsDiff(
+        directory: String,
+        mode: String = "git",
+        context: Int? = null
+    ): List<OpenCodeFileChange> = getList(
+        "vcs/diff",
+        query("directory" to directory, "mode" to mode, "context" to context?.toString())
+    )
+
+    suspend fun sessionDiff(
+        sessionId: String,
+        directory: String? = null,
+        messageId: String? = null
+    ): List<OpenCodeFileChange> = getList(
+        "session/${encodePath(sessionId)}/diff",
+        query("directory" to directory, "messageID" to messageId)
+    )
+
+    suspend fun sessionTodo(
+        sessionId: String,
+        directory: String? = null
+    ): List<OpenCodeTodo> = getList(
+        "session/${encodePath(sessionId)}/todo",
+        query("directory" to directory)
+    )
 
     suspend fun promptAsync(sessionId: String, request: PromptRequest) {
         val json = JsonObject().apply {
@@ -148,24 +231,35 @@ class OpenCodeApiClient(
         }
     }
 
-    private suspend fun <T> get(path: String, clazz: Class<T>): T = withContext(Dispatchers.IO) {
-        execute(requestBuilder(path).get().build()) { body -> gson.fromJson(body, clazz) }
+    private suspend fun <T> get(
+        path: String,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        execute(requestBuilder(path, queryParameters).get().build()) { body -> gson.fromJson(body, clazz) }
     }
 
-    private suspend inline fun <reified T> getList(path: String): List<T> = withContext(Dispatchers.IO) {
-        execute(requestBuilder(path).get().build()) { body ->
+    private suspend inline fun <reified T> getList(
+        path: String,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): List<T> = withContext(Dispatchers.IO) {
+        execute(requestBuilder(path, queryParameters).get().build()) { body ->
             val type = object : TypeToken<List<T>>() {}.type
             gson.fromJson<List<T>>(body, type).orEmpty()
         }
     }
 
-    private suspend fun <T> post(path: String, body: JsonObject, clazz: Class<T>): T =
-        withContext(Dispatchers.IO) {
-            val request = requestBuilder(path)
-                .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-            execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
-        }
+    private suspend fun <T> post(
+        path: String,
+        body: JsonObject,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path, queryParameters)
+            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
 
     private suspend fun postWithoutResponse(path: String, body: JsonObject) = withContext(Dispatchers.IO) {
         val request = requestBuilder(path)
@@ -186,9 +280,15 @@ class OpenCodeApiClient(
         }
     }
 
-    private fun requestBuilder(path: String): Request.Builder {
-        val url = baseUrl.resolve(path.removePrefix("/"))
+    private fun requestBuilder(
+        path: String,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): Request.Builder {
+        val resolved = baseUrl.resolve(path.removePrefix("/"))
             ?: throw IllegalArgumentException("Invalid OpenCode API path")
+        val url = resolved.newBuilder().apply {
+            queryParameters.forEach { (name, value) -> addQueryParameter(name, value) }
+        }.build()
         return Request.Builder()
             .url(url)
             .header("Accept", "application/json")
@@ -198,6 +298,11 @@ class OpenCodeApiClient(
                 }
             }
     }
+
+    private fun query(vararg parameters: Pair<String, String?>): List<Pair<String, String>> =
+        parameters.mapNotNull { (name, value) ->
+            value?.takeIf { it.isNotBlank() }?.let { name to it }
+        }
 
     private fun encodePath(value: String): String =
         value.replace("/", "%2F").replace("?", "%3F").replace("#", "%23")

@@ -148,8 +148,8 @@ class RuntimeRegistryTest {
         override fun disconnect() = Unit
         override suspend fun listWorkspaces(): List<WorkspaceRef> = emptyList()
         override suspend fun health(): OpenCodeHealth = OpenCodeHealth(true, "test")
-        override suspend fun listSessions(): List<OpenCodeSession> = emptyList()
-        override suspend fun createSession(title: String?): OpenCodeSession = error("unused")
+        override suspend fun listSessions(directory: String?): List<OpenCodeSession> = emptyList()
+        override suspend fun createSession(title: String?, directory: String?): OpenCodeSession = error("unused")
         override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = emptyList()
         override suspend fun listProviders(): ProviderCatalog = ProviderCatalog()
         override suspend fun listAgents(): List<OpenCodeAgent> = emptyList()

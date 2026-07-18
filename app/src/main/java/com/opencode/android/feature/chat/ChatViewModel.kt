@@ -43,6 +43,7 @@ data class ChatUiState(
     val selectedProviderId: String? = null,
     val selectedModelId: String? = null,
     val selectedAgentId: String? = null,
+    val selectedWorkspacePath: String? = null,
     val error: String? = null
 )
 
@@ -85,6 +86,11 @@ class ChatViewModel(
                     }
             }
         }
+    }
+
+    fun selectWorkspace(path: String?) {
+        if (_uiState.value.sessionId != null) return
+        _uiState.update { it.copy(selectedWorkspacePath = path) }
     }
 
     fun selectConfiguration(providerId: String?, modelId: String?, agentId: String?) {
@@ -171,7 +177,10 @@ class ChatViewModel(
             runCatching {
                 val existingSessionId = _uiState.value.sessionId
                 val session = if (existingSessionId == null) {
-                    currentBackend.createSession(normalized.take(60))
+                    currentBackend.createSession(
+                        title = normalized.take(60),
+                        directory = _uiState.value.selectedWorkspacePath
+                    )
                 } else {
                     null
                 }
@@ -250,7 +259,7 @@ class ChatViewModel(
         val activeSession = _uiState.value.sessionId
         when (event) {
             OpenCodeEvent.ServerConnected -> {
-                _uiState.update { it.copy(isConnected = true) }
+                _uiState.update { it.copy(isConnected = true, error = null) }
             }
             is OpenCodeEvent.MessagePartUpdated -> {
                 val part = event.part

@@ -12,10 +12,14 @@ class LocalRuntimeProcessLauncher(
 
     @Synchronized
     fun start(runtime: LocalRuntimeInstaller.InstalledRuntime): Process {
-        process?.takeIf { it.isAlive }?.let { return it }
+        val port = runtime.metadata.port
+        process?.let { current ->
+            if (current.isAlive && portProbe(port)) return current
+            terminate(current)
+            process = null
+        }
         val rootfs = runtime.rootfs
         val suite = runtime.commandSuite
-        val port = runtime.metadata.port
         val logs = File(runtimeDirectory, "logs").apply { mkdirs() }
         val logFile = File(logs, "opencode-local.log")
         val workspace = File(runtimeDirectory, "workspace").apply { mkdirs() }
@@ -51,10 +55,8 @@ class LocalRuntimeProcessLauncher(
             .redirectErrorStream(true)
             .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
         builder.environment().apply {
-            putAll(suite.environment())
-            put("PROOT_TMP_DIR", prootTmp.absolutePath)
-            put("OPENCODE_CONFIG_DIR", "/root/.config/opencode")
-            put("OPENCODE_DISABLE_AUTOUPDATE", "true")
+            clear()
+            putAll(localRuntimeEnvironment(suite.environment(), prootTmp))
         }
         val started = builder.start()
         process = started
@@ -65,15 +67,22 @@ class LocalRuntimeProcessLauncher(
     @Synchronized
     fun stop() {
         val current = process ?: return
+        terminate(current)
+        process = null
+    }
+
+    fun isRunning(): Boolean = process?.isAlive == true
+
+    fun isHealthy(port: Int): Boolean = process?.isAlive == true && portProbe(port)
+
+    private fun terminate(current: Process) {
+        if (!current.isAlive) return
         current.destroy()
         if (!current.waitFor(3, TimeUnit.SECONDS)) {
             current.destroyForcibly()
             current.waitFor(2, TimeUnit.SECONDS)
         }
-        process = null
     }
-
-    fun isRunning(): Boolean = process?.isAlive == true
 
     private fun waitUntilReady(process: Process, port: Int, logFile: File) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
@@ -91,4 +100,24 @@ class LocalRuntimeProcessLauncher(
     private fun tail(file: File): String = runCatching {
         file.readLines().takeLast(20).joinToString("\n")
     }.getOrDefault("No runtime log was produced")
+}
+
+internal fun localRuntimeEnvironment(
+    suiteEnvironment: Map<String, String>,
+    prootTmp: File
+): Map<String, String> = buildMap {
+    putAll(suiteEnvironment)
+    put("PROOT_TMP_DIR", prootTmp.absolutePath)
+    put("HOME", "/root")
+    put("USER", "root")
+    put("LOGNAME", "root")
+    put("SHELL", "/bin/bash")
+    put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    put("TMPDIR", "/tmp")
+    put("XDG_CONFIG_HOME", "/root/.config")
+    put("XDG_CACHE_HOME", "/root/.cache")
+    put("XDG_DATA_HOME", "/root/.local/share")
+    put("XDG_STATE_HOME", "/root/.local/state")
+    put("OPENCODE_CONFIG_DIR", "/root/.config/opencode")
+    put("OPENCODE_DISABLE_AUTOUPDATE", "true")
 }

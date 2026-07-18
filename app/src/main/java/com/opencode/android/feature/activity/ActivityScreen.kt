@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
@@ -40,6 +42,7 @@ import com.opencode.android.ui.components.StatusChip
 fun ActivityScreen(
     state: ActivityUiState,
     onRefresh: () -> Unit,
+    onInspectSession: (OpenCodeSession) -> Unit,
     onOpenSession: (String, String) -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -72,20 +75,24 @@ fun ActivityScreen(
         }
 
         when (selectedTab) {
-            0 -> RunningTab(state, onOpenSession)
+            0 -> RunningTab(state, onInspectSession, onOpenSession)
             1 -> ApprovalTab(state)
-            2 -> SessionsTab(state, onOpenSession)
+            2 -> SessionsTab(state, onInspectSession, onOpenSession)
             else -> LogsTab(state)
         }
     }
 }
 
 @Composable
-private fun RunningTab(state: ActivityUiState, onOpenSession: (String, String) -> Unit) {
+private fun RunningTab(
+    state: ActivityUiState,
+    onInspectSession: (OpenCodeSession) -> Unit,
+    onOpenSession: (String, String) -> Unit
+) {
     val activeSessions = state.sessions.filter { it.id in state.activeSessionIds }
     ActivityList(emptyText = "実行中のタスクはありません", isEmpty = activeSessions.isEmpty()) {
         items(activeSessions, key = { it.id }) { session ->
-            SectionCard(modifier = Modifier.clickable { onOpenSession(session.id, session.title) }) {
+            SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Terminal, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column(modifier = Modifier.weight(1f)) {
@@ -93,6 +100,13 @@ private fun RunningTab(state: ActivityUiState, onOpenSession: (String, String) -
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     StatusChip("実行中", active = true)
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { onOpenSession(session.id, session.title) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("チャットを開く")
                 }
             }
         }
@@ -125,10 +139,14 @@ private fun ApprovalTab(state: ActivityUiState) {
 }
 
 @Composable
-private fun SessionsTab(state: ActivityUiState, onOpenSession: (String, String) -> Unit) {
+private fun SessionsTab(
+    state: ActivityUiState,
+    onInspectSession: (OpenCodeSession) -> Unit,
+    onOpenSession: (String, String) -> Unit
+) {
     ActivityList(emptyText = "セッションはまだありません", isEmpty = state.sessions.isEmpty()) {
         items(state.sessions, key = { it.id }) { session ->
-            SectionCard(modifier = Modifier.clickable { onOpenSession(session.id, session.title) }) {
+            SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column(modifier = Modifier.weight(1f)) {
@@ -136,6 +154,13 @@ private fun SessionsTab(state: ActivityUiState, onOpenSession: (String, String) 
                         Spacer(Modifier.height(4.dp))
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                     }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { onOpenSession(session.id, session.title) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("チャットを続ける")
                 }
             }
         }

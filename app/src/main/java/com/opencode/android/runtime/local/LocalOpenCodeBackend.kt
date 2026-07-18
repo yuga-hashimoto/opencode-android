@@ -2,9 +2,17 @@ package com.opencode.android.runtime.local
 
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeEvent
+import com.opencode.android.core.api.OpenCodeFileChange
+import com.opencode.android.core.api.OpenCodeFileContent
+import com.opencode.android.core.api.OpenCodeFileNode
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.core.api.OpenCodeMessage
+import com.opencode.android.core.api.OpenCodePathInfo
+import com.opencode.android.core.api.OpenCodeProject
+import com.opencode.android.core.api.OpenCodeSearchMatch
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.core.api.OpenCodeTodo
+import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
@@ -37,11 +45,45 @@ class LocalOpenCodeBackend(
     }
 
     override suspend fun health(): OpenCodeHealth = delegate().health()
-    override suspend fun listSessions(): List<OpenCodeSession> = delegate().listSessions()
-    override suspend fun createSession(title: String?): OpenCodeSession = delegate().createSession(title)
+    override suspend fun listSessions(directory: String?): List<OpenCodeSession> =
+        delegate().listSessions(directory)
+    override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
+        delegate().createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = delegate().listMessages(sessionId)
     override suspend fun listProviders(): ProviderCatalog = delegate().listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = delegate().listAgents()
+    override suspend fun listProjects(directory: String?): List<OpenCodeProject> =
+        delegate().listProjects(directory)
+    override suspend fun currentProject(directory: String?): OpenCodeProject =
+        delegate().currentProject(directory)
+    override suspend fun pathInfo(directory: String?): OpenCodePathInfo = delegate().pathInfo(directory)
+    override suspend fun listFiles(directory: String, path: String): List<OpenCodeFileNode> =
+        delegate().listFiles(directory, path)
+    override suspend fun readFile(directory: String, path: String): OpenCodeFileContent =
+        delegate().readFile(directory, path)
+    override suspend fun fileStatus(directory: String): List<OpenCodeFileChange> =
+        delegate().fileStatus(directory)
+    override suspend fun searchText(directory: String, pattern: String): List<OpenCodeSearchMatch> =
+        delegate().searchText(directory, pattern)
+    override suspend fun findFiles(
+        directory: String,
+        query: String,
+        includeDirectories: Boolean?,
+        type: String?,
+        limit: Int?
+    ): List<String> = delegate().findFiles(directory, query, includeDirectories, type, limit)
+    override suspend fun vcsInfo(directory: String): OpenCodeVcsInfo = delegate().vcsInfo(directory)
+    override suspend fun vcsStatus(directory: String): List<OpenCodeFileChange> =
+        delegate().vcsStatus(directory)
+    override suspend fun vcsDiff(directory: String, mode: String, context: Int?): List<OpenCodeFileChange> =
+        delegate().vcsDiff(directory, mode, context)
+    override suspend fun sessionDiff(
+        sessionId: String,
+        directory: String?,
+        messageId: String?
+    ): List<OpenCodeFileChange> = delegate().sessionDiff(sessionId, directory, messageId)
+    override suspend fun sessionTodo(sessionId: String, directory: String?): List<OpenCodeTodo> =
+        delegate().sessionTodo(sessionId, directory)
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) = delegate().sendMessage(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = delegate().abortSession(sessionId)
     override suspend fun respondToPermission(
