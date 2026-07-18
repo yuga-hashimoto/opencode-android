@@ -2,12 +2,14 @@ package com.opencode.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Lobster Theme Palette
-val OpenCodeOrange = Color(0xFFFF5722) // Primary Lobster Color
-val OpenCodePopYellow = Color(0xFFFFD600) // Pop Background
-val OpenCodeDarkGrey = Color(0xFF121212) // Background
-val OpenCodeSurfaceGrey = Color(0xFF1E1E1E) // Surface
-val OpenCodeBlue = Color(0xFF283593) // Deprecated: Kept for compat but should be avoided
-val OpenCodeTextPrimary = Color(0xFFEEEEEE)
-val OpenCodeTextSecondary = Color(0xFFB0B0B0)
-val OpenCodeError = Color(0xFFD32F2F)
+val OpenCodeBackground = Color(0xFF0B1017)
+val OpenCodeSurface = Color(0xFF121A24)
+val OpenCodeSurfaceVariant = Color(0xFF1A2633)
+val OpenCodePrimary = Color(0xFF6EA8FE)
+val OpenCodeSecondary = Color(0xFF55C6C1)
+val OpenCodeSuccess = Color(0xFF62C58F)
+val OpenCodeWarning = Color(0xFFF2B766)
+val OpenCodeError = Color(0xFFFF7A86)
+val OpenCodeTextPrimary = Color(0xFFF2F5F9)
+val OpenCodeTextSecondary = Color(0xFFA9B6C5)
+val OpenCodeOutline = Color(0xFF304153)
