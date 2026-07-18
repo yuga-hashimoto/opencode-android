@@ -18,14 +18,9 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -40,13 +35,9 @@ import com.opencode.android.ui.components.SectionCard
 fun SettingsScreen(
     state: AppUiState,
     onOpenAssistantSettings: () -> Unit,
-    onHotwordChange: (Boolean) -> Unit,
-    onWakeWordChange: (String) -> Unit,
     onTtsChange: (Boolean) -> Unit,
     onContinuousChange: (Boolean) -> Unit
 ) {
-    var wakeWordDraft by remember(state.wakeWord) { mutableStateOf(state.wakeWord) }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -89,44 +80,12 @@ fun SettingsScreen(
                 Button(onClick = onOpenAssistantSettings, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.set_default_assistant))
                 }
-            }
-        }
-
-        item {
-            SectionCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Mic, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                    Spacer(Modifier.padding(horizontal = 7.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.wake_word_detection), fontWeight = FontWeight.Medium)
-                        Text(
-                            "マイクを使用するForeground Serviceとして動作します。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked = state.hotwordEnabled, onCheckedChange = onHotwordChange)
-                }
-                Spacer(Modifier.height(14.dp))
-                OutlinedTextField(
-                    value = wakeWordDraft,
-                    onValueChange = { wakeWordDraft = it },
-                    label = { Text(stringResource(R.string.wake_word_phrase)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    supportingText = { Text("例: open code") }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "常時ウェイクワードは標準APKに含めません。将来、任意ダウンロード機能として追加します。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { onWakeWordChange(wakeWordDraft) },
-                    enabled = wakeWordDraft.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.save))
-                }
             }
         }
 
@@ -169,13 +128,13 @@ fun SettingsScreen(
         item {
             SectionCard {
                 LabelValueRow(
-                    label = "Provider",
-                    value = state.selectedProviderId ?: "Not selected"
+                    label = "AIサービス",
+                    value = state.selectedProviderId ?: "未選択"
                 )
                 Spacer(Modifier.height(12.dp))
                 LabelValueRow(
                     label = stringResource(R.string.model),
-                    value = state.selectedModelId ?: "Default"
+                    value = state.selectedModelId ?: "既定"
                 )
                 Spacer(Modifier.height(12.dp))
                 LabelValueRow(
@@ -184,7 +143,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "モデルとエージェントはチャット画面で選択できます。ホームアシストも同じ選択を使用します。",
+                    "モデルとエージェントはチャット画面で選択できます。ホームアシストも同じ設定を利用します。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -234,7 +193,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column {
-                        Text("OpenCode Android 0.1.0", fontWeight = FontWeight.Medium)
+                        Text("OpenCode Android 0.2.0", fontWeight = FontWeight.Medium)
                         Text(
                             stringResource(R.string.unofficial_client),
                             style = MaterialTheme.typography.bodySmall,

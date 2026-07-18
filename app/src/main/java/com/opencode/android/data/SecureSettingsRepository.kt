@@ -44,14 +44,6 @@ class SecureSettingsRepository(context: Context) {
     fun selectedConnection(): ConnectionProfile? =
         selectedConnectionId?.let { selected -> connections().firstOrNull { it.id == selected } }
 
-    var hotwordEnabled: Boolean
-        get() = preferences.getBoolean(KEY_HOTWORD_ENABLED, false)
-        set(value) = preferences.edit().putBoolean(KEY_HOTWORD_ENABLED, value).apply()
-
-    var wakeWord: String
-        get() = preferences.getString(KEY_WAKE_WORD, DEFAULT_WAKE_WORD) ?: DEFAULT_WAKE_WORD
-        set(value) = preferences.edit().putString(KEY_WAKE_WORD, normalizeWakeWord(value)).apply()
-
     var ttsEnabled: Boolean
         get() = preferences.getBoolean(KEY_TTS_ENABLED, true)
         set(value) = preferences.edit().putBoolean(KEY_TTS_ENABLED, value).apply()
@@ -77,21 +69,14 @@ class SecureSettingsRepository(context: Context) {
         set(value) = preferences.edit().putString(KEY_AGENT_ID, value).apply()
 
     companion object {
-        const val DEFAULT_WAKE_WORD = "open code"
-
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
         private const val KEY_SELECTED_CONNECTION = "selected_connection"
-        private const val KEY_HOTWORD_ENABLED = "hotword_enabled"
-        private const val KEY_WAKE_WORD = "wake_word"
         private const val KEY_TTS_ENABLED = "tts_enabled"
         private const val KEY_CONTINUOUS_CONVERSATION = "continuous_conversation"
         private const val KEY_ASSISTANT_SESSION_ID = "assistant_session_id"
         private const val KEY_PROVIDER_ID = "provider_id"
         private const val KEY_MODEL_ID = "model_id"
         private const val KEY_AGENT_ID = "agent_id"
-
-        fun normalizeWakeWord(value: String): String =
-            value.trim().lowercase().replace(Regex("\\s+"), " ").ifBlank { DEFAULT_WAKE_WORD }
     }
 }

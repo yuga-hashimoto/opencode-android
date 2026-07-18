@@ -79,9 +79,6 @@ dependencies {
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     
-    // Vosk
-    implementation("com.alphacephei:vosk-android:0.3.47")
-    
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     

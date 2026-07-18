@@ -1,7 +1,6 @@
 package com.opencode.android.assistant
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.view.View
@@ -55,7 +54,6 @@ import com.opencode.android.api.PermissionRequest
 import com.opencode.android.api.PromptRequest
 import com.opencode.android.backend.PermissionResponse
 import com.opencode.android.backend.RemoteOpenCodeBackend
-import com.opencode.android.hotword.HotwordService
 import com.opencode.android.speech.SpeechRecognizerManager
 import com.opencode.android.speech.SpeechResult
 import com.opencode.android.speech.TTSManager
@@ -132,7 +130,6 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         super.onShow(args, showFlags)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-        context.sendBroadcast(Intent(HotwordService.ACTION_PAUSE_HOTWORD).setPackage(context.packageName))
 
         val connection = settings.selectedConnection()
         if (connection == null) {
@@ -152,14 +149,12 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         eventJob?.cancel()
         speech.destroy()
         tts.stop()
-        context.sendBroadcast(Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName))
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         super.onHide()
     }
 
     override fun onDestroy() {
-        context.sendBroadcast(Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName))
         scope.cancel()
         speech.destroy()
         tts.shutdown()

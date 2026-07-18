@@ -53,21 +53,13 @@
 
     <string name="home_assistant">ホームアシスト</string>
     <string name="set_default_assistant">既定のデジタルアシスタントに設定</string>
-    <string name="wake_word_detection">ウェイクワード検知</string>
-    <string name="wake_word_phrase">ウェイクワード</string>
     <string name="voice">音声</string>
     <string name="mic_permission_required">音声機能にはマイクの権限が必要です</string>
     <string name="voice_response">応答を音声で読み上げる</string>
     <string name="continuous_conversation">連続会話</string>
     <string name="auto_start_mic">回答後に自動で聞き取りを再開する</string>
     <string name="could_not_open_settings">アシスタント設定を開けませんでした</string>
-    <string name="hotword_started">ウェイクワード検知を開始しました</string>
-    <string name="hotword_stopped">ウェイクワード検知を停止しました</string>
-    <string name="hotword_start_failed">ウェイクワード検知を開始できませんでした</string>
 
-    <string name="notification_channel_name">ウェイクワード</string>
-    <string name="notification_channel_description">設定したOpenCodeのウェイクワードを端末内で検知します</string>
-    <string name="notification_title">OpenCode Androidが聞き取り中です</string>
 
     <string name="about">このアプリについて</string>
 </resources>

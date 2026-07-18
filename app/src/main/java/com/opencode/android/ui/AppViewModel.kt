@@ -34,8 +34,6 @@ data class AppUiState(
     val selectedAgentId: String? = null,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val hotwordEnabled: Boolean = false,
-    val wakeWord: String = "open code",
     val ttsEnabled: Boolean = true,
     val continuousConversation: Boolean = false
 ) {
@@ -59,8 +57,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             selectedProviderId = settings.selectedProviderId,
             selectedModelId = settings.selectedModelId,
             selectedAgentId = settings.selectedAgentId,
-            hotwordEnabled = settings.hotwordEnabled,
-            wakeWord = settings.wakeWord,
             ttsEnabled = settings.ttsEnabled,
             continuousConversation = settings.continuousConversation
         )
@@ -207,16 +203,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAgent(agentId: String) {
         settings.selectedAgentId = agentId
         _uiState.update { it.copy(selectedAgentId = agentId) }
-    }
-
-    fun setHotwordEnabled(enabled: Boolean) {
-        settings.hotwordEnabled = enabled
-        _uiState.update { it.copy(hotwordEnabled = enabled) }
-    }
-
-    fun setWakeWord(value: String) {
-        settings.wakeWord = value
-        _uiState.update { it.copy(wakeWord = settings.wakeWord) }
     }
 
     fun setTtsEnabled(enabled: Boolean) {

@@ -53,21 +53,13 @@
 
     <string name="home_assistant">Home assistant</string>
     <string name="set_default_assistant">Set as default digital assistant</string>
-    <string name="wake_word_detection">Wake word detection</string>
-    <string name="wake_word_phrase">Wake word phrase</string>
     <string name="voice">Voice</string>
     <string name="mic_permission_required">Microphone permission is required for voice features</string>
     <string name="voice_response">Read responses aloud</string>
     <string name="continuous_conversation">Continuous conversation</string>
     <string name="auto_start_mic">Start listening again after each response</string>
     <string name="could_not_open_settings">Could not open assistant settings</string>
-    <string name="hotword_started">Wake word detection started</string>
-    <string name="hotword_stopped">Wake word detection stopped</string>
-    <string name="hotword_start_failed">Could not start wake word detection</string>
 
-    <string name="notification_channel_name">Wake word</string>
-    <string name="notification_channel_description">Listens locally for the configured OpenCode wake word</string>
-    <string name="notification_title">OpenCode Android is listening</string>
 
     <string name="about">About</string>
 </resources>

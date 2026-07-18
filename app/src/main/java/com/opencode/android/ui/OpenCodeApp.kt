@@ -1,6 +1,9 @@
 package com.opencode.android.ui
 
-import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -26,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -36,7 +40,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.opencode.android.R
 import com.opencode.android.backend.OpenCodeBackend
-import com.opencode.android.hotword.HotwordService
 import com.opencode.android.speech.SpeechRecognizerManager
 import com.opencode.android.speech.SpeechResult
 import com.opencode.android.ui.chat.ChatViewModel
@@ -63,8 +66,7 @@ private enum class Destination(
 @Composable
 fun OpenCodeApp(
     appViewModel: AppViewModel,
-    onOpenAssistantSettings: () -> Unit,
-    onHotwordChanged: (Boolean) -> Unit
+    onOpenAssistantSettings: () -> Unit
 ) {
     val appState by appViewModel.uiState.collectAsState()
     val navController = rememberNavController()
@@ -82,6 +84,53 @@ fun OpenCodeApp(
     val speechManager = remember { SpeechRecognizerManager(context.applicationContext) }
     val voiceScope = rememberCoroutineScope()
     var voiceJob by remember { mutableStateOf<Job?>(null) }
+    var startVoiceAfterPermission by remember { mutableStateOf(false) }
+
+    fun hasMicrophonePermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    fun startOrStopVoiceInput() {
+        if (voiceJob?.isActive == true) {
+            voiceJob?.cancel()
+            chatViewModel.stopListening()
+            return
+        }
+
+        chatViewModel.startListening()
+        voiceJob = voiceScope.launch {
+            try {
+                speechManager.startListening("ja-JP").collect { result ->
+                    when (result) {
+                        SpeechResult.Ready,
+                        SpeechResult.Listening,
+                        SpeechResult.Processing,
+                        is SpeechResult.RmsChanged -> Unit
+                        is SpeechResult.PartialResult -> chatViewModel.updateSpeechPartial(result.text)
+                        is SpeechResult.Result -> {
+                            chatViewModel.stopListening()
+                            chatViewModel.sendMessage(result.text)
+                        }
+                        is SpeechResult.Error -> chatViewModel.reportSpeechError(result.message)
+                    }
+                }
+            } finally {
+                chatViewModel.stopListening()
+            }
+        }
+    }
+
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && startVoiceAfterPermission) {
+            startVoiceAfterPermission = false
+            startOrStopVoiceInput()
+        } else if (!granted) {
+            startVoiceAfterPermission = false
+            chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
+        }
+    }
 
     DisposableEffect(speechManager) {
         onDispose {
@@ -91,40 +140,11 @@ fun OpenCodeApp(
     }
 
     val requestVoiceInput: () -> Unit = {
-        if (voiceJob?.isActive == true) {
-            voiceJob?.cancel()
-            chatViewModel.stopListening()
-            context.sendBroadcast(
-                Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName)
-            )
+        if (hasMicrophonePermission()) {
+            startOrStopVoiceInput()
         } else {
-            context.sendBroadcast(
-                Intent(HotwordService.ACTION_PAUSE_HOTWORD).setPackage(context.packageName)
-            )
-            chatViewModel.startListening()
-            voiceJob = voiceScope.launch {
-                try {
-                    speechManager.startListening("ja-JP").collect { result ->
-                        when (result) {
-                            SpeechResult.Ready,
-                            SpeechResult.Listening,
-                            SpeechResult.Processing,
-                            is SpeechResult.RmsChanged -> Unit
-                            is SpeechResult.PartialResult -> chatViewModel.updateSpeechPartial(result.text)
-                            is SpeechResult.Result -> {
-                                chatViewModel.stopListening()
-                                chatViewModel.sendMessage(result.text)
-                            }
-                            is SpeechResult.Error -> chatViewModel.reportSpeechError(result.message)
-                        }
-                    }
-                } finally {
-                    chatViewModel.stopListening()
-                    context.sendBroadcast(
-                        Intent(HotwordService.ACTION_RESUME_HOTWORD).setPackage(context.packageName)
-                    )
-                }
-            }
+            startVoiceAfterPermission = true
+            microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -233,11 +253,6 @@ fun OpenCodeApp(
                 SettingsScreen(
                     state = appState,
                     onOpenAssistantSettings = onOpenAssistantSettings,
-                    onHotwordChange = { enabled ->
-                        appViewModel.setHotwordEnabled(enabled)
-                        onHotwordChanged(enabled)
-                    },
-                    onWakeWordChange = appViewModel::setWakeWord,
                     onTtsChange = appViewModel::setTtsEnabled,
                     onContinuousChange = appViewModel::setContinuousConversation
                 )
