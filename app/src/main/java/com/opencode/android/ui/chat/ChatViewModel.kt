@@ -1,294 +1,341 @@
 package com.opencode.android.ui.chat
 
-import android.app.Application
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
-import android.util.Log
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.opencode.android.api.OpenCodeClient
-import com.opencode.android.data.SettingsRepository
-import com.opencode.android.speech.SpeechRecognizerManager
-import com.opencode.android.speech.SpeechResult
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.isActive
+import com.opencode.android.api.OpenCodeEvent
+import com.opencode.android.api.OpenCodeMessage
+import com.opencode.android.api.PermissionRequest
+import com.opencode.android.api.PromptRequest
+import com.opencode.android.backend.OpenCodeBackend
+import com.opencode.android.backend.PermissionResponse
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import java.util.Locale
 import java.util.UUID
-import kotlin.coroutines.resume
-
-private const val TAG = "ChatViewModel"
 
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isStreaming: Boolean = false
 )
 
 data class ChatUiState(
+    val backendName: String = "",
+    val sessionId: String? = null,
+    val sessionTitle: String = "",
     val messages: List<ChatMessage> = emptyList(),
+    val permissions: List<PermissionRequest> = emptyList(),
+    val isConnected: Boolean = false,
+    val isRunning: Boolean = false,
+    val isLoadingHistory: Boolean = false,
     val isListening: Boolean = false,
     val isThinking: Boolean = false,
     val isSpeaking: Boolean = false,
-    val error: String? = null,
-    val partialText: String = "" // For real-time speech transcription
+    val partialText: String = "",
+    val selectedProviderId: String? = null,
+    val selectedModelId: String? = null,
+    val selectedAgentId: String? = null,
+    val error: String? = null
 )
 
-class ChatViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val _uiState = MutableStateFlow(ChatUiState())
+class ChatViewModel(
+    private val backend: OpenCodeBackend? = null
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(
+        ChatUiState(backendName = backend?.displayName.orEmpty())
+    )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    private val settings = SettingsRepository.getInstance(application)
-    private val apiClient = OpenCodeClient()
-    private val speechManager = SpeechRecognizerManager(application)
-    
-    // TTS will be set from Activity
+    private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
-    private var isTTSReady = false
 
-    /**
-     * ActivityからTTSを設定する
-     */
-    fun setTTS(textToSpeech: TextToSpeech) {
-        Log.e(TAG, "setTTS called")
-        tts = textToSpeech
-        isTTSReady = true
+    init {
+        if (backend != null) {
+            eventJob = viewModelScope.launch {
+                backend.events()
+                    .catch { error ->
+                        _uiState.update { it.copy(error = error.safeMessage()) }
+                    }
+                    .collect(::handleEvent)
+            }
+            viewModelScope.launch {
+                runCatching { backend.health() }
+                    .onSuccess { health ->
+                        _uiState.update {
+                            it.copy(
+                                isConnected = health.healthy,
+                                backendName = "${backend.displayName} · ${health.version}"
+                            )
+                        }
+                    }
+                    .onFailure { error ->
+                        _uiState.update { it.copy(error = error.safeMessage()) }
+                    }
+            }
+        }
+    }
+
+    fun selectConfiguration(providerId: String?, modelId: String?, agentId: String?) {
+        _uiState.update {
+            it.copy(
+                selectedProviderId = providerId,
+                selectedModelId = modelId,
+                selectedAgentId = agentId
+            )
+        }
+    }
+
+    fun openSession(sessionId: String, title: String = "") {
+        val currentBackend = backend ?: return
+        _uiState.update {
+            it.copy(
+                sessionId = sessionId,
+                sessionTitle = title,
+                isLoadingHistory = true,
+                messages = emptyList(),
+                permissions = emptyList(),
+                error = null
+            )
+        }
+        viewModelScope.launch {
+            runCatching { currentBackend.listMessages(sessionId) }
+                .onSuccess { messages ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingHistory = false,
+                            messages = messages.mapNotNull(::toUiMessage)
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(isLoadingHistory = false, error = error.safeMessage())
+                    }
+                }
+        }
+    }
+
+    fun newSession() {
+        _uiState.update {
+            it.copy(
+                sessionId = null,
+                sessionTitle = "",
+                messages = emptyList(),
+                permissions = emptyList(),
+                isRunning = false,
+                error = null
+            )
+        }
     }
 
     fun sendMessage(text: String) {
-        if (text.isBlank()) return
+        val normalized = text.trim()
+        if (normalized.isEmpty()) return
+        val currentBackend = backend
+        if (currentBackend == null) {
+            _uiState.update { it.copy(error = "OpenCode connection is not configured") }
+            return
+        }
 
-        // Add user message
-        addMessage(text, isUser = true)
-        _uiState.update { it.copy(isThinking = true) }
+        val userMessage = ChatMessage(text = normalized, isUser = true)
+        _uiState.update {
+            it.copy(
+                messages = it.messages + userMessage,
+                isRunning = true,
+                isThinking = true,
+                partialText = "",
+                error = null
+            )
+        }
 
         viewModelScope.launch {
-            try {
-                val result = apiClient.sendMessage(
-                    webhookUrl = settings.webhookUrl,
-                    message = text,
-                    sessionId = settings.sessionId,
-                    authToken = settings.authToken.takeIf { it.isNotBlank() }
-                )
-
-                result.fold(
-                    onSuccess = { response ->
-                        val responseText = response.getResponseText() ?: "No response"
-                        addMessage(responseText, isUser = false)
-                        _uiState.update { it.copy(isThinking = false) }
-                        if (settings.ttsEnabled) {
-                            speak(responseText)
-                        } else if (lastInputWasVoice && settings.continuousMode) {
-                            // If TTS is disabled but we're in continuous mode, restart listening directly
-                            viewModelScope.launch {
-                                kotlinx.coroutines.delay(500)
-                                startListening()
-                            }
-                        }
-                    },
-                    onFailure = { error ->
-                        _uiState.update { it.copy(isThinking = false, error = error.message) }
-                        addMessage("Error: ${error.message}", isUser = false)
+            runCatching {
+                val existingSessionId = _uiState.value.sessionId
+                val session = if (existingSessionId == null) {
+                    currentBackend.createSession(normalized.take(60))
+                } else {
+                    null
+                }
+                val targetSessionId = existingSessionId ?: requireNotNull(session).id
+                if (session != null) {
+                    _uiState.update {
+                        it.copy(sessionId = session.id, sessionTitle = session.title)
                     }
+                }
+                currentBackend.sendMessage(
+                    targetSessionId,
+                    PromptRequest(
+                        text = normalized,
+                        providerId = _uiState.value.selectedProviderId,
+                        modelId = _uiState.value.selectedModelId,
+                        agent = _uiState.value.selectedAgentId
+                    )
                 )
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isThinking = false, error = e.message) }
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        isRunning = false,
+                        isThinking = false,
+                        error = error.safeMessage()
+                    )
+                }
             }
         }
     }
 
-    private var lastInputWasVoice = false
-    private var listeningJob: kotlinx.coroutines.Job? = null
-
-    fun startListening() {
-        Log.e(TAG, "startListening() called, isListening=${_uiState.value.isListening}")
-        if (_uiState.value.isListening) return
-
-        // Pause Hotword Service to prevent microphone conflict
-        sendPauseBroadcast()
-
-        lastInputWasVoice = true // Mark as voice input
-        listeningJob?.cancel()
-
-        // Stop TTS if speaking
-        tts?.stop()
-
-        listeningJob = viewModelScope.launch {
-            val startTime = System.currentTimeMillis()
-            var hasActuallySpoken = false
-            
-            // Wait for TTS resource release before starting mic
-            delay(500)
-
-            try {
-                while (isActive && !hasActuallySpoken) {
-                    Log.e(TAG, "Starting speechManager.startListening(), isListening=true")
-                    _uiState.update { it.copy(isListening = true, partialText = "") }
-
-                    speechManager.startListening("ja-JP").collect { result ->
-                        Log.e(TAG, "SpeechResult: $result")
-                        when (result) {
-                            is SpeechResult.PartialResult -> {
-                                _uiState.update { it.copy(partialText = result.text) }
-                            }
-                            is SpeechResult.Result -> {
-                                hasActuallySpoken = true
-                                _uiState.update { it.copy(isListening = false, partialText = "") }
-                                sendMessage(result.text)
-                            }
-                            is SpeechResult.Error -> {
-                                val elapsed = System.currentTimeMillis() - startTime
-                                val isTimeout = result.code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || 
-                                              result.code == SpeechRecognizer.ERROR_NO_MATCH
-                                
-                                if (isTimeout && settings.continuousMode && elapsed < 5000) {
-                                    Log.d(TAG, "Speech timeout within 5s window ($elapsed ms), retrying loop...")
-                                    // Just fall through to next while iteration
-                                    _uiState.update { it.copy(isListening = false) }
-                                } else {
-                                    // Permanent error or out of time
-                                    _uiState.update { it.copy(isListening = false, error = result.message) }
-                                    lastInputWasVoice = false
-                                    hasActuallySpoken = true // Break the while loop
-                                }
-                            }
-                            else -> {}
-                        }
-                    }
-                    
-                    if (!hasActuallySpoken) {
-                        delay(300) // Small gap between retries
+    fun respondToPermission(
+        permissionId: String,
+        response: PermissionResponse,
+        remember: Boolean
+    ) {
+        val currentBackend = backend ?: return
+        val permission = _uiState.value.permissions.firstOrNull { it.id == permissionId } ?: return
+        viewModelScope.launch {
+            runCatching {
+                currentBackend.respondToPermission(
+                    permission.sessionId,
+                    permission.id,
+                    response,
+                    remember
+                )
+            }.onSuccess { accepted ->
+                if (accepted) {
+                    _uiState.update { state ->
+                        state.copy(permissions = state.permissions.filterNot { it.id == permissionId })
                     }
                 }
-            } finally {
-                // If the loop finishes (e.g. error or spoken), and we are NOT continuing to speak/think immediately,
-                // we might want to resume hotword...
-                // HOWEVER: if we successfully spoke, we are now "Thinking" or "Speaking", so we shouldn't resume yet.
-                // We only resume if we are truly done (e.g. stopped listening without input).
-                
-                // But actually, sendMessage() triggers Thinking -> Speaking -> (maybe) startListening again.
-                // So we should only resume hotword if we are definitely NOT going to loop back.
-                
-                if (!lastInputWasVoice) {
-                    sendResumeBroadcast()
-                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.safeMessage()) }
             }
         }
+    }
+
+    fun abort() {
+        val currentBackend = backend ?: return
+        val sessionId = _uiState.value.sessionId ?: return
+        viewModelScope.launch {
+            runCatching { currentBackend.abortSession(sessionId) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(isRunning = false, isThinking = false)
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(error = error.safeMessage()) }
+                }
+        }
+    }
+
+    private fun handleEvent(event: OpenCodeEvent) {
+        val activeSession = _uiState.value.sessionId
+        when (event) {
+            OpenCodeEvent.ServerConnected -> {
+                _uiState.update { it.copy(isConnected = true) }
+            }
+            is OpenCodeEvent.MessagePartUpdated -> {
+                val part = event.part
+                if (part.sessionId != activeSession || part.type != "text") return
+                val messageId = part.messageId ?: part.id ?: return
+                val text = part.text.orEmpty()
+                _uiState.update { state ->
+                    val index = state.messages.indexOfFirst { it.id == messageId }
+                    val updated = if (index >= 0) {
+                        state.messages.toMutableList().apply {
+                            this[index] = this[index].copy(text = text, isStreaming = true)
+                        }
+                    } else {
+                        state.messages + ChatMessage(
+                            id = messageId,
+                            text = text,
+                            isUser = false,
+                            isStreaming = true
+                        )
+                    }
+                    state.copy(
+                        messages = updated,
+                        isRunning = true,
+                        isThinking = false
+                    )
+                }
+            }
+            is OpenCodeEvent.PermissionAsked -> {
+                if (event.request.sessionId != activeSession) return
+                _uiState.update { state ->
+                    state.copy(
+                        permissions = state.permissions.filterNot { it.id == event.request.id } + event.request,
+                        isThinking = false
+                    )
+                }
+            }
+            is OpenCodeEvent.SessionIdle -> {
+                if (event.sessionId != activeSession) return
+                _uiState.update { state ->
+                    state.copy(
+                        messages = state.messages.map { message ->
+                            if (message.isStreaming) message.copy(isStreaming = false) else message
+                        },
+                        isRunning = false,
+                        isThinking = false
+                    )
+                }
+            }
+            is OpenCodeEvent.SessionError -> {
+                if (event.sessionId != null && event.sessionId != activeSession) return
+                _uiState.update {
+                    it.copy(
+                        isRunning = false,
+                        isThinking = false,
+                        error = event.message ?: "OpenCode session failed"
+                    )
+                }
+            }
+            is OpenCodeEvent.Unknown -> Unit
+        }
+    }
+
+    private fun toUiMessage(message: OpenCodeMessage): ChatMessage? {
+        val text = message.text
+        if (text.isBlank()) return null
+        return ChatMessage(
+            id = message.info.id,
+            text = text,
+            isUser = message.info.role == "user",
+            timestamp = message.info.time.created,
+            isStreaming = false
+        )
+    }
+
+    fun setTTS(textToSpeech: TextToSpeech) {
+        tts = textToSpeech
+    }
+
+    fun startListening() {
+        _uiState.update { it.copy(isListening = true) }
     }
 
     fun stopListening() {
-        lastInputWasVoice = false // User manually stopped
-        listeningJob?.cancel()
-        _uiState.update { it.copy(isListening = false) }
-        sendResumeBroadcast()
+        _uiState.update { it.copy(isListening = false, partialText = "") }
     }
 
-    private fun speak(text: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isSpeaking = true) }
-            
-            val success = if (isTTSReady && tts != null) {
-                speakWithTTS(text)
-            } else {
-                Log.e(TAG, "TTS not ready, skipping speech")
-                false
-            }
-            
-            _uiState.update { it.copy(isSpeaking = false) }
-
-            // If it was a voice conversation and continuous mode is on, continue listening
-            if (success && lastInputWasVoice && settings.continuousMode) {
-                // Explicit cleanup and wait for TTS to fully release audio focus
-                speechManager.destroy()
-                kotlinx.coroutines.delay(1000) // Increased from 800ms for more reliable cleanup
-
-                // Restart listening (which will pause hotword again if needed, though it should still be paused)
-                startListening()
-            } else {
-                // Conversation ended
-                sendResumeBroadcast()
-            }
-        }
-    }
-
-    private suspend fun speakWithTTS(text: String): Boolean = suspendCancellableCoroutine { continuation ->
-        val utteranceId = UUID.randomUUID().toString()
-        
-        val listener = object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            
-            override fun onDone(utteranceId: String?) {
-                if (continuation.isActive) {
-                    continuation.resume(true)
-                }
-            }
-            
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                if (continuation.isActive) {
-                    continuation.resume(false)
-                }
-            }
-            
-            override fun onError(utteranceId: String?, errorCode: Int) {
-                Log.e(TAG, "TTS error: $errorCode")
-                if (continuation.isActive) {
-                    continuation.resume(false)
-                }
-            }
-        }
-        
-        tts?.setOnUtteranceProgressListener(listener)
-        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
-        Log.e(TAG, "TTS speak result: $result")
-        
-        if (result != TextToSpeech.SUCCESS) {
-            Log.e(TAG, "TTS speak failed immediately")
-            if (continuation.isActive) {
-                continuation.resume(false)
-            }
-        }
-        
-        continuation.invokeOnCancellation {
-            tts?.stop()
-        }
-    }
-    
     fun stopSpeaking() {
-        lastInputWasVoice = false // Stop loop if manually stopped
         tts?.stop()
         _uiState.update { it.copy(isSpeaking = false) }
-        sendResumeBroadcast()
-    }
-
-    private fun addMessage(text: String, isUser: Boolean) {
-        val message = ChatMessage(text = text, isUser = isUser)
-        _uiState.update { state ->
-            state.copy(messages = state.messages + message)
-        }
     }
 
     override fun onCleared() {
+        eventJob?.cancel()
+        tts?.stop()
+        tts = null
         super.onCleared()
-        speechManager.destroy()
-        sendResumeBroadcast()
-        // Don't shutdown TTS here - Activity owns it
     }
 
-    private fun sendPauseBroadcast() {
-        val intent = android.content.Intent("com.opencode.android.ACTION_PAUSE_HOTWORD")
-        intent.setPackage(getApplication<Application>().packageName)
-        getApplication<Application>().sendBroadcast(intent)
-    }
-    
-    private fun sendResumeBroadcast() {
-        val intent = android.content.Intent("com.opencode.android.ACTION_RESUME_HOTWORD")
-        intent.setPackage(getApplication<Application>().packageName)
-        getApplication<Application>().sendBroadcast(intent)
-    }
+    private fun Throwable.safeMessage(): String =
+        message?.takeIf { it.isNotBlank() } ?: "OpenCode operation failed"
 }
