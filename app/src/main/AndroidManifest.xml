@@ -41,7 +41,7 @@
         </activity>
 
         <service
-            android:name=".assistant.OpenCodeVoiceInteractionService"
+            android:name=".feature.assistant.OpenCodeVoiceInteractionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <meta-data
@@ -54,12 +54,12 @@
         </service>
 
         <service
-            android:name=".assistant.OpenCodeSessionService"
+            android:name=".feature.assistant.OpenCodeSessionService"
             android:exported="false"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
         <service
-            android:name=".assistant.OpenCodeRecognitionService"
+            android:name=".feature.assistant.OpenCodeRecognitionService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_RECOGNITION_SERVICE">

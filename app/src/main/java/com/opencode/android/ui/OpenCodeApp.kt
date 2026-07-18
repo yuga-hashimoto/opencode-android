@@ -39,15 +39,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.opencode.android.R
-import com.opencode.android.backend.OpenCodeBackend
-import com.opencode.android.speech.SpeechRecognizerManager
-import com.opencode.android.speech.SpeechResult
-import com.opencode.android.ui.chat.ChatViewModel
-import com.opencode.android.ui.chat.OpenCodeChatScreen
-import com.opencode.android.ui.connections.ConnectionsScreen
-import com.opencode.android.ui.home.HomeScreen
-import com.opencode.android.ui.sessions.SessionsScreen
-import com.opencode.android.ui.settings.SettingsScreen
+import com.opencode.android.runtime.OpenCodeBackend
+import com.opencode.android.feature.assistant.SpeechRecognizerManager
+import com.opencode.android.feature.assistant.SpeechResult
+import com.opencode.android.feature.chat.ChatViewModel
+import com.opencode.android.feature.chat.OpenCodeChatScreen
+import com.opencode.android.feature.workspace.ConnectionsScreen
+import com.opencode.android.feature.home.HomeScreen
+import com.opencode.android.feature.activity.SessionsScreen
+import com.opencode.android.feature.settings.SettingsScreen
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 

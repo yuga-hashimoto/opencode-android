@@ -1,8 +1,8 @@
 package com.opencode.android
 
 import android.app.Application
-import com.opencode.android.data.AppRepository
-import com.opencode.android.data.SecureSettingsRepository
+import com.opencode.android.data.repository.AppRepository
+import com.opencode.android.data.connection.SecureSettingsRepository
 
 class OpenCodeApplication : Application() {
     lateinit var settings: SecureSettingsRepository

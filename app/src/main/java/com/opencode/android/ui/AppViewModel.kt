@@ -4,14 +4,14 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.OpenCodeApplication
-import com.opencode.android.api.OpenCodeAgent
-import com.opencode.android.api.OpenCodeApiClient
-import com.opencode.android.api.OpenCodeHealth
-import com.opencode.android.api.OpenCodeProvider
-import com.opencode.android.api.OpenCodeSession
-import com.opencode.android.backend.OpenCodeBackend
-import com.opencode.android.data.ConnectionProfile
-import com.opencode.android.ui.connections.ConnectionFormState
+import com.opencode.android.core.api.OpenCodeAgent
+import com.opencode.android.core.api.OpenCodeApiClient
+import com.opencode.android.core.api.OpenCodeHealth
+import com.opencode.android.core.api.OpenCodeProvider
+import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.runtime.OpenCodeBackend
+import com.opencode.android.data.connection.ConnectionProfile
+import com.opencode.android.feature.workspace.ConnectionFormState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -241,7 +241,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private data class DashboardData(
         val health: OpenCodeHealth,
         val sessions: List<OpenCodeSession>,
-        val providers: com.opencode.android.api.ProviderCatalog,
+        val providers: com.opencode.android.core.api.ProviderCatalog,
         val agents: List<OpenCodeAgent>
     )
 }

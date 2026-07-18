@@ -14,11 +14,11 @@
 
 # Gson reflective models returned by the OpenCode API.
 -keep class com.google.gson.** { *; }
--keep class com.opencode.android.api.** { *; }
+-keep class com.opencode.android.core.api.** { *; }
 
 # Persisted JSON must retain stable field names across release builds and updates.
--keep class com.opencode.android.data.ConnectionProfile { *; }
--keep class com.opencode.android.runtime.LocalRuntimeMetadata { *; }
+-keep class com.opencode.android.data.connection.ConnectionProfile { *; }
+-keep class com.opencode.android.runtime.local.LocalRuntimeMetadata { *; }
 -keepclassmembers,allowobfuscation class * {
     @com.google.gson.annotations.SerializedName <fields>;
 }
