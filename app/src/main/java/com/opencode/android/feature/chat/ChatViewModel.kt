@@ -10,6 +10,7 @@ import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,7 +47,9 @@ data class ChatUiState(
 )
 
 class ChatViewModel(
-    private val backend: OpenCodeBackend? = null
+    private val backend: OpenCodeBackend? = null,
+    private val eventFlow: Flow<OpenCodeEvent>? = null,
+    private val onPermissionResolved: (String) -> Unit = {}
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         ChatUiState(backendName = backend?.displayName.orEmpty())
@@ -60,7 +63,7 @@ class ChatViewModel(
     init {
         if (backend != null) {
             eventJob = viewModelScope.launch {
-                backend.events()
+                (eventFlow ?: backend.events())
                     .catch { error ->
                         _uiState.update { it.copy(error = error.safeMessage()) }
                     }
@@ -213,6 +216,7 @@ class ChatViewModel(
                     _uiState.update { state ->
                         state.copy(permissions = state.permissions.filterNot { it.id == permissionId })
                     }
+                    onPermissionResolved(permissionId)
                 }
             }.onFailure { error ->
                 _uiState.update { it.copy(error = error.safeMessage()) }

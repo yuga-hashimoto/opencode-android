@@ -7,6 +7,8 @@
     <string name="nav_chat">Chat</string>
     <string name="nav_connections">Connections</string>
     <string name="nav_sessions">Sessions</string>
+    <string name="nav_workspaces">Workspaces</string>
+    <string name="nav_activity">Activity</string>
     <string name="nav_settings">Settings</string>
 
     <string name="connection_missing">Connect a PC to get started</string>

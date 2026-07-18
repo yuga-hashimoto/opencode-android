@@ -27,13 +27,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
-import com.opencode.android.ui.AppUiState
 import com.opencode.android.ui.components.LabelValueRow
 import com.opencode.android.ui.components.SectionCard
 
 @Composable
 fun SettingsScreen(
-    state: AppUiState,
+    state: SettingsUiState,
     onOpenAssistantSettings: () -> Unit,
     onTtsChange: (Boolean) -> Unit,
     onContinuousChange: (Boolean) -> Unit
@@ -129,17 +128,17 @@ fun SettingsScreen(
             SectionCard {
                 LabelValueRow(
                     label = "AIサービス",
-                    value = state.selectedProviderId ?: "未選択"
+                    value = state.providerId ?: "未選択"
                 )
                 Spacer(Modifier.height(12.dp))
                 LabelValueRow(
                     label = stringResource(R.string.model),
-                    value = state.selectedModelId ?: "既定"
+                    value = state.modelId ?: "既定"
                 )
                 Spacer(Modifier.height(12.dp))
                 LabelValueRow(
                     label = stringResource(R.string.agent),
-                    value = state.selectedAgentId ?: "build"
+                    value = state.agentId ?: "build"
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(

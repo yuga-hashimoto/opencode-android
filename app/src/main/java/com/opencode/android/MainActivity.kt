@@ -8,22 +8,15 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import com.opencode.android.ui.AppViewModel
 import com.opencode.android.ui.OpenCodeApp
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
 class MainActivity : ComponentActivity() {
-    private val appViewModel: AppViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             OpenCodeAndroidTheme {
-                OpenCodeApp(
-                    appViewModel = appViewModel,
-                    onOpenAssistantSettings = ::openAssistantSettings
-                )
+                OpenCodeApp(onOpenAssistantSettings = ::openAssistantSettings)
             }
         }
     }

@@ -11,17 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,19 +32,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
-import com.opencode.android.ui.AppUiState
+import com.opencode.android.runtime.RuntimeState
+import com.opencode.android.runtime.RuntimeType
 import com.opencode.android.ui.components.OpenCodeBrand
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeSuccess
-import com.opencode.android.ui.theme.OpenCodeWarning
 
 @Composable
 fun HomeScreen(
-    state: AppUiState,
+    state: HomeUiState,
     onNewChat: () -> Unit,
-    onOpenConnections: () -> Unit,
-    onOpenSessions: () -> Unit,
+    onOpenWorkspaces: () -> Unit,
+    onOpenActivity: () -> Unit,
     onOpenSession: (String, String) -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -75,33 +73,29 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Icon(
-                        imageVector = if (state.health?.healthy == true) Icons.Default.CheckCircle else Icons.Default.Computer,
+                        imageVector = when (state.runtimeType) {
+                            RuntimeType.LOCAL -> Icons.Default.Android
+                            RuntimeType.REMOTE -> Icons.Default.Computer
+                            null -> Icons.Default.Computer
+                        },
                         contentDescription = null,
-                        tint = if (state.health?.healthy == true) OpenCodeSuccess else MaterialTheme.colorScheme.primary
+                        tint = if (state.connected) OpenCodeSuccess else MaterialTheme.colorScheme.primary
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = state.selectedConnection?.name ?: stringResource(R.string.connection_missing),
+                            text = state.runtimeName.ifBlank { "実行先を選択してください" },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = when {
-                                state.health?.healthy == true -> stringResource(
-                                    R.string.connected_version,
-                                    state.health.version
-                                )
-                                state.backend != null && state.isRefreshing -> stringResource(R.string.processing)
-                                state.backend != null -> state.error ?: stringResource(R.string.connection_missing)
-                                else -> stringResource(R.string.unofficial_client)
-                            },
+                            text = runtimeDescription(state),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     StatusChip(
-                        text = if (state.health?.healthy == true) stringResource(R.string.active) else stringResource(R.string.not_set),
-                        active = state.health?.healthy == true
+                        text = if (state.connected) "接続済み" else "未接続",
+                        active = state.connected
                     )
                 }
             }
@@ -115,84 +109,53 @@ fun HomeScreen(
                 Button(
                     onClick = onNewChat,
                     modifier = Modifier.weight(1f),
-                    enabled = state.backend != null
+                    enabled = state.runtimeId != null
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
                     Text(stringResource(R.string.new_chat))
                 }
                 FilledTonalButton(
-                    onClick = onOpenConnections,
+                    onClick = onOpenWorkspaces,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.AddLink, contentDescription = null)
+                    Icon(Icons.Default.Folder, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text(stringResource(R.string.nav_connections))
+                    Text("作業先")
                 }
             }
         }
 
         item {
-            Text(
-                text = stringResource(R.string.remote_runtime),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Text("現在の構成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
 
         item {
             SectionCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Icon(Icons.Default.Computer, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.selectedConnection?.name ?: stringResource(R.string.connection_missing),
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = state.selectedConnection?.baseUrl ?: stringResource(R.string.connection_help),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                ConfigurationRow("作業フォルダ", state.workspace?.path ?: "未選択")
+                Spacer(Modifier.height(12.dp))
+                ConfigurationRow("モデル", state.modelId ?: "OpenCodeの既定値")
+                Spacer(Modifier.height(12.dp))
+                ConfigurationRow("エージェント", state.agentId ?: "build")
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.padding(horizontal = 5.dp))
+                    Text(
+                        text = state.providerId ?: "AIサービス未選択",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
 
-        item {
-            Text(
-                text = stringResource(R.string.local_runtime),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = OpenCodeWarning.copy(alpha = 0.08f)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Icon(Icons.Default.Android, contentDescription = null, tint = OpenCodeWarning)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.experimental_not_installed), fontWeight = FontWeight.Medium)
-                        Text(
-                            text = stringResource(R.string.local_runtime_note),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+        state.error?.let { error ->
+            item {
+                SectionCard {
+                    Text("接続または取得に失敗しました", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.height(6.dp))
+                    Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -208,7 +171,7 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                androidx.compose.material3.TextButton(onClick = onOpenSessions) {
+                androidx.compose.material3.TextButton(onClick = onOpenActivity) {
                     Text(stringResource(R.string.view_all))
                 }
             }
@@ -217,32 +180,48 @@ fun HomeScreen(
         if (state.sessions.isEmpty()) {
             item {
                 SectionCard {
-                    Text(
-                        text = stringResource(R.string.no_sessions),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(stringResource(R.string.no_sessions), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
             items(state.sessions.take(4), key = { it.id }) { session ->
                 SectionCard(
-                    modifier = Modifier.clickable {
-                        onOpenSession(session.id, session.title)
-                    }
+                    modifier = Modifier.clickable { onOpenSession(session.id, session.title) }
                 ) {
-                    Text(
-                        text = session.title.ifBlank { session.slug ?: session.id },
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = session.directory.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(session.title.ifBlank { session.slug ?: session.id }, fontWeight = FontWeight.Medium)
+                            Text(
+                                session.directory.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun ConfigurationRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.Medium, maxLines = 1)
+    }
+}
+
+private fun runtimeDescription(state: HomeUiState): String = when {
+    state.connected -> "OpenCode ${state.version}"
+    state.isRefreshing -> "接続と状態を確認しています"
+    state.runtimeState is RuntimeState.Unavailable -> state.runtimeState.reason
+    state.runtimeState is RuntimeState.Failed -> state.runtimeState.message
+    state.runtimeId == null -> "AndroidローカルまたはPCを選択できます"
+    else -> "OpenCodeへ未接続"
 }

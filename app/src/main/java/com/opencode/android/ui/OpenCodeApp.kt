@@ -7,9 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -30,24 +30,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.opencode.android.OpenCodeApplication
 import com.opencode.android.R
-import com.opencode.android.runtime.OpenCodeBackend
+import com.opencode.android.feature.activity.ActivityScreen
+import com.opencode.android.feature.activity.ActivityViewModel
 import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
 import com.opencode.android.feature.chat.ChatViewModel
 import com.opencode.android.feature.chat.OpenCodeChatScreen
-import com.opencode.android.feature.workspace.ConnectionsScreen
 import com.opencode.android.feature.home.HomeScreen
-import com.opencode.android.feature.activity.SessionsScreen
+import com.opencode.android.feature.home.HomeViewModel
 import com.opencode.android.feature.settings.SettingsScreen
+import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.workspace.WorkspaceViewModel
+import com.opencode.android.feature.workspace.WorkspacesScreen
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -56,31 +58,67 @@ private enum class Destination(
     val labelRes: Int,
     val icon: ImageVector
 ) {
-    HOME("home", R.string.nav_home, Icons.Default.Home),
+    HOME("home", R.string.nav_home, Icons.Default.Dashboard),
     CHAT("chat", R.string.nav_chat, Icons.AutoMirrored.Filled.Chat),
-    CONNECTIONS("connections", R.string.nav_connections, Icons.Default.Link),
-    SESSIONS("sessions", R.string.nav_sessions, Icons.AutoMirrored.Filled.ViewList),
+    WORKSPACES("workspaces", R.string.nav_workspaces, Icons.Default.Folder),
+    ACTIVITY("activity", R.string.nav_activity, Icons.Default.History),
     SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
 @Composable
 fun OpenCodeApp(
-    appViewModel: AppViewModel,
     onOpenAssistantSettings: () -> Unit
 ) {
-    val appState by appViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val app = context.applicationContext as OpenCodeApplication
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingSession by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    val backend = appState.backend
+    val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
+    val preferences by app.preferences.state.collectAsState()
+    val homeViewModel: HomeViewModel = viewModel(
+        key = "home",
+        factory = ViewModelFactory { HomeViewModel(app.catalogRepository, app.preferences) }
+    )
+    val homeState by homeViewModel.state.collectAsState()
+
+    val workspaceViewModel: WorkspaceViewModel = viewModel(
+        key = "workspaces",
+        factory = ViewModelFactory {
+            WorkspaceViewModel(app.runtimeRegistry, app.catalogRepository, app.localRuntimeManager)
+        }
+    )
+    val workspaceState by workspaceViewModel.state.collectAsState()
+
+    val activityViewModel: ActivityViewModel = viewModel(
+        key = "activity",
+        factory = ViewModelFactory {
+            ActivityViewModel(app.catalogRepository, app.activityRepository)
+        }
+    )
+    val activityState by activityViewModel.state.collectAsState()
+
+    val settingsViewModel: SettingsViewModel = viewModel(
+        key = "settings",
+        factory = ViewModelFactory {
+            SettingsViewModel(app.catalogRepository, app.preferences)
+        }
+    )
+    val settingsState by settingsViewModel.state.collectAsState()
+
     val chatViewModel: ChatViewModel = viewModel(
-        key = "chat-${backend?.id ?: "none"}",
-        factory = ChatViewModelFactory(backend)
+        key = "chat-${selectedRuntime?.id ?: "none"}",
+        factory = ViewModelFactory {
+            ChatViewModel(
+                backend = selectedRuntime,
+                eventFlow = app.activityRepository.events,
+                onPermissionResolved = app.activityRepository::resolvePermission
+            )
+        }
     )
     val chatState by chatViewModel.uiState.collectAsState()
 
-    val context = LocalContext.current
     val speechManager = remember { SpeechRecognizerManager(context.applicationContext) }
     val voiceScope = rememberCoroutineScope()
     var voiceJob by remember { mutableStateOf<Job?>(null) }
@@ -96,7 +134,6 @@ fun OpenCodeApp(
             chatViewModel.stopListening()
             return
         }
-
         chatViewModel.startListening()
         voiceJob = voiceScope.launch {
             try {
@@ -148,15 +185,11 @@ fun OpenCodeApp(
         }
     }
 
-    LaunchedEffect(
-        appState.selectedProviderId,
-        appState.selectedModelId,
-        appState.selectedAgentId
-    ) {
+    LaunchedEffect(preferences.providerId, preferences.modelId, preferences.agentId) {
         chatViewModel.selectConfiguration(
-            appState.selectedProviderId,
-            appState.selectedModelId,
-            appState.selectedAgentId
+            preferences.providerId,
+            preferences.modelId,
+            preferences.agentId
         )
     }
 
@@ -175,9 +208,7 @@ fun OpenCodeApp(
                                 restoreState = true
                             }
                         },
-                        icon = {
-                            Icon(destination.icon, contentDescription = stringResource(destination.labelRes))
-                        },
+                        icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
                         label = { Text(stringResource(destination.labelRes)) }
                     )
                 }
@@ -191,21 +222,22 @@ fun OpenCodeApp(
         ) {
             composable(Destination.HOME.route) {
                 HomeScreen(
-                    state = appState,
+                    state = homeState,
                     onNewChat = {
                         pendingSession = null
                         chatViewModel.newSession()
                         navController.navigate(Destination.CHAT.route)
                     },
-                    onOpenConnections = { navController.navigate(Destination.CONNECTIONS.route) },
-                    onOpenSessions = { navController.navigate(Destination.SESSIONS.route) },
+                    onOpenWorkspaces = { navController.navigate(Destination.WORKSPACES.route) },
+                    onOpenActivity = { navController.navigate(Destination.ACTIVITY.route) },
                     onOpenSession = { id, title ->
                         pendingSession = id to title
                         navController.navigate(Destination.CHAT.route)
                     },
-                    onRefresh = appViewModel::refresh
+                    onRefresh = homeViewModel::refresh
                 )
             }
+
             composable(Destination.CHAT.route) {
                 LaunchedEffect(pendingSession) {
                     pendingSession?.let { (id, title) ->
@@ -215,58 +247,51 @@ fun OpenCodeApp(
                 }
                 OpenCodeChatScreen(
                     state = chatState,
-                    providers = appState.providers,
-                    agents = appState.agents,
-                    selectedProviderId = appState.selectedProviderId,
-                    selectedModelId = appState.selectedModelId,
-                    selectedAgentId = appState.selectedAgentId,
-                    onSelectModel = appViewModel::selectModel,
-                    onSelectAgent = appViewModel::selectAgent,
+                    providers = settingsState.providers,
+                    agents = settingsState.agents,
+                    selectedProviderId = settingsState.providerId,
+                    selectedModelId = settingsState.modelId,
+                    selectedAgentId = settingsState.agentId,
+                    onSelectModel = settingsViewModel::selectModel,
+                    onSelectAgent = settingsViewModel::selectAgent,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
                     onMic = requestVoiceInput
                 )
             }
-            composable(Destination.CONNECTIONS.route) {
-                ConnectionsScreen(
-                    connections = appState.connections,
-                    selectedConnectionId = appState.selectedConnectionId,
-                    onSelect = appViewModel::selectConnection,
-                    onSave = appViewModel::saveConnection,
-                    onDelete = appViewModel::deleteConnection,
-                    onTest = appViewModel::testConnection
+
+            composable(Destination.WORKSPACES.route) {
+                WorkspacesScreen(
+                    state = workspaceState,
+                    onSelectRuntime = workspaceViewModel::selectRuntime,
+                    onSaveConnection = workspaceViewModel::saveConnection,
+                    onDeleteConnection = workspaceViewModel::deleteConnection,
+                    onTestConnection = workspaceViewModel::testConnection,
+                    onRefresh = workspaceViewModel::refresh,
+                    onSetupLocal = { }
                 )
             }
-            composable(Destination.SESSIONS.route) {
-                SessionsScreen(
-                    sessions = appState.sessions,
-                    isRefreshing = appState.isRefreshing,
-                    onRefresh = appViewModel::refresh,
+
+            composable(Destination.ACTIVITY.route) {
+                ActivityScreen(
+                    state = activityState,
+                    onRefresh = activityViewModel::refresh,
                     onOpenSession = { id, title ->
                         pendingSession = id to title
                         navController.navigate(Destination.CHAT.route)
                     }
                 )
             }
+
             composable(Destination.SETTINGS.route) {
                 SettingsScreen(
-                    state = appState,
+                    state = settingsState,
                     onOpenAssistantSettings = onOpenAssistantSettings,
-                    onTtsChange = appViewModel::setTtsEnabled,
-                    onContinuousChange = appViewModel::setContinuousConversation
+                    onTtsChange = settingsViewModel::setTtsEnabled,
+                    onContinuousChange = settingsViewModel::setContinuousConversation
                 )
             }
         }
-    }
-}
-
-private class ChatViewModelFactory(
-    private val backend: OpenCodeBackend?
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        require(modelClass.isAssignableFrom(ChatViewModel::class.java))
-        return ChatViewModel(backend) as T
     }
 }
