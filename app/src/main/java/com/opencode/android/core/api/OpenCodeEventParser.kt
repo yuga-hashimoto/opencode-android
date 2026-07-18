@@ -19,6 +19,13 @@ class OpenCodeEventParser(
                     val part = gson.fromJson(properties.getAsJsonObject("part"), OpenCodePart::class.java)
                     OpenCodeEvent.MessagePartUpdated(part)
                 }
+                "message.part.delta" -> OpenCodeEvent.MessagePartDelta(
+                    sessionId = properties.get("sessionID").asString,
+                    messageId = properties.get("messageID").asString,
+                    partId = properties.get("partID").asString,
+                    field = properties.get("field").asString,
+                    delta = properties.get("delta").asString
+                )
                 "permission.asked" -> OpenCodeEvent.PermissionAsked(
                     PermissionRequest(
                         id = properties.get("id").asString,

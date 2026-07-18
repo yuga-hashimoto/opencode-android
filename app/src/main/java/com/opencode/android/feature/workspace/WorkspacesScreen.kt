@@ -18,11 +18,15 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -51,7 +55,10 @@ fun WorkspacesScreen(
     onDeleteConnection: (String) -> Unit,
     onTestConnection: suspend (ConnectionFormState) -> Result<OpenCodeHealth>,
     onRefresh: () -> Unit,
-    onSetupLocal: () -> Unit
+    onSetupLocal: () -> Unit,
+    onStartLocal: () -> Unit,
+    onStopLocal: () -> Unit,
+    onReinstallLocal: () -> Unit
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
 
@@ -131,12 +138,55 @@ fun WorkspacesScreen(
                             }
                         }
                     }
-                    if (target.type == RuntimeType.LOCAL && state.localStatus !is LocalRuntimeStatus.Ready) {
+                    if (target.type == RuntimeType.LOCAL) {
                         Spacer(Modifier.height(12.dp))
-                        Button(onClick = onSetupLocal, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Build, contentDescription = null)
-                            Spacer(Modifier.padding(horizontal = 4.dp))
-                            Text(if (state.localStatus is LocalRuntimeStatus.Broken) "修復する" else "この端末へセットアップ")
+                        when (val local = state.localStatus) {
+                            LocalRuntimeStatus.NotInstalled -> {
+                                Button(onClick = onSetupLocal, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Build, contentDescription = null)
+                                    Spacer(Modifier.padding(horizontal = 4.dp))
+                                    Text("この端末へセットアップ")
+                                }
+                            }
+                            is LocalRuntimeStatus.Installing -> {
+                                Text(local.step, style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(8.dp))
+                                if (local.progress != null) {
+                                    LinearProgressIndicator(
+                                        progress = { local.progress.coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                            is LocalRuntimeStatus.Starting -> {
+                                Text("OpenCode ${local.version}を起動しています")
+                                Spacer(Modifier.height(8.dp))
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            }
+                            is LocalRuntimeStatus.Stopped -> {
+                                Button(onClick = onStartLocal, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(Modifier.padding(horizontal = 4.dp))
+                                    Text("OpenCodeを起動")
+                                }
+                            }
+                            is LocalRuntimeStatus.Ready -> {
+                                OutlinedButton(onClick = onStopLocal, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Stop, contentDescription = null)
+                                    Spacer(Modifier.padding(horizontal = 4.dp))
+                                    Text("ローカル実行を停止")
+                                }
+                            }
+                            is LocalRuntimeStatus.Broken -> {
+                                Button(onClick = onReinstallLocal, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Build, contentDescription = null)
+                                    Spacer(Modifier.padding(horizontal = 4.dp))
+                                    Text("修復して再セットアップ")
+                                }
+                            }
+                            is LocalRuntimeStatus.UnsupportedAbi -> Unit
                         }
                     }
                 }
@@ -230,15 +280,30 @@ private fun targetSubtitle(
     RuntimeType.REMOTE -> when (val runtimeState = target.state) {
         is RuntimeState.Connected -> "OpenCode ${runtimeState.version} · ${remoteUrl.orEmpty()}"
         RuntimeState.Connecting -> "接続中 · ${remoteUrl.orEmpty()}"
-        is RuntimeState.Failed -> runtimeState.message
+        is RuntimeState.Failed -> compactRuntimeError(runtimeState.message)
         is RuntimeState.Unavailable -> runtimeState.reason
         RuntimeState.Disconnected -> remoteUrl.orEmpty()
     }
     RuntimeType.LOCAL -> when (localStatus) {
         LocalRuntimeStatus.NotInstalled -> "未インストール"
-        is LocalRuntimeStatus.Installing -> "セットアップ中"
-        is LocalRuntimeStatus.Ready -> "OpenCode ${localStatus.version}"
-        is LocalRuntimeStatus.Broken -> localStatus.reason
+        is LocalRuntimeStatus.Installing -> "セットアップ中 · ${localStatus.step}"
+        is LocalRuntimeStatus.Starting -> "OpenCode ${localStatus.version}を起動中"
+        is LocalRuntimeStatus.Stopped -> "導入済み · OpenCode ${localStatus.version} · 停止中"
+        is LocalRuntimeStatus.Ready -> "OpenCode ${localStatus.version} · 稼働中"
+        is LocalRuntimeStatus.Broken -> compactRuntimeError(localStatus.reason)
         is LocalRuntimeStatus.UnsupportedAbi -> "未対応ABI: ${localStatus.abi}"
+    }
+}
+
+private fun compactRuntimeError(message: String): String {
+    val firstUsefulLine = message.lineSequence()
+        .map(String::trim)
+        .firstOrNull { it.isNotBlank() }
+        .orEmpty()
+    val compact = firstUsefulLine.take(160)
+    return when {
+        compact.isBlank() -> "ローカルランタイムで問題が発生しました"
+        compact.length < firstUsefulLine.length -> "$compact…"
+        else -> compact
     }
 }

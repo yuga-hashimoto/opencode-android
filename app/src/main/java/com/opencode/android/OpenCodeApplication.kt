@@ -7,7 +7,10 @@ import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.local.LocalRuntimeInstaller
 import com.opencode.android.runtime.local.LocalRuntimeManager
+import com.opencode.android.runtime.local.LocalRuntimeProcessLauncher
+import com.opencode.android.runtime.local.LocalRuntimeServiceController
 import com.opencode.android.runtime.local.LocalRuntimeTarget
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +31,9 @@ class OpenCodeApplication : Application() {
     lateinit var localRuntimeManager: LocalRuntimeManager
         private set
 
+    lateinit var localRuntimeController: LocalRuntimeServiceController
+        private set
+
     lateinit var runtimeRegistry: RuntimeRegistry
         private set
 
@@ -41,10 +47,20 @@ class OpenCodeApplication : Application() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
         preferences = AppPreferencesRepository(settings)
-        localRuntimeManager = LocalRuntimeManager(
-            runtimeDirectory = File(filesDir, "runtime"),
-            abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        val runtimeDirectory = File(filesDir, "runtime")
+        val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
+        val installer = LocalRuntimeInstaller(this, runtimeDirectory, abi)
+        val launcher = LocalRuntimeProcessLauncher(
+            runtimeDirectory = runtimeDirectory,
+            portProbe = LocalRuntimeManager::defaultPortProbe
         )
+        localRuntimeManager = LocalRuntimeManager(
+            runtimeDirectory = runtimeDirectory,
+            abi = abi,
+            installer = installer,
+            processLauncher = launcher
+        )
+        localRuntimeController = LocalRuntimeServiceController(this)
         runtimeRegistry = RuntimeRegistry(
             store = settings,
             localTarget = LocalRuntimeTarget(localRuntimeManager)

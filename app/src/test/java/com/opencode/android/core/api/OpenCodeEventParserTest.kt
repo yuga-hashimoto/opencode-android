@@ -24,6 +24,19 @@ class OpenCodeEventParserTest {
     }
 
     @Test
+    fun `parses streamed text delta`() {
+        val event = parser.parse(
+            """{"type":"message.part.delta","properties":{"sessionID":"s1","messageID":"m1","partID":"p1","field":"text","delta":"Hello"}}"""
+        ) as OpenCodeEvent.MessagePartDelta
+
+        assertEquals("s1", event.sessionId)
+        assertEquals("m1", event.messageId)
+        assertEquals("p1", event.partId)
+        assertEquals("text", event.field)
+        assertEquals("Hello", event.delta)
+    }
+
+    @Test
     fun `parses permission request`() {
         val event = parser.parse(
             """{"type":"permission.asked","properties":{"id":"perm1","sessionID":"s1","permission":"bash","patterns":["git status"]}}"""

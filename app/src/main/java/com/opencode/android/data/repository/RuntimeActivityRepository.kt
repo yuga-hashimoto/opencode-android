@@ -77,6 +77,11 @@ class RuntimeActivityRepository(
                     "reasoning" -> appendLog("推論", null, sessionId)
                 }
             }
+            is OpenCodeEvent.MessagePartDelta -> {
+                mutableState.update { current ->
+                    current.copy(activeSessionIds = current.activeSessionIds + event.sessionId)
+                }
+            }
             is OpenCodeEvent.PermissionAsked -> {
                 mutableState.update { current ->
                     current.copy(

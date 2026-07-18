@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
@@ -57,6 +58,15 @@
             android:name=".feature.assistant.OpenCodeSessionService"
             android:exported="false"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".runtime.local.LocalRuntimeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs a user-requested local OpenCode development server and runtime installation." />
+        </service>
 
         <service
             android:name=".feature.assistant.OpenCodeRecognitionService"

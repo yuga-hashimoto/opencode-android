@@ -11,7 +11,7 @@ permissions:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -23,18 +23,51 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests
-        run: ./gradlew testDebugUnitTest
+      - name: Cache generated Android runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/generated/runtime-assets
+            build/generated/runtime-jni
+          key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Validate runtime build scripts
+        run: |
+          python -m py_compile \
+            runtime_tools/termux_assets.py \
+            scripts/prepare_android_runtime_assets.py \
+            scripts/prepare_android_runtime_native_libs.py
+          python scripts/prepare_android_runtime_assets.py --help >/dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          lock = json.loads(Path('runtime_tools/termux_assets.lock.json').read_text())
+          assert lock['version'] == 1
+          assert {'arm64-v8a', 'x86_64'} == set(lock['architectures'])
+          assert all(item['packages'] for item in lock['architectures'].values())
+          PY
+
+      - name: Test, lint and build APKs
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: opencode-android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-android-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error

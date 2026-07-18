@@ -17,7 +17,11 @@ import com.opencode.android.runtime.WorkspaceRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class LocalRuntimeTarget(
     private val runtimeManager: LocalRuntimeManager,
@@ -30,6 +34,13 @@ class LocalRuntimeTarget(
 
     private val mutableState = MutableStateFlow(mapStatus(runtimeManager.status()))
     override val state: StateFlow<RuntimeState> = mutableState.asStateFlow()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        scope.launch {
+            runtimeManager.state.collect { status -> mutableState.value = mapStatus(status) }
+        }
+    }
 
     fun refreshLocalState(): RuntimeState = mapStatus(runtimeManager.status()).also {
         mutableState.value = it
@@ -93,8 +104,10 @@ class LocalRuntimeTarget(
         LocalRuntimeStatus.NotInstalled -> RuntimeState.Unavailable("ローカルランタイムは未インストールです")
         is LocalRuntimeStatus.UnsupportedAbi -> RuntimeState.Unavailable("未対応ABI: ${status.abi}")
         is LocalRuntimeStatus.Installing -> RuntimeState.Connecting
+        is LocalRuntimeStatus.Starting -> RuntimeState.Connecting
+        is LocalRuntimeStatus.Stopped -> RuntimeState.Disconnected
         is LocalRuntimeStatus.Broken -> RuntimeState.Failed(status.reason)
-        is LocalRuntimeStatus.Ready -> RuntimeState.Disconnected
+        is LocalRuntimeStatus.Ready -> RuntimeState.Connected(status.version)
     }
 
     private fun RuntimeState.describe(): String = when (this) {

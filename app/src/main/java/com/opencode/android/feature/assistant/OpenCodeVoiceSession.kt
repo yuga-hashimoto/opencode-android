@@ -88,6 +88,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
     private var listeningJob: Job? = null
     private var sessionId: String? = null
     private val responseParts = linkedMapOf<String, String>()
+    private val textPartIds = mutableSetOf<String>()
 
     private val assistantState = mutableStateOf(VoiceState.IDLE)
     private val userText = mutableStateOf("")
@@ -174,7 +175,19 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                         is OpenCodeEvent.MessagePartUpdated -> {
                             if (event.part.sessionId == sessionId && event.part.type == "text") {
                                 val partKey = event.part.id ?: event.part.messageId ?: "text"
+                                textPartIds += partKey
                                 responseParts[partKey] = event.part.text.orEmpty()
+                                responseText.value = responseParts.values.joinToString("")
+                                assistantState.value = VoiceState.THINKING
+                            }
+                        }
+                        is OpenCodeEvent.MessagePartDelta -> {
+                            if (
+                                event.sessionId == sessionId &&
+                                event.field == "text" &&
+                                event.partId in textPartIds
+                            ) {
+                                responseParts[event.partId] = responseParts[event.partId].orEmpty() + event.delta
                                 responseText.value = responseParts.values.joinToString("")
                                 assistantState.value = VoiceState.THINKING
                             }
@@ -205,6 +218,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         listeningJob?.cancel()
         userText.value = ""
         responseParts.clear()
+        textPartIds.clear()
         responseText.value = ""
         partialText.value = ""
         errorText.value = null

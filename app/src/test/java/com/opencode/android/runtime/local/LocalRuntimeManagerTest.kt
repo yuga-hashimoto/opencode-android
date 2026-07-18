@@ -47,6 +47,7 @@ class LocalRuntimeManagerTest {
 
     @Test
     fun `healthy metadata and port probe are ready`() {
+        createRuntimeFiles()
         temporaryFolder.newFile("metadata.json").writeText(
             """{"version":"1.17.20","port":4096,"installedAt":123}"""
         )
@@ -60,7 +61,8 @@ class LocalRuntimeManagerTest {
     }
 
     @Test
-    fun `metadata without a listening server is broken`() {
+    fun `metadata without a listening server is stopped`() {
+        createRuntimeFiles()
         temporaryFolder.newFile("metadata.json").writeText(
             """{"version":"1.17.20","port":4096,"installedAt":123}"""
         )
@@ -70,6 +72,12 @@ class LocalRuntimeManagerTest {
             portProbe = { false }
         )
 
-        assertTrue(manager.status() is LocalRuntimeStatus.Broken)
+        assertEquals(LocalRuntimeStatus.Stopped("1.17.20", 4096), manager.status())
+    }
+
+    private fun createRuntimeFiles() {
+        val binary = temporaryFolder.root.resolve("environment/rootfs/usr/local/bin/opencode")
+        binary.parentFile.mkdirs()
+        binary.writeText("binary")
     }
 }

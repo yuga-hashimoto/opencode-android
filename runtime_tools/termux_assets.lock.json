@@ -1,0 +1,67 @@
+{
+  "architectures": {
+    "arm64-v8a": {
+      "packages": [
+        {
+          "depends": [
+            "libandroid-shmem",
+            "libtalloc"
+          ],
+          "filename": "pool/main/p/proot/proot_5.1.107.84_aarch64.deb",
+          "name": "proot",
+          "sha256": "59ace3b02894a9b87348eb5ccf246ed52ec64465021839422a151d7128acfe97",
+          "version": "5.1.107.84"
+        },
+        {
+          "depends": [],
+          "filename": "pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb",
+          "name": "libandroid-shmem",
+          "sha256": "0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6",
+          "version": "0.7"
+        },
+        {
+          "depends": [],
+          "filename": "pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb",
+          "name": "libtalloc",
+          "sha256": "ac81ad623d74c209718b9f3acb2dd702cc8a88c431e820d212229910b4db29da",
+          "version": "2.4.3"
+        }
+      ],
+      "termux_arch": "aarch64"
+    },
+    "x86_64": {
+      "packages": [
+        {
+          "depends": [
+            "libandroid-shmem",
+            "libtalloc"
+          ],
+          "filename": "pool/main/p/proot/proot_5.1.107.84_x86_64.deb",
+          "name": "proot",
+          "sha256": "98f30502dcc3c455ed5562e7fe0b8c04619b2b08633b3701a7750a86c6287e5d",
+          "version": "5.1.107.84"
+        },
+        {
+          "depends": [],
+          "filename": "pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_x86_64.deb",
+          "name": "libandroid-shmem",
+          "sha256": "ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797",
+          "version": "0.7"
+        },
+        {
+          "depends": [],
+          "filename": "pool/main/libt/libtalloc/libtalloc_2.4.3_x86_64.deb",
+          "name": "libtalloc",
+          "sha256": "7ca2eaae2e53b28228a01301bc410b62845403d6317c25b8e0a7f40681de0628",
+          "version": "2.4.3"
+        }
+      ],
+      "termux_arch": "x86_64"
+    }
+  },
+  "root_packages": [
+    "proot"
+  ],
+  "termux_main_base_url": "https://packages.termux.dev/apt/termux-main",
+  "version": 1
+}

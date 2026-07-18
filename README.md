@@ -1,51 +1,63 @@
 # OpenCode Android
 
-**AndroidからOpenCodeを操作する、非公式のオープンソースクライアントです。**
+**OpenCodeをAndroidローカルまたはPCリモートで使う、非公式のオープンソースAndroidクライアントです。**
 
-同じアプリから、PC・Mac・Linux上の`opencode serve`へ接続して、チャット、セッション再開、モデル選択、ツール承認、音声入力、ホームアシスト、ウェイクワードを利用できます。
+OpenCode本体はフォークせず、同じREST/SSE APIをAndroid内ランタイムとPC上の`opencode serve`の両方で利用します。
 
 > [!IMPORTANT]
-> OpenCode AndroidはOpenCode公式プロジェクトではありません。OpenCode本体をフォークせず、公式サーバーAPIへ接続します。
+> OpenCode AndroidはOpenCode公式プロジェクトではありません。
 
-## 現在できること
+## 主な機能
 
-- PC上のOpenCodeへLANまたはTailscale経由で接続
-- OpenCodeのバージョン・接続状態を確認
-- 接続済みプロバイダーとモデルをOpenCodeから取得
-- `build`などのOpenCodeエージェントを選択
-- 新規セッションの作成、既存セッションの再開
-- SSEによる回答と実行状態のリアルタイム受信
-- シェル・ファイル操作などの承認要求にAndroidから回答
-- Android音声認識による入力
+- Android端末内へのOpenCode、Alpine Linux、Git、bash、curl、ripgrepの自動セットアップ
+- PC・Mac・Linux上のOpenCodeへLANまたはTailscale経由で接続
+- Androidローカル／PCリモートの実行先切り替え
+- OpenCodeのモデル・プロバイダー・エージェントを動的取得
+- 新規セッション作成、既存セッション再開
+- SSEによる回答・実行状況・承認要求のリアルタイム受信
+- 危険なツール操作の許可・拒否
+- Android音声認識によるプッシュ・トゥ・トーク
 - Android Text-to-Speechによる回答読み上げ
 - Androidの既定デジタルアシスタントとして起動
-- 日本語・英語表示
 - 接続情報をAndroid Keystoreで暗号化保存
+- 日本語・英語表示
 
 ## 画面構成
 
-- **ホーム**: 接続状態、実行先、最近のセッション
-- **チャット**: 会話、モデル・エージェント選択、音声入力、承認
-- **接続**: PC接続先の追加、接続テスト、切り替え
-- **セッション**: OpenCodeの既存セッション一覧と再開
-- **設定**: ホームアシスト、ウェイクワード、TTS、連続会話
+- **ホーム**: 現在の実行先、モデル、エージェント、最近のセッション
+- **チャット**: 会話、音声入力、モデル切り替え、承認操作
+- **作業先**: Androidローカルランタイム、PC接続先、作業フォルダ
+- **履歴**: 実行中タスク、承認待ち、セッション、イベントログ
+- **設定**: ホームアシスト、TTS、連続会話、現在の構成
 
-## 必要環境
+## Androidローカル実行
 
-### Android
+**作業先 → このAndroid端末 → この端末へセットアップ**を押すと、Foreground Serviceで次を実行します。
 
-- Android 8.0（API 26）以上
-- マイク権限
-- ウェイクワード使用時は通知権限とバックグラウンド動作の許可
+1. APKに含まれる最小のAndroidネイティブPRootランナーを確認
+2. Alpine Linux minirootfsを公式CDNからダウンロード
+3. OpenCodeの公式muslバイナリをGitHub Releasesからダウンロード
+4. 両方のSHA-256を検証
+5. 一時領域へ安全に展開
+6. Alpine内へGit、bash、curl、ripgrep、CA証明書を導入
+7. `127.0.0.1:4097`でOpenCodeサーバーを起動
+8. Androidアプリをローカル実行先へ切り替え
 
-### PC側
+ダウンロードまたは展開に失敗した場合、既存ランタイムは維持されます。セットアップ後は起動、停止、修復・再導入を作業先画面から操作できます。
 
-- OpenCodeがインストール済みであること
-- Android端末から到達可能なLANまたはTailscale接続
+### 固定バージョン
 
-## PC側のOpenCodeを起動する
+初期ランタイムマニフェストは次を固定しています。
 
-強いパスワードを設定してOpenCodeサーバーを起動します。
+- Alpine Linux 3.24.1
+- OpenCode 1.18.3
+- arm64-v8a／x86_64
+
+ランタイムマニフェストはOpenCode本体から独立しており、将来のアプリリリースで更新できます。
+
+## PCリモート実行
+
+PC側で強いパスワードを設定してOpenCodeサーバーを起動します。
 
 ```bash
 OPENCODE_SERVER_PASSWORD='replace-with-a-strong-password' \
@@ -54,7 +66,7 @@ OPENCODE_SERVER_PASSWORD='replace-with-a-strong-password' \
   --port 4096
 ```
 
-OpenCode Androidでは次を入力します。
+Androidアプリの**作業先**画面で接続先を追加します。
 
 ```text
 表示名: Mac mini
@@ -63,80 +75,55 @@ URL: http://192.168.1.10:4096
 パスワード: 上で設定したパスワード
 ```
 
-Tailscaleを使う場合は、PCのTailscale IPまたはMagicDNS名を入力します。
+TailscaleではPCのTailscale IPまたはMagicDNS名を利用できます。
 
 ```text
 http://100.x.y.z:4096
 http://your-mac.tailnet-name.ts.net:4096
 ```
 
-### セキュリティ上の注意
+### セキュリティ
 
-- インターネットへ直接ポート4096を公開しないでください。
+- ポート4096をインターネットへ直接公開しないでください。
 - LANまたはTailscaleでの利用を推奨します。
-- 公開ネットワークを経由する場合は、HTTPSリバースプロキシを使用してください。
-- サーバーパスワードを設定しない運用は推奨しません。
+- 公開ネットワークではHTTPSリバースプロキシを使用してください。
 - Androidアプリは危険操作を自動承認しません。
+- LAN上の平文HTTPは、ユーザーが接続先ごとに明示的に許可した場合だけ利用できます。
 
-## Androidアプリの初期設定
+## モデルとプロバイダー
 
-1. OpenCode Androidを起動します。
-2. 下部の**接続**を開きます。
-3. 右下の追加ボタンを押します。
-4. PCのURL、ユーザー名、パスワードを入力します。
-5. LAN上のHTTPを使う場合は、確認項目をオンにします。
-6. **接続テスト**でOpenCodeのバージョンが表示されることを確認します。
-7. 保存後、**チャット**からモデルとエージェントを選びます。
+モデル一覧はアプリへ固定で埋め込まず、選択中のOpenCode実行先から取得します。OpenCode側で無料モデル、OpenRouter、OpenAI互換プロバイダーなどが追加・変更された場合も、アプリ更新なしで一覧へ反映できます。
 
-無料モデルを含む利用可能なモデルは、Androidアプリへ固定で埋め込まず、接続中のOpenCodeが返すプロバイダー情報をそのまま表示します。そのため、OpenCode側のモデル追加・変更へ追従できます。
+Androidローカル実行では、初期状態でOpenCodeが提供する利用可能なモデルを使用します。APIキーやOAuthが必要なプロバイダーのネイティブ設定UIは今後の拡張対象です。
 
 ## ホームアシスト
 
-1. アプリの**設定**を開きます。
-2. **既定のデジタルアシスタントに設定**を押します。
-3. Androidの設定画面でOpenCode Androidを選択します。
-4. ホームジェスチャー、画面下隅からのスワイプ、または端末が割り当てるアシスト操作で起動します。
+1. **設定 → 既定のデジタルアシスタントに設定**を押します。
+2. Android設定でOpenCode Androidを選択します。
+3. ホームジェスチャー、画面下隅スワイプ、または端末のアシスト操作で起動します。
 
-端末によっては、電源ボタン長押しやCircle to Searchが優先されます。その場合は端末設定でアシスタント起動方法を変更してください。
-
-ホームアシストは、通常のチャット画面で最後に選択した接続先、プロバイダー、モデル、エージェントを使用します。
-
-## ウェイクワード
-
-1. **設定 → ウェイクワード検知**をオンにします。
-2. 起動フレーズを設定します。初期値は`open code`です。
-3. マイクと通知の権限を許可します。
-
-音声はウェイクワード検知のために端末内で処理し、録音ファイルとして保存しません。
-
-Android・端末メーカーの省電力制御により、画面消灯後にサービスが停止される場合があります。長時間利用する場合は、OpenCode Androidをバッテリー最適化の対象外にしてください。
-
-Android 11以降では、再起動直後のバックグラウンド状態からマイク用Foreground Serviceを開始できません。端末を再起動した後は、OpenCode Androidを一度開くとウェイクワード検知が再開します。
-
-## Androidローカル実行について
-
-リポジトリには、Android内OpenCodeをリモート実行と同じAPIとして扱うための次の境界を実装しています。
-
-- `LocalRuntimeManager`
-- `LocalRuntimeStatus`
-- `LocalOpenCodeBackend`
-
-現時点のAPKにはLinux rootfs、PRoot、Bun、OpenCode本体のインストーラーを同梱していません。そのため、**現在利用できる実行方式はPCリモート実行です**。
-
-ローカル実行の設計と残作業は[docs/LOCAL_RUNTIME.md](docs/LOCAL_RUNTIME.md)に記載しています。
+ホームアシストは最後に選択した実行先、モデル、エージェントを利用します。常時ウェイクワードモデルは標準APKへ同梱していません。音声入力はマイクボタンまたはホームアシスト起動後に使用します。
 
 ## ビルド
 
-Android Studioにプロジェクトを開くか、JDK 17とAndroid SDKを設定してGradle Wrapperを実行します。
+必要環境:
+
+- JDK 17
+- Android SDK
+- Python 3
+- ネットワーク接続（初回のみTermuxパッケージ生成に使用）
 
 ```bash
-./gradlew testDebugUnitTest assembleDebug
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
+
+初回ビルドでは、固定ロックに記録されたTermuxパッケージからPRoot・bash・必要ライブラリを生成します。各パッケージはSHA-256で検証され、生成物は`build/generated`へキャッシュされます。APKへ含まれるネイティブランナーは全ABI合計で約5MBです。
 
 APK:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
+app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
 実機へインストール:
@@ -145,27 +132,27 @@ app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## テスト
+## テスト対象
 
-- URL安全性とLAN・Tailscale判定
+- URL安全性、LAN・Tailscale判定
 - 接続情報のシリアライズ
-- OpenCode REST APIとBasic認証
-- SSEイベントの解析
-- セッション・ストリーミング・承認状態
-- 接続画面の入力検証
-- ホームアシスト設定解決
-- ウェイクワード正規化
-- Androidローカルランタイム診断
-
-```bash
-./gradlew testDebugUnitTest
-```
+- OpenCode REST API、Basic認証、SSE再接続
+- セッション、ストリーミング、複数text part、承認状態
+- RuntimeRegistryと実行先切り替え
+- ランタイムカタログとイベント共有
+- ローカルランタイム状態診断
+- ランタイムマニフェストとSHA-256形式
+- Release R8ビルドとLint
 
 ## 設計資料
 
-- [プロダクト設計書](docs/superpowers/specs/2026-07-18-opencode-android-design.md)
+- [OpenCode Android v2設計書](docs/superpowers/specs/2026-07-18-opencode-android-v2-design.md)
 - [第一完成版の実装計画](docs/superpowers/plans/2026-07-18-initial-mvp.md)
 - [Androidローカル実行設計](docs/LOCAL_RUNTIME.md)
+
+## 第三者ソフトウェア
+
+ランタイム生成処理の一部は、MITライセンスのHermes Agent Android実装に含まれる汎用Termuxパッケージ解決・展開処理をOpenCode向けに再設計しています。OpenCode、Alpine Linux、Termuxパッケージを含む詳細は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
 
 ## ライセンス
 

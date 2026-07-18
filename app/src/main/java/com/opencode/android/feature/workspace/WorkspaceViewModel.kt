@@ -12,10 +12,12 @@ import com.opencode.android.runtime.RuntimeState
 import com.opencode.android.runtime.RuntimeType
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.runtime.local.LocalRuntimeManager
+import com.opencode.android.runtime.local.LocalRuntimeServiceController
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class RuntimeSummary(
     val id: String,
@@ -38,13 +40,15 @@ data class WorkspaceUiState(
 class WorkspaceViewModel(
     private val registry: RuntimeRegistry,
     private val catalog: RuntimeCatalogRepository,
-    private val localRuntimeManager: LocalRuntimeManager
+    private val localRuntimeManager: LocalRuntimeManager,
+    private val localRuntimeController: LocalRuntimeServiceController
 ) : ViewModel() {
     val state: StateFlow<WorkspaceUiState> = combine(
         registry.targets,
         registry.selected,
-        catalog.state
-    ) { targets, selected, runtime ->
+        catalog.state,
+        localRuntimeManager.state
+    ) { targets, selected, runtime, localStatus ->
         WorkspaceUiState(
             targets = targets.map { target ->
                 RuntimeSummary(
@@ -58,11 +62,22 @@ class WorkspaceViewModel(
             connections = registry.remoteProfiles(),
             selectedRuntimeId = selected?.id,
             workspaces = runtime.workspaces,
-            localStatus = localRuntimeManager.status(),
+            localStatus = localStatus,
             isRefreshing = runtime.isRefreshing,
             error = runtime.error
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, WorkspaceUiState())
+
+    init {
+        viewModelScope.launch {
+            localRuntimeManager.state.collect { status ->
+                if (status is LocalRuntimeStatus.Ready) {
+                    registry.select("local-android")
+                    catalog.refresh()
+                }
+            }
+        }
+    }
 
     fun selectRuntime(id: String) {
         registry.select(id)
@@ -83,6 +98,14 @@ class WorkspaceViewModel(
         }
         return runCatching { OpenCodeApiClient(form.toProfile()).health() }
     }
+
+    fun setupLocalRuntime() = localRuntimeController.installAndStart()
+
+    fun startLocalRuntime() = localRuntimeController.start()
+
+    fun stopLocalRuntime() = localRuntimeController.stop()
+
+    fun reinstallLocalRuntime() = localRuntimeController.reinstall()
 
     fun refresh() {
         registry.refresh()

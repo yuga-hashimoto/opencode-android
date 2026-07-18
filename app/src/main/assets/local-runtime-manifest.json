@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "runtimeVersion": "2026.07.18.1",
+  "openCodeVersion": "1.18.3",
+  "alpineVersion": "3.24.1",
+  "port": 4097,
+  "architectures": {
+    "arm64-v8a": {
+      "alpineUrl": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/aarch64/alpine-minirootfs-3.24.1-aarch64.tar.gz",
+      "alpineSha256": "f55a90f69052c5bd6f92cb09a8f47065970830b194c917a006fb94028e721259",
+      "openCodeUrl": "https://github.com/anomalyco/opencode/releases/download/v1.18.3/opencode-linux-arm64-musl.tar.gz",
+      "openCodeSha256": "e937e4149160634782c4e7c3d83245058630ce1ae67577c9e9197c3798d8933e"
+    },
+    "x86_64": {
+      "alpineUrl": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz",
+      "alpineSha256": "41f73e3cf5fa919b8aa5ca6b30dc48f0da2720776d7423e2a7748211456fe081",
+      "openCodeUrl": "https://github.com/anomalyco/opencode/releases/download/v1.18.3/opencode-linux-x64-musl.tar.gz",
+      "openCodeSha256": "dc28ff8034f46eead03e54c39d435e217323474965c2da2f5eedb766bf967c1c"
+    }
+  }
+}

@@ -86,7 +86,12 @@ fun OpenCodeApp(
     val workspaceViewModel: WorkspaceViewModel = viewModel(
         key = "workspaces",
         factory = ViewModelFactory {
-            WorkspaceViewModel(app.runtimeRegistry, app.catalogRepository, app.localRuntimeManager)
+            WorkspaceViewModel(
+                app.runtimeRegistry,
+                app.catalogRepository,
+                app.localRuntimeManager,
+                app.localRuntimeController
+            )
         }
     )
     val workspaceState by workspaceViewModel.state.collectAsState()
@@ -269,7 +274,10 @@ fun OpenCodeApp(
                     onDeleteConnection = workspaceViewModel::deleteConnection,
                     onTestConnection = workspaceViewModel::testConnection,
                     onRefresh = workspaceViewModel::refresh,
-                    onSetupLocal = { }
+                    onSetupLocal = workspaceViewModel::setupLocalRuntime,
+                    onStartLocal = workspaceViewModel::startLocalRuntime,
+                    onStopLocal = workspaceViewModel::stopLocalRuntime,
+                    onReinstallLocal = workspaceViewModel::reinstallLocalRuntime
                 )
             }
 

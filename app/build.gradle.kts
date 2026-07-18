@@ -3,6 +3,40 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val repoRoot = rootProject.projectDir
+val generatedRuntimeAssets = rootProject.layout.buildDirectory.dir("generated/runtime-assets")
+val generatedRuntimeJni = rootProject.layout.buildDirectory.dir("generated/runtime-jni")
+
+val prepareOpenCodeRuntimeAssets = tasks.register<Exec>("prepareOpenCodeRuntimeAssets") {
+    inputs.file(repoRoot.resolve("runtime_tools/termux_assets.py"))
+    inputs.file(repoRoot.resolve("runtime_tools/termux_assets.lock.json"))
+    inputs.file(repoRoot.resolve("scripts/prepare_android_runtime_assets.py"))
+    outputs.dir(generatedRuntimeAssets)
+    commandLine(
+        "python3",
+        repoRoot.resolve("scripts/prepare_android_runtime_assets.py").absolutePath,
+        "--output-dir",
+        generatedRuntimeAssets.get().asFile.absolutePath,
+        "--lock-file",
+        repoRoot.resolve("runtime_tools/termux_assets.lock.json").absolutePath
+    )
+}
+
+val prepareOpenCodeRuntimeNativeLibs = tasks.register<Exec>("prepareOpenCodeRuntimeNativeLibs") {
+    dependsOn(prepareOpenCodeRuntimeAssets)
+    inputs.dir(generatedRuntimeAssets)
+    inputs.file(repoRoot.resolve("scripts/prepare_android_runtime_native_libs.py"))
+    outputs.dir(generatedRuntimeJni)
+    commandLine(
+        "python3",
+        repoRoot.resolve("scripts/prepare_android_runtime_native_libs.py").absolutePath,
+        "--linux-assets-dir",
+        generatedRuntimeAssets.get().asFile.absolutePath,
+        "--output-dir",
+        generatedRuntimeJni.get().asFile.absolutePath
+    )
+}
+
 android {
     namespace = "com.opencode.android"
     compileSdk = 34
@@ -45,11 +79,21 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+    sourceSets {
+        getByName("main").jniLibs.srcDir(generatedRuntimeJni)
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(prepareOpenCodeRuntimeNativeLibs)
 }
 
 dependencies {
@@ -75,6 +119,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.apache.commons:commons-compress:1.27.1")
     
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

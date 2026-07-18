@@ -50,8 +50,8 @@
 
     <string name="remote_runtime">PCリモート実行</string>
     <string name="local_runtime">Androidローカル実行</string>
-    <string name="experimental_not_installed">実験機能・未インストール</string>
-    <string name="local_runtime_note">Androidローカル実行は実験用バックエンドとして分離されています。このビルドではPC上のOpenCodeを利用します。</string>
+    <string name="experimental_not_installed">管理対象ローカルランタイム</string>
+    <string name="local_runtime_note">作業先画面からAndroidローカルOpenCodeのセットアップ、起動、停止、修復を操作できます。</string>
 
     <string name="home_assistant">ホームアシスト</string>
     <string name="set_default_assistant">既定のデジタルアシスタントに設定</string>

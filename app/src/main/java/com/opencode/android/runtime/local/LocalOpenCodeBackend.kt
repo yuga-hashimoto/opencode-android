@@ -23,15 +23,13 @@ class LocalOpenCodeBackend(
     override val kind: BackendKind = BackendKind.LOCAL
 
     private fun delegate(): RemoteOpenCodeBackend {
-        val status = runtimeManager.status()
-        require(status is LocalRuntimeStatus.Ready) {
-            "Android local OpenCode runtime is not ready: $status"
-        }
+        val port = runtimeManager.installedPort()
+            ?: error("Android local OpenCode runtime is not installed")
         return RemoteOpenCodeBackend(
             ConnectionProfile(
                 id = id,
                 name = displayName,
-                baseUrl = "http://127.0.0.1:${status.port}/",
+                baseUrl = "http://127.0.0.1:$port/",
                 username = "opencode",
                 allowInsecureLan = true
             )

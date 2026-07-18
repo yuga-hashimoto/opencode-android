@@ -50,8 +50,8 @@
 
     <string name="remote_runtime">PC remote runtime</string>
     <string name="local_runtime">Android local runtime</string>
-    <string name="experimental_not_installed">Experimental · Not installed</string>
-    <string name="local_runtime_note">The local Android runtime is isolated behind an experimental backend. This build uses PC remote OpenCode.</string>
+    <string name="experimental_not_installed">Managed local runtime</string>
+    <string name="local_runtime_note">Install, start, stop, and repair the Android-local OpenCode runtime from Workspaces.</string>
 
     <string name="home_assistant">Home assistant</string>
     <string name="set_default_assistant">Set as default digital assistant</string>

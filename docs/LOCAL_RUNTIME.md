@@ -2,113 +2,108 @@
 
 ## 目的
 
-OpenCode Androidの完成形では、PCへ接続しなくてもAndroid端末内でOpenCodeを起動し、リモート実行と同じチャット・セッション・承認UIから操作できるようにする。
+OpenCode Androidは、PCへ接続しなくてもAndroid端末内でOpenCodeを起動し、PCリモート実行と同じチャット・セッション・承認UIから操作できる。
 
-OpenCode本体はフォークしない。アプリ専用ストレージへLinuxユーザーランドを構築し、その内部で公式OpenCodeを起動する。
+OpenCode本体はフォークしない。アプリ専用ストレージ内へLinuxユーザーランドを構築し、その内部でOpenCode公式musl配布物を実行する。
 
-## 現在の実装範囲
+## 現在の実装
 
-現在のコードには、ローカルランタイムを安全に追加するための境界が実装されている。
+現在のAPKには、AndroidローカルOpenCodeをセットアップして利用するための次の機能が入っている。
+
+- arm64-v8a・x86_64向けPRootランナー
+- Alpine Linux 3.24.1 minirootfsのダウンロード
+- OpenCode 1.18.3公式muslバイナリのダウンロード
+- URL・サイズ・SHA-256を固定したランタイムマニフェスト
+- 一時領域への展開と、成功後だけ本番環境へ切り替えるインストール
+- Alpine内へのGit、Bash、curl、CA証明書、ripgrep、libstdc++導入
+- `127.0.0.1:4097`限定のOpenCodeサーバー起動
+- Foreground Serviceによるセットアップ・起動・停止
+- 未導入、導入中、起動中、停止中、稼働中、破損、未対応ABIの状態管理
+- 作業先画面からのセットアップ、起動、停止、修復・再セットアップ
+- ローカルとPCリモートで共通のREST/SSEクライアント
+
+API 36のARM64エミュレーターで、以下を実動作確認している。
 
 ```text
-LocalRuntimeManager
-├─ ABI判定
-├─ metadata.jsonの検証
-├─ OpenCodeポートの疎通確認
-└─ NotInstalled / Ready / Broken / UnsupportedAbi
-
-LocalOpenCodeBackend
-└─ Ready時に127.0.0.1のOpenCodeサーバーへ接続
+OpenCode 1.18.3
+Git 2.54.0
+Bash 5.3.9
+ripgrep 15.1.0
+GET /global/health
+モデル・エージェント取得
+big-pickleによる推論
+SSEによるリアルタイム応答
 ```
 
-現在のAPKはrootfsやOpenCode本体をダウンロード・実行しない。UIでは「実験機能・未インストール」と表示する。
-
-## 想定ディレクトリ
+## ディレクトリ構成
 
 ```text
-filesDir/runtime/
+files/runtime/
 ├─ metadata.json
-├─ runner/
-│  └─ proot
-├─ rootfs/
-│  ├─ bin/
-│  ├─ usr/
-│  └─ home/opencode/
 ├─ cache/
-├─ logs/
-└─ rollback/
+│  ├─ alpine-minirootfs.tar.gz
+│  └─ opencode-linux-musl.tar.gz
+├─ staging/
+├─ environment/
+│  ├─ rootfs/
+│  └─ home/
+└─ logs/
+   ├─ tools.log
+   └─ opencode.log
 ```
 
-`metadata.json`の例:
+PRoot本体・ローダー・必要共有ライブラリは、APKのABI別ネイティブライブラリとして配置する。AlpineとOpenCode本体は初回セットアップ時に取得するため、APKを不必要に大型化しない。
 
-```json
-{
-  "version": "1.17.20",
-  "port": 4096,
-  "installedAt": 1784340000000
-}
-```
-
-## 必要コンポーネント
-
-- ARM64対応のPRootまたは同等のユーザーランドランナー
-- ARM64 Linux rootfs
-- Bash
-- CA証明書
-- Git
-- curl
-- BunまたはOpenCodeが要求する実行環境
-- OpenCode公式配布物
-
-初期対象ABIは`arm64-v8a`とする。`x86_64`はエミュレーター検証用に後続対応する。
-
-## インストールフロー
+## セットアップフロー
 
 ```text
-ユーザーが「ローカル実行をセットアップ」
+ユーザーが「この端末へセットアップ」
 ↓
-ABI・空き容量・ネットワークを診断
+ABI・ランタイムマニフェストを確認
 ↓
-署名済みマニフェストを取得
+Foreground Serviceを開始
 ↓
-ランナーとrootfsを一時領域へダウンロード
+AlpineとOpenCodeを一時キャッシュへダウンロード
 ↓
-SHA-256と署名を検証
+ファイルサイズとSHA-256を検証
 ↓
-展開して必須コマンドを診断
+ステージング領域へ安全に展開
 ↓
-Linux環境内へ公式OpenCodeを導入
+Alpine内へ必須ツールを導入
 ↓
-opencode serve --hostname 127.0.0.1 --port <port>
+opencode --versionを確認
 ↓
-/global/healthが成功したらmetadata.jsonを確定
+環境を本番ディレクトリへ切り替え
 ↓
-LocalOpenCodeBackendへ切り替え
+opencode serve --hostname 127.0.0.1 --port 4097
+↓
+/global/healthが成功したらReady
 ```
 
-インストール途中のデータは完成ディレクトリへ直接書かず、成功後にアトミックに切り替える。
-
-## 更新とロールバック
-
-OpenCode本体とAndroidアプリの更新は分離する。
-
-1. 現在のバージョンを`rollback/`へ退避
-2. 新バージョンを一時環境へ導入
-3. `opencode --version`と`/global/health`を確認
-4. 成功したら切り替え
-5. 失敗したら直前環境へ戻す
-
-rootfs・PRootランナーはAndroidアプリ管理版として更新し、OpenCode本体はLinux環境内で公式配布物を利用する。
+ダウンロード、検証、展開、ツール導入のいずれかに失敗した場合、破損状態と理由を表示し、修復・再セットアップを選択できる。
 
 ## セキュリティ
 
-- 取得物はハッシュだけでなく署名も検証する
-- rootfs内のサーバーは`127.0.0.1`だけへbindする
-- Androidアプリ専用ストレージ以外への書き込みはStorage Access Framework経由に限定する
-- ローカルAPIキーはAndroid Keystoreで暗号化する
-- 任意の未検証バイナリを自動ダウンロードしない
-- ランタイムログへAPIキーやAuthorizationヘッダーを記録しない
-- シェル操作の承認既定値は`once`とする
+- ダウンロード先URL、期待サイズ、SHA-256をマニフェストへ固定する
+- 不一致のファイルは展開しない
+- アーカイブ内のパストラバーサルと危険なシンボリックリンクを拒否する
+- OpenCodeサーバーは`127.0.0.1`だけへbindする
+- ランタイムはアプリ専用ストレージへ保存する
+- ランタイムログへAPIキー、パスワード、Authorizationヘッダーを記録しない
+- Androidアプリは危険操作を無条件に自動承認しない
+
+## 現在残っている実装
+
+完成版までに次を追加する。
+
+1. OpenCode更新確認と更新内容表示
+2. 新旧環境のアトミック切り替えとロールバック
+3. ランタイムの完全削除
+4. 空き容量、メモリ、稼働時間、ログの診断画面
+5. SSHを含む必須ツール診断
+6. Storage Access Frameworkによる外部作業フォルダ
+7. ローカルプロバイダー認証情報をKeystoreから安全に設定するUI
+8. 物理端末でのバッテリー・メモリ・容量計測
 
 ## Android上の制約
 
@@ -125,22 +120,9 @@ Androidローカル実行はPCの完全な代替ではない。
 対象外:
 
 - Docker
-- Android Emulator
+- Android Emulatorの内側から別のAndroid Emulatorを動かすこと
 - iOSビルド
 - 大規模なGradle・Flutterビルド
 - 長時間の高負荷処理
 
 重い作業はPCリモート実行へ切り替える。
-
-## 次の実装単位
-
-1. 配布マニフェストと署名検証
-2. PRootランナーの組み込み
-3. rootfsのダウンロード・展開
-4. Runtime Doctor画面
-5. OpenCode導入・起動・停止
-6. Foreground Serviceによるプロセス維持
-7. ローカルプロバイダー認証UI
-8. PCとのセッションハンドオフ
-9. 更新・ロールバック
-10. 実機ベンチマークとバッテリー計測

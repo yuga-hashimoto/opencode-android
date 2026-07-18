@@ -103,6 +103,13 @@ data class PermissionRequest(
 sealed interface OpenCodeEvent {
     data object ServerConnected : OpenCodeEvent
     data class MessagePartUpdated(val part: OpenCodePart) : OpenCodeEvent
+    data class MessagePartDelta(
+        val sessionId: String,
+        val messageId: String,
+        val partId: String,
+        val field: String,
+        val delta: String
+    ) : OpenCodeEvent
     data class PermissionAsked(val request: PermissionRequest) : OpenCodeEvent
     data class SessionIdle(val sessionId: String) : OpenCodeEvent
     data class SessionError(val sessionId: String?, val message: String?) : OpenCodeEvent

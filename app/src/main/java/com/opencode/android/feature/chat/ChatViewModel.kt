@@ -59,6 +59,7 @@ class ChatViewModel(
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
+    private val textPartIds = mutableSetOf<String>()
 
     init {
         if (backend != null) {
@@ -99,6 +100,7 @@ class ChatViewModel(
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
         streamedParts.clear()
+        textPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -129,6 +131,7 @@ class ChatViewModel(
 
     fun newSession() {
         streamedParts.clear()
+        textPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = null,
@@ -136,6 +139,9 @@ class ChatViewModel(
                 messages = emptyList(),
                 permissions = emptyList(),
                 isRunning = false,
+                isThinking = false,
+                isListening = false,
+                partialText = "",
                 error = null
             )
         }
@@ -251,29 +257,20 @@ class ChatViewModel(
                 if (part.sessionId != activeSession || part.type != "text") return
                 val messageId = part.messageId ?: part.id ?: return
                 val partId = part.id ?: messageId
+                textPartIds += partId
                 val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
                 messageParts[partId] = part.text.orEmpty()
-                val text = messageParts.values.joinToString("")
-                _uiState.update { state ->
-                    val index = state.messages.indexOfFirst { it.id == messageId }
-                    val updated = if (index >= 0) {
-                        state.messages.toMutableList().apply {
-                            this[index] = this[index].copy(text = text, isStreaming = true)
-                        }
-                    } else {
-                        state.messages + ChatMessage(
-                            id = messageId,
-                            text = text,
-                            isUser = false,
-                            isStreaming = true
-                        )
-                    }
-                    state.copy(
-                        messages = updated,
-                        isRunning = true,
-                        isThinking = false
-                    )
-                }
+                updateStreamingMessage(messageId, messageParts.values.joinToString(""))
+            }
+            is OpenCodeEvent.MessagePartDelta -> {
+                if (
+                    event.sessionId != activeSession ||
+                    event.field != "text" ||
+                    event.partId !in textPartIds
+                ) return
+                val messageParts = streamedParts.getOrPut(event.messageId) { linkedMapOf() }
+                messageParts[event.partId] = messageParts[event.partId].orEmpty() + event.delta
+                updateStreamingMessage(event.messageId, messageParts.values.joinToString(""))
             }
             is OpenCodeEvent.PermissionAsked -> {
                 if (event.request.sessionId != activeSession) return
@@ -308,6 +305,29 @@ class ChatViewModel(
                 }
             }
             is OpenCodeEvent.Unknown -> Unit
+        }
+    }
+
+    private fun updateStreamingMessage(messageId: String, text: String) {
+        _uiState.update { state ->
+            val index = state.messages.indexOfFirst { it.id == messageId }
+            val updated = if (index >= 0) {
+                state.messages.toMutableList().apply {
+                    this[index] = this[index].copy(text = text, isStreaming = true)
+                }
+            } else {
+                state.messages + ChatMessage(
+                    id = messageId,
+                    text = text,
+                    isUser = false,
+                    isStreaming = true
+                )
+            }
+            state.copy(
+                messages = updated,
+                isRunning = true,
+                isThinking = false
+            )
         }
     }
 
