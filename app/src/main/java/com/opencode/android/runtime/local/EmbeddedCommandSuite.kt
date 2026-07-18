@@ -33,7 +33,7 @@ class EmbeddedCommandSuite(
         val home = File(stateRoot, "home").apply { mkdirs() }
         val tmp = File(stateRoot, "tmp").apply { mkdirs() }
         val nativeLibraryDirectory = File(context.applicationInfo.nativeLibraryDir)
-        val proot = File(nativeLibraryDirectory, "libopencode_android_proot.so")
+        val proot = File(nativeLibraryDirectory, PROOT_LIBRARY_NAME)
         val loader = File(nativeLibraryDirectory, "libopencode_android_proot_loader.so")
         val loader32 = File(nativeLibraryDirectory, "libopencode_android_proot_loader32.so")
         require(proot.isFile && proot.canExecute()) { "Embedded PRoot is unavailable for $abi" }
@@ -43,6 +43,7 @@ class EmbeddedCommandSuite(
     }
 
     companion object {
+        const val PROOT_LIBRARY_NAME = "libopencode_android_proot.so"
         private val SUPPORTED_ABIS = setOf("arm64-v8a", "x86_64")
     }
 }

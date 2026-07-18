@@ -3,15 +3,19 @@ package com.opencode.android.data.repository
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.RuntimeState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -31,8 +35,13 @@ data class RuntimeActivityState(
 
 class RuntimeActivityRepository(
     registry: RuntimeRegistry,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    private val retryDelayMillis: Long = 2_000L
 ) {
+    init {
+        require(retryDelayMillis >= 0L)
+    }
+
     private val mutableState = MutableStateFlow(RuntimeActivityState())
     val state: StateFlow<RuntimeActivityState> = mutableState.asStateFlow()
 
@@ -41,19 +50,37 @@ class RuntimeActivityRepository(
 
     init {
         scope.launch {
-            registry.selected.collectLatest { target ->
+            registry.selected.collectLatest selected@ { target ->
                 mutableState.value = RuntimeActivityState()
-                if (target == null) return@collectLatest
-                target.events()
-                    .catch { error ->
-                        mutableState.update {
-                            it.copy(streamError = error.message ?: "OpenCodeイベント接続に失敗しました")
+                if (target == null) return@selected
+
+                target.state.collectLatest state@ { runtimeState ->
+                    mutableState.update {
+                        it.copy(
+                            activeSessionIds = emptySet(),
+                            permissions = emptyList(),
+                            streamError = null
+                        )
+                    }
+                    if (runtimeState !is RuntimeState.Connected) return@state
+
+                    flow { emitAll(target.events()) }
+                        .retryWhen { error, _ ->
+                            mutableState.update {
+                                it.copy(
+                                    streamError = error.message
+                                        ?: "OpenCodeイベント接続に失敗しました"
+                                )
+                            }
+                            if (retryDelayMillis > 0L) delay(retryDelayMillis)
+                            true
                         }
-                    }
-                    .collect { event ->
-                        mutableEvents.emit(event)
-                        handle(event)
-                    }
+                        .collect { event ->
+                            mutableState.update { it.copy(streamError = null) }
+                            mutableEvents.emit(event)
+                            handle(event)
+                        }
+                }
             }
         }
     }

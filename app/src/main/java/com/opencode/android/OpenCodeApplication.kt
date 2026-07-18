@@ -7,6 +7,8 @@ import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.local.LocalRuntimeCommandRunner
+import com.opencode.android.runtime.local.LocalRuntimeDiagnosticsCollector
 import com.opencode.android.runtime.local.LocalRuntimeInstaller
 import com.opencode.android.runtime.local.LocalRuntimeManager
 import com.opencode.android.runtime.local.LocalRuntimeProcessLauncher
@@ -34,6 +36,9 @@ class OpenCodeApplication : Application() {
     lateinit var localRuntimeController: LocalRuntimeServiceController
         private set
 
+    lateinit var localRuntimeDiagnosticsCollector: LocalRuntimeDiagnosticsCollector
+        private set
+
     lateinit var runtimeRegistry: RuntimeRegistry
         private set
 
@@ -59,6 +64,17 @@ class OpenCodeApplication : Application() {
             abi = abi,
             installer = installer,
             processLauncher = launcher
+        )
+        val commandRunner = LocalRuntimeCommandRunner(
+            runtimeDirectory = runtimeDirectory,
+            installedRuntimeProvider = installer::installedRuntime
+        )
+        localRuntimeDiagnosticsCollector = LocalRuntimeDiagnosticsCollector(
+            runtimeDirectory = runtimeDirectory,
+            abi = abi,
+            statusProvider = localRuntimeManager::status,
+            processMetricsProvider = launcher::metrics,
+            commandExecutor = commandRunner::run
         )
         localRuntimeController = LocalRuntimeServiceController(this)
         runtimeRegistry = RuntimeRegistry(

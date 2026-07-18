@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
@@ -60,7 +61,8 @@ fun WorkspacesScreen(
     onSetupLocal: () -> Unit,
     onStartLocal: () -> Unit,
     onStopLocal: () -> Unit,
-    onReinstallLocal: () -> Unit
+    onReinstallLocal: () -> Unit,
+    onOpenLocalManagement: () -> Unit
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
 
@@ -189,6 +191,19 @@ fun WorkspacesScreen(
                                 }
                             }
                             is LocalRuntimeStatus.UnsupportedAbi -> Unit
+                        }
+                        if (state.localStatus !is LocalRuntimeStatus.UnsupportedAbi) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onOpenLocalManagement,
+                                enabled = state.localStatus !is LocalRuntimeStatus.Installing &&
+                                    state.localStatus !is LocalRuntimeStatus.Starting,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = null)
+                                Spacer(Modifier.padding(horizontal = 4.dp))
+                                Text("診断と管理")
+                            }
                         }
                     }
                 }

@@ -15,11 +15,13 @@ OpenCode本体はフォークしない。アプリ専用ストレージ内へLin
 - OpenCode 1.18.3公式muslバイナリのダウンロード
 - URL・サイズ・SHA-256を固定したランタイムマニフェスト
 - 一時領域への展開と、成功後だけ本番環境へ切り替えるインストール
-- Alpine内へのGit、Bash、curl、CA証明書、ripgrep、libstdc++導入
+- Alpine内へのGit、Bash、curl、OpenSSH client、CA証明書、ripgrep、libstdc++導入
 - `127.0.0.1:4097`限定のOpenCodeサーバー起動
-- Foreground Serviceによるセットアップ・起動・停止
+- Foreground Serviceによるセットアップ・起動・停止・稼働監視・自動復旧
 - 未導入、導入中、起動中、停止中、稼働中、破損、未対応ABIの状態管理
 - 作業先画面からのセットアップ、起動、停止、修復・再セットアップ
+- 容量、空き容量、プロセスツリー全体のメモリ、PID、稼働時間、必須ツール、ログの診断画面
+- 確認ダイアログ付きの完全削除。Linux環境、キャッシュ、ログ、ローカル作業領域、残留プロセスを削除
 - ローカルとPCリモートで共通のREST/SSEクライアント
 
 API 36のARM64エミュレーターで、以下を実動作確認している。
@@ -29,6 +31,8 @@ OpenCode 1.18.3
 Git 2.54.0
 Bash 5.3.9
 ripgrep 15.1.0
+OpenSSH 10.3p1
+CA証明書
 GET /global/health
 モデル・エージェント取得
 big-pickleによる推論
@@ -80,7 +84,9 @@ opencode serve --hostname 127.0.0.1 --port 4097
 /global/healthが成功したらReady
 ```
 
-ダウンロード、検証、展開、ツール導入のいずれかに失敗した場合、破損状態と理由を表示し、修復・再セットアップを選択できる。
+ダウンロード、検証、展開、ツール導入のいずれかに失敗した場合、破損状態と理由を表示し、修復・再セットアップを選択できる。診断画面ではOpenCode、Git、Bash、curl、SSH、ripgrep、CA証明書を実際のLinux環境内で確認する。
+
+完全削除はOpenCodeとPRootのプロセスツリーを停止してから、`files/runtime`全体を削除する。API 36 ARM64エミュレーターで、削除後にOpenCode・PRoot・Foreground Service・ランタイムディレクトリが残らないことを確認している。
 
 ## セキュリティ
 
@@ -98,12 +104,9 @@ opencode serve --hostname 127.0.0.1 --port 4097
 
 1. OpenCode更新確認と更新内容表示
 2. 新旧環境のアトミック切り替えとロールバック
-3. ランタイムの完全削除
-4. 空き容量、メモリ、稼働時間、ログの診断画面
-5. SSHを含む必須ツール診断
-6. Storage Access Frameworkによる外部作業フォルダ
-7. ローカルプロバイダー認証情報をKeystoreから安全に設定するUI
-8. 物理端末でのバッテリー・メモリ・容量計測
+3. Storage Access Frameworkによる外部作業フォルダ
+4. ローカルプロバイダー認証情報をKeystoreから安全に設定するUI
+5. 物理端末でのバッテリー・メモリ・容量計測
 
 ## Android上の制約
 

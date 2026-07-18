@@ -58,6 +58,14 @@ class LocalRuntimeService : Service() {
                 autoRestartEnabled = true
                 launchOperation { manager.reinstall() }
             }
+            ACTION_DELETE -> {
+                autoRestartEnabled = false
+                launchOperation {
+                    manager.deleteRuntime()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
             ACTION_STOP -> {
                 autoRestartEnabled = false
                 launchOperation {
@@ -171,6 +179,7 @@ class LocalRuntimeService : Service() {
         const val ACTION_START = "com.opencode.android.local.START"
         const val ACTION_STOP = "com.opencode.android.local.STOP"
         const val ACTION_REINSTALL = "com.opencode.android.local.REINSTALL"
+        const val ACTION_DELETE = "com.opencode.android.local.DELETE"
 
         fun send(context: Context, action: String) {
             val intent = Intent(context, LocalRuntimeService::class.java).setAction(action)
@@ -188,4 +197,5 @@ class LocalRuntimeServiceController(private val context: Context) {
     fun start() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_START)
     fun stop() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_STOP)
     fun reinstall() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_REINSTALL)
+    fun delete() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_DELETE)
 }

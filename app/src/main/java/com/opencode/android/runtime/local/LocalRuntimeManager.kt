@@ -83,6 +83,24 @@ class LocalRuntimeManager(
         }
     }
 
+    suspend fun deleteRuntime(): Result<LocalRuntimeStatus.NotInstalled> = operationMutex.withLock {
+        runCatching {
+            withContext(Dispatchers.IO) {
+                processLauncher?.stop()
+                if (runtimeDirectory.exists()) {
+                    require(runtimeDirectory.deleteRecursively()) {
+                        "ローカルランタイムを完全に削除できませんでした"
+                    }
+                }
+            }
+            LocalRuntimeStatus.NotInstalled.also { mutableState.value = it }
+        }.onFailure { error ->
+            mutableState.value = LocalRuntimeStatus.Broken(
+                error.message ?: "ローカルランタイムを削除できません"
+            )
+        }
+    }
+
     suspend fun reinstall(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
         withContext(Dispatchers.IO) { processLauncher?.stop() }
         File(runtimeDirectory, METADATA_FILE).delete()

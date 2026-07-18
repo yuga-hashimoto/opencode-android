@@ -51,13 +51,17 @@ import com.opencode.android.feature.home.HomeScreen
 import com.opencode.android.feature.home.HomeViewModel
 import com.opencode.android.feature.settings.SettingsScreen
 import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.workspace.LocalRuntimeManagementScreen
+import com.opencode.android.feature.workspace.LocalRuntimeManagementViewModel
 import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
 import com.opencode.android.feature.workspace.WorkspacesScreen
 import com.opencode.android.runtime.WorkspaceRef
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class Destination(
     val route: String,
@@ -73,6 +77,7 @@ private enum class Destination(
 
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
+private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
 
 @Composable
 fun OpenCodeApp(
@@ -307,7 +312,45 @@ fun OpenCodeApp(
                     onSetupLocal = workspaceViewModel::setupLocalRuntime,
                     onStartLocal = workspaceViewModel::startLocalRuntime,
                     onStopLocal = workspaceViewModel::stopLocalRuntime,
-                    onReinstallLocal = workspaceViewModel::reinstallLocalRuntime
+                    onReinstallLocal = workspaceViewModel::reinstallLocalRuntime,
+                    onOpenLocalManagement = {
+                        navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE)
+                    }
+                )
+            }
+
+            composable(LOCAL_RUNTIME_MANAGEMENT_ROUTE) {
+                val managementViewModel: LocalRuntimeManagementViewModel = viewModel(
+                    key = "local-runtime-management",
+                    factory = ViewModelFactory {
+                        LocalRuntimeManagementViewModel(
+                            runtimeState = app.localRuntimeManager.state,
+                            diagnosticsProvider = {
+                                withContext(Dispatchers.IO) {
+                                    app.localRuntimeDiagnosticsCollector.collect()
+                                }
+                            },
+                            repairAction = app.localRuntimeController::reinstall,
+                            deleteAction = app.localRuntimeController::delete
+                        )
+                    }
+                )
+                val managementState by managementViewModel.state.collectAsState()
+                LaunchedEffect(managementState.deleteCompleted) {
+                    if (managementState.deleteCompleted) {
+                        managementViewModel.consumeDeleteCompleted()
+                        workspaceViewModel.refresh()
+                        navController.popBackStack()
+                    }
+                }
+                LocalRuntimeManagementScreen(
+                    state = managementState,
+                    onBack = { navController.popBackStack() },
+                    onRefresh = managementViewModel::refresh,
+                    onRepair = managementViewModel::repair,
+                    onRequestDelete = managementViewModel::requestDelete,
+                    onDismissDelete = managementViewModel::dismissDelete,
+                    onConfirmDelete = managementViewModel::confirmDelete
                 )
             }
 

@@ -5,10 +5,18 @@ import java.util.concurrent.TimeUnit
 
 class LocalRuntimeProcessLauncher(
     private val runtimeDirectory: File,
-    private val portProbe: (Int) -> Boolean
+    private val portProbe: (Int) -> Boolean,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val procRoot: File = File("/proc"),
+    private val processSignal: (Long) -> Unit = { pid ->
+        android.os.Process.killProcess(pid.toInt())
+    }
 ) {
     @Volatile
     private var process: Process? = null
+
+    @Volatile
+    private var startedAtMillis: Long? = null
 
     @Synchronized
     fun start(runtime: LocalRuntimeInstaller.InstalledRuntime): Process {
@@ -60,28 +68,79 @@ class LocalRuntimeProcessLauncher(
         }
         val started = builder.start()
         process = started
-        waitUntilReady(started, port, logFile)
-        return started
+        startedAtMillis = nowMillis()
+        return try {
+            waitUntilReady(started, port, logFile)
+            started
+        } catch (error: Throwable) {
+            process = null
+            startedAtMillis = null
+            throw error
+        }
     }
 
     @Synchronized
     fun stop() {
-        val current = process ?: return
-        terminate(current)
+        process?.let(::terminate) ?: terminateResidualManagedProcesses()
         process = null
+        startedAtMillis = null
     }
 
     fun isRunning(): Boolean = process?.isAlive == true
 
     fun isHealthy(port: Int): Boolean = process?.isAlive == true && portProbe(port)
 
-    private fun terminate(current: Process) {
-        if (!current.isAlive) return
-        current.destroy()
-        if (!current.waitFor(3, TimeUnit.SECONDS)) {
-            current.destroyForcibly()
-            current.waitFor(2, TimeUnit.SECONDS)
+    @Synchronized
+    fun metrics(): LocalRuntimeProcessMetrics? {
+        val current = process?.takeIf(Process::isAlive) ?: return null
+        val pid = processId(current)
+        val rssBytes = pid?.let { rootPid ->
+            totalResidentSetBytes(
+                rootPid = rootPid,
+                statusReader = { processId ->
+                    runCatching { File("/proc/$processId/status").readText() }.getOrNull()
+                },
+                childrenReader = ::readDirectChildPids
+            )
         }
+        return LocalRuntimeProcessMetrics(
+            pid = pid,
+            rssBytes = rssBytes,
+            uptimeMillis = (nowMillis() - (startedAtMillis ?: nowMillis())).coerceAtLeast(0L)
+        )
+    }
+
+    private fun terminate(current: Process) {
+        val roots = linkedSetOf<Long>().apply {
+            processId(current)?.let(::add)
+            addAll(findManagedRuntimeRootPids(runtimeDirectory, procRoot))
+        }
+        val terminationOrder = roots
+            .flatMap { rootPid ->
+                processTreePostOrder(rootPid) { pid -> readDirectChildPids(pid, procRoot) }
+            }
+            .distinct()
+
+        if (current.isAlive) {
+            current.destroy()
+            current.waitFor(750, TimeUnit.MILLISECONDS)
+        }
+        terminationOrder.forEach { pid ->
+            runCatching { processSignal(pid) }
+        }
+        if (current.isAlive && !current.waitFor(2, TimeUnit.SECONDS)) {
+            current.destroyForcibly()
+            current.waitFor(1, TimeUnit.SECONDS)
+        }
+    }
+
+    private fun terminateResidualManagedProcesses() {
+        findManagedRuntimeRootPids(runtimeDirectory, procRoot)
+            .flatMap { rootPid ->
+                processTreePostOrder(rootPid) { pid -> readDirectChildPids(pid, procRoot) }
+            }
+            .distinct()
+            .forEach { pid -> runCatching { processSignal(pid) } }
     }
 
     private fun waitUntilReady(process: Process, port: Int, logFile: File) {
@@ -100,6 +159,77 @@ class LocalRuntimeProcessLauncher(
     private fun tail(file: File): String = runCatching {
         file.readLines().takeLast(20).joinToString("\n")
     }.getOrDefault("No runtime log was produced")
+}
+
+internal fun processTreePostOrder(
+    rootPid: Long,
+    childrenReader: (Long) -> List<Long>
+): List<Long> {
+    val visited = mutableSetOf<Long>()
+    val result = mutableListOf<Long>()
+
+    fun visit(pid: Long) {
+        if (!visited.add(pid)) return
+        childrenReader(pid).forEach(::visit)
+        result += pid
+    }
+
+    visit(rootPid)
+    return result
+}
+
+internal fun findManagedRuntimeRootPids(
+    runtimeDirectory: File,
+    procRoot: File = File("/proc"),
+    prootMarker: String = EmbeddedCommandSuite.PROOT_LIBRARY_NAME
+): List<Long> {
+    val runtimeMarker = runtimeDirectory.absolutePath
+    return procRoot.listFiles()
+        .orEmpty()
+        .asSequence()
+        .filter(File::isDirectory)
+        .mapNotNull { directory ->
+            val pid = directory.name.toLongOrNull() ?: return@mapNotNull null
+            val commandLine = runCatching {
+                File(directory, "cmdline")
+                    .readBytes()
+                    .toString(Charsets.UTF_8)
+                    .replace('\u0000', ' ')
+            }.getOrNull() ?: return@mapNotNull null
+            pid.takeIf {
+                commandLine.contains(prootMarker) &&
+                    commandLine.contains(runtimeMarker)
+            }
+        }
+        .sorted()
+        .toList()
+}
+
+internal fun processId(process: Process): Long? {
+    val methodValue = runCatching {
+        process.javaClass.methods
+            .firstOrNull { it.name == "pid" && it.parameterCount == 0 }
+            ?.invoke(process)
+    }.getOrNull()
+    when (methodValue) {
+        is Long -> return methodValue
+        is Int -> return methodValue.toLong()
+    }
+
+    return sequenceOf("pid", "id")
+        .mapNotNull { fieldName ->
+            runCatching {
+                process.javaClass.getDeclaredField(fieldName).apply { isAccessible = true }.get(process)
+            }.getOrNull()
+        }
+        .mapNotNull { value ->
+            when (value) {
+                is Long -> value
+                is Int -> value.toLong()
+                else -> null
+            }
+        }
+        .firstOrNull()
 }
 
 internal fun localRuntimeEnvironment(

@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import kotlinx.coroutines.runBlocking
 
 class LocalRuntimeManagerTest {
     @get:Rule
@@ -73,6 +74,42 @@ class LocalRuntimeManagerTest {
         )
 
         assertEquals(LocalRuntimeStatus.Stopped("1.17.20", 4096), manager.status())
+    }
+
+    @Test
+    fun `delete runtime removes every managed file and returns not installed`() = runBlocking {
+        val runtime = temporaryFolder.newFolder("managed-runtime")
+        runtime.resolve("metadata.json").writeText(
+            """{"version":"1.18.3","port":4097,"installedAt":123}"""
+        )
+        runtime.resolve("environment/rootfs/usr/local/bin/opencode").apply {
+            parentFile.mkdirs()
+            writeText("binary")
+        }
+        runtime.resolve("cache/archive.tar.gz").apply {
+            parentFile.mkdirs()
+            writeText("cache")
+        }
+        runtime.resolve("logs/opencode-local.log").apply {
+            parentFile.mkdirs()
+            writeText("log")
+        }
+        runtime.resolve("workspace/project/file.txt").apply {
+            parentFile.mkdirs()
+            writeText("workspace")
+        }
+        val manager = LocalRuntimeManager(
+            runtimeDirectory = runtime,
+            abi = "arm64-v8a",
+            portProbe = { false }
+        )
+
+        val result = manager.deleteRuntime()
+
+        assertTrue(result.isSuccess)
+        assertEquals(LocalRuntimeStatus.NotInstalled, result.getOrNull())
+        assertTrue(!runtime.exists())
+        assertEquals(LocalRuntimeStatus.NotInstalled, manager.status())
     }
 
     private fun createRuntimeFiles() {

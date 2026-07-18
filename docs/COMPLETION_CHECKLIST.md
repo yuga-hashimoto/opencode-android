@@ -38,16 +38,16 @@
 - [x] PRootネイティブランナー
 - [x] Alpine minirootfs導入
 - [x] 公式OpenCode musl配布物のSHA-256検証
-- [x] Git / Bash / curl / CA証明書 / ripgrep / libstdc++の自動導入
+- [x] Git / Bash / curl / SSH / CA証明書 / ripgrep / libstdc++の自動導入
 - [x] `127.0.0.1:4097`限定起動
 - [x] Foreground Serviceによる起動・停止
 - [x] OpenCode 1.18.3 health・モデル・エージェント・推論の実動作
 - [x] セットアップ・修復UI
 - [ ] OpenCode更新確認・更新
 - [ ] アトミック更新とロールバック
-- [ ] ランタイム完全削除
-- [ ] 空き容量・メモリ・稼働時間・ログ診断UI
-- [ ] SSHを含む必須ツール診断
+- [x] ランタイム完全削除
+- [x] 空き容量・メモリ・稼働時間・ログ診断UI
+- [x] SSHを含む必須ツール診断
 - [ ] Storage Access Frameworkによる外部作業フォルダ
 - [ ] APIキーをKeystoreからローカルOpenCodeへ安全に設定するUI
 
@@ -59,11 +59,11 @@
 - [~] reasoning / tool / commandイベントのアクティビティ表示
 - [ ] ツール実行カードの詳細表示
 - [ ] コマンド出力の折りたたみ表示
-- [ ] ファイル一覧
-- [ ] ファイル検索
-- [ ] Git状態
-- [ ] セッション差分
-- [ ] セッションTodo
+- [x] ファイル一覧
+- [x] ファイル検索
+- [x] Git状態
+- [x] セッション差分
+- [x] セッションTodo
 - [ ] 添付ファイル
 - [ ] AndroidローカルとPCリモート間のハンドオフ
 

@@ -3,3 +3,4 @@ local.properties
 build/
 *.iml
 .idea/
+__pycache__/
