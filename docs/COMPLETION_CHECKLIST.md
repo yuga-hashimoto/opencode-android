@@ -26,12 +26,13 @@
 - [x] Basic認証と暗号化保存
 - [x] `/global/health`、セッション、モデル、エージェント取得
 - [x] 新規セッション作成・メッセージ送信
+- [x] セッションの名前変更・削除（PATCH/DELETE `/session/{id}`）
 - [x] OpenCode 1.18.3 SSE `message.part.updated` / `message.part.delta`対応
 - [x] 中断API
 - [x] 承認APIと承認UI（Chat / Activity / 通知アクション）
 - [~] 接続時capability保存・API互換性表示（health version 表示）
-- [ ] mDNS/NSDによるLAN実行先検出
-- [ ] QRコードによる接続入力
+- [x] mDNS/NSDによるLAN実行先検出
+- [x] QRコードによる接続入力
 
 ## C. Androidローカルランタイム
 

@@ -98,4 +98,19 @@
     <string name="notifications_permission_rationale">バックグラウンドでの承認待ちと完了通知に使います。</string>
     <string name="capability_version">OpenCode %1$s</string>
     <string name="request_notifications">通知を許可</string>
+
+    <string name="session_options">セッション操作</string>
+    <string name="rename_session">名前を変更</string>
+    <string name="delete_session">削除</string>
+    <string name="rename_session_title">セッション名を変更</string>
+    <string name="session_title_hint">セッション名</string>
+    <string name="delete_session_title">セッションを削除しますか？</string>
+    <string name="delete_session_body">このセッションとメッセージは完全に削除されます。</string>
+
+    <string name="add_via_qr">QRで追加</string>
+    <string name="scan_qr_title">接続用QRコードをスキャン</string>
+    <string name="discover_on_lan">LANで検索</string>
+    <string name="discovering_servers">OpenCodeサーバーを検索中…</string>
+    <string name="no_servers_found">LAN上にサーバーが見つかりませんでした</string>
+    <string name="discovered_servers_title">LANで見つかったサーバー</string>
 </resources>

@@ -2,6 +2,7 @@ package com.opencode.android.feature.activity
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,21 +15,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,7 +57,9 @@ fun ActivityScreen(
     onRefresh: () -> Unit,
     onInspectSession: (OpenCodeSession) -> Unit,
     onOpenSession: (String, String) -> Unit,
-    onPermission: (String, PermissionResponse, Boolean) -> Unit = { _, _, _ -> }
+    onPermission: (String, PermissionResponse, Boolean) -> Unit = { _, _, _ -> },
+    onRenameSession: (String, String) -> Unit = { _, _ -> },
+    onDeleteSession: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("実行中", "承認", "セッション", "ログ")
@@ -83,7 +93,7 @@ fun ActivityScreen(
         when (selectedTab) {
             0 -> RunningTab(state, onInspectSession, onOpenSession)
             1 -> ApprovalTab(state, onPermission)
-            2 -> SessionsTab(state, onInspectSession, onOpenSession)
+            2 -> SessionsTab(state, onInspectSession, onOpenSession, onRenameSession, onDeleteSession)
             else -> LogsTab(state)
         }
     }
@@ -175,8 +185,14 @@ private fun ApprovalTab(
 private fun SessionsTab(
     state: ActivityUiState,
     onInspectSession: (OpenCodeSession) -> Unit,
-    onOpenSession: (String, String) -> Unit
+    onOpenSession: (String, String) -> Unit,
+    onRenameSession: (String, String) -> Unit,
+    onDeleteSession: (String) -> Unit
 ) {
+    var renaming by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var deleting by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var menuExpandedFor by remember { mutableStateOf<String?>(null) }
+
     ActivityList(emptyText = "セッションはまだありません", isEmpty = state.sessions.isEmpty()) {
         items(state.sessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
@@ -186,6 +202,30 @@ private fun SessionsTab(
                         Text(session.title.ifBlank { session.slug ?: session.id }, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                    Box {
+                        IconButton(onClick = { menuExpandedFor = session.id }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.session_options))
+                        }
+                        DropdownMenu(
+                            expanded = menuExpandedFor == session.id,
+                            onDismissRequest = { menuExpandedFor = null }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.rename_session)) },
+                                onClick = {
+                                    menuExpandedFor = null
+                                    renaming = session
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete_session)) },
+                                onClick = {
+                                    menuExpandedFor = null
+                                    deleting = session
+                                }
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -197,6 +237,62 @@ private fun SessionsTab(
                 }
             }
         }
+    }
+
+    renaming?.let { session ->
+        var title by remember(session.id) { mutableStateOf(session.title) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text(stringResource(R.string.rename_session_title)) },
+            text = {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.session_title_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRenameSession(session.id, title)
+                        renaming = null
+                    },
+                    enabled = title.isNotBlank()
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    deleting?.let { session ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.delete_session_title)) },
+            text = { Text(stringResource(R.string.delete_session_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteSession(session.id)
+                        deleting = null
+                    }
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 

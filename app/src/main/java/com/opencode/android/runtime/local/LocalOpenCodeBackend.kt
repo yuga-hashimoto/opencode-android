@@ -103,6 +103,9 @@ class LocalOpenCodeBackend(
         delegate().sessionTodo(sessionId, directory)
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) = delegate().sendMessage(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = delegate().abortSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        delegate().renameSession(sessionId, title)
+    override suspend fun deleteSession(sessionId: String): Boolean = delegate().deleteSession(sessionId)
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

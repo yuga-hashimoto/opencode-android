@@ -124,6 +124,9 @@ class RemoteRuntimeTarget(
         backend.sessionTodo(sessionId, directory)
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) = backend.sendMessage(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = backend.abortSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        backend.renameSession(sessionId, title)
+    override suspend fun deleteSession(sessionId: String): Boolean = backend.deleteSession(sessionId)
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

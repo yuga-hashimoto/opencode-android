@@ -1,5 +1,8 @@
 package com.opencode.android.feature.workspace
 
+import android.content.Context
+import android.net.nsd.NsdManager
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,9 +22,12 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.WifiFind
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -36,18 +42,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeHealth
+import com.opencode.android.core.security.ConnectionQrPayload
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeState
 import com.opencode.android.runtime.RuntimeType
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun WorkspacesScreen(
@@ -65,6 +80,41 @@ fun WorkspacesScreen(
     onOpenLocalManagement: () -> Unit
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
+    var discoveryDialogOpen by remember { mutableStateOf(false) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discoveredServers by remember { mutableStateOf<List<DiscoveredServer>>(emptyList()) }
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val qrScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val text = result.contents ?: return@rememberLauncherForActivityResult
+        ConnectionQrPayload.parse(text)?.let { payload ->
+            editing = ConnectionFormState(
+                name = payload.name.orEmpty(),
+                baseUrl = payload.url.orEmpty(),
+                username = payload.username?.takeIf { it.isNotBlank() } ?: "opencode",
+                password = payload.password.orEmpty(),
+                allowInsecureLan = payload.insecure
+            )
+        }
+    }
+
+    fun startLanDiscovery() {
+        discoveryDialogOpen = true
+        discoveredServers = emptyList()
+        isDiscovering = true
+        coroutineScope.launch {
+            val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+            withTimeoutOrNull(10_000) {
+                LanDiscovery(nsdManager).discover().collect { server ->
+                    discoveredServers = (discoveredServers + server)
+                        .distinctBy { it.host to it.port }
+                }
+            }
+            isDiscovering = false
+        }
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -98,6 +148,36 @@ fun WorkspacesScreen(
                     }
                     IconButton(onClick = onRefresh, enabled = !state.isRefreshing) {
                         Icon(Icons.Default.Refresh, contentDescription = "更新")
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            qrScanLauncher.launch(
+                                ScanOptions()
+                                    .setBeepEnabled(false)
+                                    .setOrientationLocked(false)
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text(stringResource(R.string.add_via_qr))
+                    }
+                    OutlinedButton(
+                        onClick = { startLanDiscovery() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.WifiFind, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text(stringResource(R.string.discover_on_lan))
                     }
                 }
             }
@@ -298,6 +378,63 @@ fun WorkspacesScreen(
                 }
             } else null,
             onTest = onTestConnection
+        )
+    }
+
+    if (discoveryDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { discoveryDialogOpen = false },
+            title = { Text(stringResource(R.string.discovered_servers_title)) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isDiscovering) {
+                        Text(
+                            stringResource(R.string.discovering_servers),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    if (discoveredServers.isEmpty()) {
+                        if (!isDiscovering) {
+                            Text(
+                                stringResource(R.string.no_servers_found),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        discoveredServers.forEach { server ->
+                            SectionCard(
+                                modifier = Modifier.clickable {
+                                    editing = ConnectionFormState(
+                                        name = server.name,
+                                        baseUrl = server.baseUrl,
+                                        allowInsecureLan = true
+                                    )
+                                    discoveryDialogOpen = false
+                                }
+                            ) {
+                                Text(server.name, fontWeight = FontWeight.Medium)
+                                Text(
+                                    server.baseUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { discoveryDialogOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
         )
     }
 }

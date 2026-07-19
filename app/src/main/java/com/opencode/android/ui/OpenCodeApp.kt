@@ -466,7 +466,9 @@ fun OpenCodeApp(
                         pendingSession = id to title
                         navController.navigate(Destination.CHAT.route)
                     },
-                    onPermission = activityViewModel::respondToPermission
+                    onPermission = activityViewModel::respondToPermission,
+                    onRenameSession = activityViewModel::renameSession,
+                    onDeleteSession = activityViewModel::deleteSession
                 )
             }
 

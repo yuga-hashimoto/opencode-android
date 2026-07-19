@@ -114,6 +114,33 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `renames session using PATCH with title body`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"s1","title":"Renamed","directory":"/repo","time":{"created":1,"updated":2}}"""))
+        val client = client()
+
+        val renamed = client.renameSession("s1", "Renamed", "/repo")
+
+        assertEquals("Renamed", renamed.title)
+        val request = server.takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/session/s1?directory=%2Frepo", request.path)
+        assertEquals("Renamed", JsonParser.parseString(request.body.readUtf8()).asJsonObject["title"].asString)
+    }
+
+    @Test
+    fun `deletes session using DELETE`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        val result = client.deleteSession("s1", "/repo")
+
+        assertTrue(result)
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/session/s1?directory=%2Frepo", request.path)
+    }
+
+    @Test
     fun `failed requests include truncated response body`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
         val client = client()

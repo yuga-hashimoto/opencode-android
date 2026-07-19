@@ -98,4 +98,19 @@
     <string name="notifications_permission_rationale">Notifications are used for approvals and task completion while the app is in the background.</string>
     <string name="capability_version">OpenCode %1$s</string>
     <string name="request_notifications">Allow notifications</string>
+
+    <string name="session_options">Session options</string>
+    <string name="rename_session">Rename</string>
+    <string name="delete_session">Delete</string>
+    <string name="rename_session_title">Rename session</string>
+    <string name="session_title_hint">Session title</string>
+    <string name="delete_session_title">Delete session?</string>
+    <string name="delete_session_body">This session and its messages will be permanently deleted.</string>
+
+    <string name="add_via_qr">Add via QR</string>
+    <string name="scan_qr_title">Scan a connection QR code</string>
+    <string name="discover_on_lan">Discover on LAN</string>
+    <string name="discovering_servers">Searching for OpenCode servers…</string>
+    <string name="no_servers_found">No servers found on the LAN</string>
+    <string name="discovered_servers_title">Servers found on the LAN</string>
 </resources>

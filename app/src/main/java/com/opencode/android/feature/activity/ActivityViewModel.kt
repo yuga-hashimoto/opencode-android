@@ -85,4 +85,28 @@ class ActivityViewModel(
             permissionBusyIds.update { it - permissionId }
         }
     }
+
+    fun renameSession(sessionId: String, title: String) {
+        val backend = registry.selected.value ?: return
+        actionError.value = null
+        viewModelScope.launch {
+            runCatching { backend.renameSession(sessionId, title) }
+                .onSuccess { catalog.refresh() }
+                .onFailure { error ->
+                    actionError.value = error.message ?: "Failed to rename session"
+                }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        val backend = registry.selected.value ?: return
+        actionError.value = null
+        viewModelScope.launch {
+            runCatching { backend.deleteSession(sessionId) }
+                .onSuccess { catalog.refresh() }
+                .onFailure { error ->
+                    actionError.value = error.message ?: "Failed to delete session"
+                }
+        }
+    }
 }
