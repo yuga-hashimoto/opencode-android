@@ -105,6 +105,7 @@ class ChatViewModel(
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
     private val textPartIds = mutableSetOf<String>()
     private val toolPartIds = mutableSetOf<String>()
+    private val userMessageIds = mutableSetOf<String>()
     private var modelContextLimit: Long? = null
     private var latestInputTokens: Long? = null
 
@@ -176,6 +177,7 @@ class ChatViewModel(
         streamedParts.clear()
         textPartIds.clear()
         toolPartIds.clear()
+        userMessageIds.clear()
         onActiveSessionChanged(sessionId)
         _uiState.update {
             it.copy(
@@ -217,6 +219,7 @@ class ChatViewModel(
         streamedParts.clear()
         textPartIds.clear()
         toolPartIds.clear()
+        userMessageIds.clear()
         latestInputTokens = null
         onActiveSessionChanged(null)
         _uiState.update {
@@ -299,6 +302,7 @@ class ChatViewModel(
                 error = null
             )
         }
+        userMessageIds += userMessage.id
 
         viewModelScope.launch {
             runCatching {
@@ -434,6 +438,7 @@ class ChatViewModel(
                 when {
                     part.type == "text" -> {
                         val messageId = part.messageId ?: part.id ?: return
+                        if (messageId in userMessageIds) return
                         val partId = part.id ?: messageId
                         textPartIds += partId
                         val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
@@ -454,6 +459,7 @@ class ChatViewModel(
                     event.field != "text" ||
                     event.partId !in textPartIds
                 ) return
+                if (event.messageId in userMessageIds) return
                 val messageParts = streamedParts.getOrPut(event.messageId) { linkedMapOf() }
                 messageParts[event.partId] = messageParts[event.partId].orEmpty() + event.delta
                 updateStreamingMessage(event.messageId, messageParts.values.joinToString(""))
@@ -659,6 +665,7 @@ class ChatViewModel(
         val items = mutableListOf<ChatMessage>()
         val text = message.text
         if (text.isNotBlank()) {
+            if (message.info.role == "user") userMessageIds += message.info.id
             items += ChatMessage(
                 id = message.info.id,
                 text = text,

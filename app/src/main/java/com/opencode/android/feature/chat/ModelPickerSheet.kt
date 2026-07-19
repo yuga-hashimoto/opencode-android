@@ -37,6 +37,21 @@ fun ModelPickerSheet(
     onDismiss: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    val visibleProviders = remember(providers, query) {
+        providers.mapNotNull { provider ->
+            if (provider.id.isBlank()) return@mapNotNull null
+            val models = provider.models.values
+                .filter { model ->
+                    model.id.isNotBlank() &&
+                        (model.status == null || model.status == "active") &&
+                        (query.isBlank() || model.name.contains(query, ignoreCase = true) || model.id.contains(query, ignoreCase = true))
+                }
+                .distinctBy { it.id }
+                .sortedBy { it.name.lowercase() }
+            provider to models
+        }.filter { it.second.isNotEmpty() }
+    }
+    val hasProviders = providers.any { it.id.isNotBlank() }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             OutlinedTextField(
@@ -74,15 +89,7 @@ fun ModelPickerSheet(
                     }
                 }
             }
-            providers.forEach { provider ->
-                val models = provider.models.values
-                    .filter { it.status == null || it.status == "active" }
-                    .filter {
-                        query.isBlank() ||
-                            it.name.contains(query, ignoreCase = true) ||
-                            it.id.contains(query, ignoreCase = true)
-                    }
-                    .sortedBy { it.name.lowercase() }
+            visibleProviders.forEach { (provider, models) ->
                 if (models.isNotEmpty()) {
                     item(key = "header-${provider.id}") {
                         Text(
@@ -100,15 +107,10 @@ fun ModelPickerSheet(
                     }
                 }
             }
-            if (providers.all { provider ->
-                    provider.models.values.none {
-                        query.isBlank() || it.name.contains(query, ignoreCase = true) || it.id.contains(query, ignoreCase = true)
-                    }
-                }
-            ) {
+            if (visibleProviders.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        stringResource(R.string.no_models_found),
+                        if (!hasProviders) "モデル情報を取得できません" else stringResource(R.string.no_models_found),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)
                     )

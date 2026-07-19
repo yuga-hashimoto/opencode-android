@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.OpenCodeModel
 import com.opencode.android.core.api.OpenCodeProvider
@@ -144,5 +145,32 @@ class OpenCodeChatScreenTest {
         composeRule.onAllNodesWithText("build").assertCountEquals(2)
         composeRule.onAllNodesWithText("Context 6%").assertCountEquals(1)
         composeRule.onNodeWithText("photo.jpg").assertIsDisplayed()
+    }
+
+    @Test
+    fun model_picker_shows_explicit_empty_state() {
+        composeRule.setContent {
+            androidx.compose.material3.MaterialTheme {
+                OpenCodeChatScreen(
+                    state = ChatUiState(backendName = "Test · 1.0.0"),
+                    providers = emptyList(),
+                    agents = emptyList(),
+                    workspaces = emptyList(),
+                    selectedProviderId = null,
+                    selectedModelId = null,
+                    selectedAgentId = null,
+                    onSelectModel = { _, _ -> },
+                    onSelectAgent = {},
+                    onSelectWorkspace = {},
+                    onSendMessage = {},
+                    onPermission = { _, _, _ -> },
+                    onAbort = {},
+                    onMic = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("モデル").performClick()
+        composeRule.onNodeWithText("モデル情報を取得できません").assertIsDisplayed()
     }
 }

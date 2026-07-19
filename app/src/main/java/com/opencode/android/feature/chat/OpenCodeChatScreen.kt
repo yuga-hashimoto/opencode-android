@@ -302,52 +302,59 @@ fun OpenCodeChatScreen(
             }
         }
 
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(12.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp
         ) {
-            IconButton(onClick = onAttach) {
-                Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.attach_file))
-            }
-            IconButton(onClick = onMic) {
-                Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.voice))
-            }
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(stringResource(R.string.message_hint)) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = {
-                        if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
-                            onSendMessage(input)
-                            input = ""
+            Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(onClick = onAttach) {
+                        Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.attach_file))
+                    }
+                    IconButton(onClick = onMic) {
+                        Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.voice))
+                    }
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(stringResource(R.string.message_hint)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
+                                    onSendMessage(input)
+                                    input = ""
+                                }
+                            }
+                        ),
+                        maxLines = 5,
+                        shape = RoundedCornerShape(18.dp)
+                    )
+                    if (state.isRunning) {
+                        IconButton(onClick = onAbort) {
+                            Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
+                        }
+                    } else {
+                        IconButton(
+                            onClick = {
+                                if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
+                                    onSendMessage(input)
+                                    input = ""
+                                }
+                            },
+                            enabled = input.isNotBlank() || state.pendingAttachments.isNotEmpty()
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_description))
                         }
                     }
-                ),
-                maxLines = 5,
-                shape = RoundedCornerShape(18.dp)
-            )
-            if (state.isRunning) {
-                IconButton(onClick = onAbort) {
-                    Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
-                }
-            } else {
-                IconButton(
-                    onClick = {
-                        if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
-                            onSendMessage(input)
-                            input = ""
-                        }
-                    },
-                    enabled = input.isNotBlank() || state.pendingAttachments.isNotEmpty()
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_description))
                 }
             }
         }
