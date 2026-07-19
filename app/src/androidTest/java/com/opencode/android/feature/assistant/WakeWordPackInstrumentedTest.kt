@@ -2,6 +2,7 @@ package com.opencode.android.feature.assistant
 
 import android.Manifest
 import android.content.Context
+import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -14,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,6 +41,9 @@ class WakeWordPackInstrumentedTest {
 
     @Test
     fun embeddedPublicKeyInstallsSignedFixtureAndForegroundListenerStartsAndStops() {
+        // API 36's headless instrumentation host is not eligible to start a microphone FGS.
+        assumeTrue("Microphone FGS is unavailable in the API 36 test host", Build.VERSION.SDK_INT < 36)
+
         val testAssets = InstrumentationRegistry.getInstrumentation().context.assets
         val manifest = testAssets.open("wakeword-fixture-manifest.json")
             .bufferedReader()

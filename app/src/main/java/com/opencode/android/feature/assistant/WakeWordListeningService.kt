@@ -57,13 +57,15 @@ class WakeWordListeningService : Service() {
         app = application as OpenCodeApplication
         speech = SpeechRecognizerManager(applicationContext)
         createChannel()
-        startForeground(NOTIFICATION_ID, notification("ウェイクワードを準備しています"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopListeningService()
-            ACTION_START, null -> startListeningLoop()
+            ACTION_START, null -> {
+                startForeground(NOTIFICATION_ID, notification("ウェイクワードを準備しています"))
+                startListeningLoop()
+            }
         }
         return START_NOT_STICKY
     }
