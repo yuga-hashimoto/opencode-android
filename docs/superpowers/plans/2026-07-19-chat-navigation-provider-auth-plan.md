@@ -407,11 +407,11 @@ git commit -m "feat: redesign chat composer for mobile controls"
 - Test: `app/src/test/java/com/opencode/android/core/api/OpenCodeApiClientTest.kt`.
 
 **Interfaces:**
-- `data class ProviderAuthMethod(val id: String, val label: String, val type: String)`.
-- `data class ProviderAuthAuthorization(val url: String, val method: String? = null, val state: String? = null, val callbackUrl: String? = null)`.
+- `data class ProviderAuthMethod(val type: String, val label: String)`; the list index is the auth method identifier.
+- `data class ProviderAuthAuthorization(val url: String, val method: String, val instructions: String)`.
 - `suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>>`.
-- `suspend fun authorizeProvider(providerId: String, methodId: String): ProviderAuthAuthorization`.
-- `suspend fun completeProviderOAuth(providerId: String, methodId: String, callback: Map<String, String>): Boolean`.
+- `suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization`.
+- `suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean`.
 
 - [ ] **Step 1: Inspect the running server schema before coding response adapters**
 
@@ -429,13 +429,13 @@ Add MockWebServer tests asserting:
 
 ```kotlin
 assertEquals("ChatGPT Plus/Pro", client.providerAuthMethods()["openai"]!!.first().label)
-assertEquals("https://auth.example", client.authorizeProvider("openai", "oauth").url)
-assertTrue(client.completeProviderOAuth("openai", "oauth", mapOf("code" to "abc", "state" to "s1")))
+assertEquals("https://auth.example", client.authorizeProvider("openai", 0).url)
+assertTrue(client.completeProviderOAuth("openai", 0, "abc"))
 ```
 
 - [ ] **Step 3: Implement the API client and backend delegation**
 
-Use `GET provider/auth`, `POST provider/{id}/oauth/authorize`, and `POST provider/{id}/oauth/callback`. Send only non-empty callback fields. Treat 404/405 as unsupported OAuth and expose that as a typed failure for the UI. Delegate all methods through both local and remote backends.
+Use `GET provider/auth`, `POST provider/{id}/oauth/authorize` with `{ method: Int }`, and `POST provider/{id}/oauth/callback` with `{ method: Int, code?: String }`. Send only non-empty code fields. Treat 404/405 as unsupported OAuth and expose that as a typed failure for the UI. Delegate all methods through both local and remote backends.
 
 - [ ] **Step 4: Run focused API tests and verify they pass**
 
@@ -463,8 +463,8 @@ git commit -m "feat: expose OpenCode provider authentication APIs"
 **Interfaces:**
 - `SettingsUiState` gains `providerAuthMethods`, `oauthProviderId`, `oauthError`, and `oauthMessage`.
 - `SettingsViewModel.refreshProviderAuth()` loads methods from the selected runtime.
-- `SettingsViewModel.beginOAuth(providerId: String, methodId: String): ProviderAuthAuthorization?`.
-- `SettingsViewModel.completeOAuth(providerId: String, methodId: String, callback: Map<String, String>): Boolean`.
+- `SettingsViewModel.beginOAuth(providerId: String, methodIndex: Int): ProviderAuthAuthorization?`.
+- `SettingsViewModel.completeOAuth(providerId: String, methodIndex: Int, code: String?): Boolean`.
 - `LocalProviderCredentialStore.unmanageProvider(providerId: String)` removes the ID from managed synchronization without deleting unrelated credentials.
 
 - [ ] **Step 1: Add failing credential ownership tests**

@@ -118,10 +118,12 @@ continue to be synchronized as API entries in OpenCode's `auth.json`.
 The app will query OpenCode's provider auth methods and expose OAuth when the
 selected provider supports it. OAuth is delegated to the OpenCode server:
 
-1. Request available methods from `/provider/auth`.
-2. Request authorization from `/provider/{id}/oauth/authorize`.
+1. Request available methods from `/provider/auth`; methods are identified by
+   their array index and have `type` and `label` fields.
+2. Request authorization from `/provider/{id}/oauth/authorize` with the method
+   index.
 3. Open the returned authorization URL in the Android browser.
-4. Submit the returned callback data to
+4. Submit the returned method index and optional authorization code to
    `/provider/{id}/oauth/callback` when required by the response.
 5. Refresh provider/auth/model data and show the authenticated state.
 
