@@ -18,8 +18,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +43,7 @@ import com.opencode.android.ui.components.OpenCodeBrand
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeSuccess
+import com.opencode.android.ui.theme.OpenCodeWarning
 
 @Composable
 fun HomeScreen(
@@ -61,6 +67,36 @@ fun HomeScreen(
                 OpenCodeBrand(modifier = Modifier.weight(1f))
                 IconButton(onClick = onRefresh, enabled = !state.isRefreshing) {
                     Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
+                }
+            }
+        }
+
+        if (state.connected && (state.runningCount > 0 || state.pendingApprovalCount > 0)) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (state.pendingApprovalCount > 0) {
+                        LiveOpsStatCard(
+                            count = state.pendingApprovalCount,
+                            label = stringResource(R.string.pending_approvals),
+                            icon = Icons.Default.Security,
+                            tint = OpenCodeWarning,
+                            onClick = onOpenActivity,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (state.runningCount > 0) {
+                        LiveOpsStatCard(
+                            count = state.runningCount,
+                            label = stringResource(R.string.running_now),
+                            icon = Icons.Default.Terminal,
+                            tint = MaterialTheme.colorScheme.primary,
+                            onClick = onOpenActivity,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
         }
@@ -204,6 +240,34 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveOpsStatCard(
+    count: Int,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.12f))
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = tint)
+            Column {
+                Text(count.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = tint)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

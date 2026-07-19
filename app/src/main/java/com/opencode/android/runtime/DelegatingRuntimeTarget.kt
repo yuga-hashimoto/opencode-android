@@ -58,6 +58,11 @@ abstract class DelegatingRuntimeTarget(
         backend.createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> =
         backend.listMessages(sessionId)
+    override suspend fun deleteSession(sessionId: String): Boolean = backend.deleteSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        backend.renameSession(sessionId, title)
+    override suspend fun listCommands(): List<com.opencode.android.core.api.OpenCodeCommand> =
+        backend.listCommands()
     override suspend fun listProviders(): ProviderCatalog = backend.listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = backend.listAgents()
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =

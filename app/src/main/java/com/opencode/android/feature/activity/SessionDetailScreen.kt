@@ -1,6 +1,5 @@
 package com.opencode.android.feature.activity
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -47,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeTodo
+import com.opencode.android.ui.components.DiffStatSummary
+import com.opencode.android.ui.components.DiffView
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
@@ -267,11 +266,16 @@ private fun SessionChangeCard(change: OpenCodeFileChange) {
             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
             Column(modifier = Modifier.weight(1f)) {
                 Text(change.displayPath.ifBlank { "変更ファイル" }, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "+${change.additions.toInt()}  -${change.deletions.toInt()}  ${change.status.orEmpty()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DiffStatSummary(change.additions.toInt(), change.deletions.toInt())
+                    if (!change.status.isNullOrBlank()) {
+                        Text(
+                            "  ${change.status}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             if (!change.patch.isNullOrBlank()) {
                 OutlinedButton(onClick = { expanded = !expanded }) {
@@ -281,14 +285,7 @@ private fun SessionChangeCard(change: OpenCodeFileChange) {
         }
         if (expanded && !change.patch.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
-            SelectionContainer {
-                Text(
-                    change.patch,
-                    fontFamily = FontFamily.Monospace,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                )
-            }
+            DiffView(change.patch, modifier = Modifier.fillMaxWidth())
         }
     }
 }

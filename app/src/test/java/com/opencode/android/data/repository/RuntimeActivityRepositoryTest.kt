@@ -5,6 +5,7 @@ import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.core.api.OpenCodeMessage
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -88,6 +90,145 @@ class RuntimeActivityRepositoryTest {
         assertEquals("イベント接続", repository.state.value.logs.single().title)
     }
 
+    @Test
+    fun `does not fire session-idle notification for quick turns under the threshold`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        var idleNotified = false
+        RuntimeActivityRepository(
+            registry = registry,
+            scope = TestScope(dispatcher),
+            onSessionIdle = { idleNotified = true }
+        )
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        target.eventFlow.emit(OpenCodeEvent.MessagePartDelta("s1", "m1", "p1", "text", "hi"))
+        target.eventFlow.emit(OpenCodeEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+
+        assertFalse(idleNotified)
+    }
+
+    @Test
+    fun `fires session-idle notification once the long-running threshold is met`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        var notifiedSessionId: String? = null
+        RuntimeActivityRepository(
+            registry = registry,
+            scope = TestScope(dispatcher),
+            onSessionIdle = { notifiedSessionId = it },
+            longRunningThresholdMillis = 0L
+        )
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        target.eventFlow.emit(OpenCodeEvent.MessagePartDelta("s1", "m1", "p1", "text", "hi"))
+        target.eventFlow.emit(OpenCodeEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+
+        assertEquals("s1", notifiedSessionId)
+    }
+
+    @Test
+    fun `suppresses session-idle notification for the foregrounded session`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        var idleNotified = false
+        val repository = RuntimeActivityRepository(
+            registry = registry,
+            scope = TestScope(dispatcher),
+            onSessionIdle = { idleNotified = true },
+            longRunningThresholdMillis = 0L
+        )
+        repository.setForegroundSessionId("s1")
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        target.eventFlow.emit(OpenCodeEvent.MessagePartDelta("s1", "m1", "p1", "text", "hi"))
+        target.eventFlow.emit(OpenCodeEvent.SessionIdle("s1"))
+        advanceUntilIdle()
+
+        assertFalse(idleNotified)
+    }
+
+    @Test
+    fun `auto-allows a read-only permission without surfacing it in visible state`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        var permissionAsked = false
+        val repository = RuntimeActivityRepository(
+            registry = registry,
+            scope = TestScope(dispatcher),
+            onPermissionAsked = { permissionAsked = true },
+            autoAllowReadOnlyTools = { true }
+        )
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        target.eventFlow.emit(
+            OpenCodeEvent.PermissionAsked(
+                PermissionRequest(id = "p1", sessionId = "s1", permission = "read")
+            )
+        )
+        advanceUntilIdle()
+
+        assertFalse(permissionAsked)
+        assertTrue(repository.state.value.permissions.isEmpty())
+        assertEquals(1, target.respondCalls)
+    }
+
+    @Test
+    fun `does not auto-allow a mutating permission even when auto-allow is enabled`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        var permissionAsked = false
+        RuntimeActivityRepository(
+            registry = registry,
+            scope = TestScope(dispatcher),
+            onPermissionAsked = { permissionAsked = true },
+            autoAllowReadOnlyTools = { true }
+        )
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        target.eventFlow.emit(
+            OpenCodeEvent.PermissionAsked(
+                PermissionRequest(id = "p1", sessionId = "s1", permission = "bash")
+            )
+        )
+        advanceUntilIdle()
+
+        assertTrue(permissionAsked)
+        assertEquals(0, target.respondCalls)
+    }
+
     private class FakeStore(
         override var selectedRuntimeId: String?
     ) : RuntimeConnectionStore {
@@ -105,6 +246,7 @@ class RuntimeActivityRepositoryTest {
         val eventFlow = MutableSharedFlow<OpenCodeEvent>(extraBufferCapacity = 8)
         val eventFlows = ArrayDeque<Flow<OpenCodeEvent>>()
         var eventCalls = 0
+        var respondCalls = 0
 
         override suspend fun connect(): Result<OpenCodeHealth> =
             Result.failure(IllegalStateException("not connected"))
@@ -123,7 +265,10 @@ class RuntimeActivityRepositoryTest {
             permissionId: String,
             response: PermissionResponse,
             remember: Boolean
-        ): Boolean = true
+        ): Boolean {
+            respondCalls++
+            return true
+        }
 
         override fun events(): Flow<OpenCodeEvent> {
             check(state.value is RuntimeState.Connected) { "runtime is not connected" }

@@ -13,7 +13,11 @@ data class AppPreferences(
     val modelId: String? = null,
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
-    val continuousConversation: Boolean = false
+    val continuousConversation: Boolean = false,
+    val recentModels: List<Pair<String, String>> = emptyList(),
+    val themeMode: String? = null,
+    val dynamicColorEnabled: Boolean = false,
+    val onboardingCompleted: Boolean = false
 )
 
 class AppPreferencesRepository(
@@ -25,7 +29,11 @@ class AppPreferencesRepository(
             modelId = settings.selectedModelId,
             agentId = settings.selectedAgentId,
             ttsEnabled = settings.ttsEnabled,
-            continuousConversation = settings.continuousConversation
+            continuousConversation = settings.continuousConversation,
+            recentModels = decodeRecentModels(settings.recentModels),
+            themeMode = settings.themeMode,
+            dynamicColorEnabled = settings.dynamicColorEnabled,
+            onboardingCompleted = settings.onboardingCompleted
         )
     )
     val state: StateFlow<AppPreferences> = mutableState.asStateFlow()
@@ -33,8 +41,26 @@ class AppPreferencesRepository(
     fun selectModel(providerId: String?, modelId: String?) {
         settings.selectedProviderId = providerId
         settings.selectedModelId = modelId
-        mutableState.update { it.copy(providerId = providerId, modelId = modelId) }
+        if (providerId != null && modelId != null) {
+            recordRecentModel(providerId, modelId)
+        }
+        mutableState.update {
+            it.copy(providerId = providerId, modelId = modelId, recentModels = decodeRecentModels(settings.recentModels))
+        }
     }
+
+    private fun recordRecentModel(providerId: String, modelId: String) {
+        val key = "$providerId:$modelId"
+        val updated = (listOf(key) + settings.recentModels.filterNot { it == key }).take(MAX_RECENT_MODELS)
+        settings.recentModels = updated
+    }
+
+    private fun decodeRecentModels(raw: List<String>): List<Pair<String, String>> =
+        raw.mapNotNull { entry ->
+            val separatorIndex = entry.indexOf(':')
+            if (separatorIndex <= 0 || separatorIndex == entry.lastIndex) return@mapNotNull null
+            entry.substring(0, separatorIndex) to entry.substring(separatorIndex + 1)
+        }
 
     fun selectAgent(agentId: String?) {
         settings.selectedAgentId = agentId
@@ -75,5 +101,29 @@ class AppPreferencesRepository(
     fun setContinuousConversation(enabled: Boolean) {
         settings.continuousConversation = enabled
         mutableState.update { it.copy(continuousConversation = enabled) }
+    }
+
+    fun setThemeMode(mode: String?) {
+        settings.themeMode = mode
+        mutableState.update { it.copy(themeMode = mode) }
+    }
+
+    fun setDynamicColorEnabled(enabled: Boolean) {
+        settings.dynamicColorEnabled = enabled
+        mutableState.update { it.copy(dynamicColorEnabled = enabled) }
+    }
+
+    fun completeOnboarding() {
+        settings.onboardingCompleted = true
+        mutableState.update { it.copy(onboardingCompleted = true) }
+    }
+
+    fun resetOnboarding() {
+        settings.onboardingCompleted = false
+        mutableState.update { it.copy(onboardingCompleted = false) }
+    }
+
+    companion object {
+        private const val MAX_RECENT_MODELS = 6
     }
 }

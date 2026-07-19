@@ -36,6 +36,10 @@ class RemoteOpenCodeBackend(
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         client.createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = client.messages(sessionId)
+    override suspend fun deleteSession(sessionId: String): Boolean = client.deleteSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        client.renameSession(sessionId, title)
+    override suspend fun listCommands(): List<com.opencode.android.core.api.OpenCodeCommand> = client.commands()
     override suspend fun listProviders(): ProviderCatalog = client.providers()
     override suspend fun listAgents(): List<OpenCodeAgent> = client.agents()
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> = client.projects(directory)

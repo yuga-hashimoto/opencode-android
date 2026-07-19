@@ -67,6 +67,11 @@ class LocalOpenCodeBackend(
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         delegate().createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = delegate().listMessages(sessionId)
+    override suspend fun deleteSession(sessionId: String): Boolean = delegate().deleteSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        delegate().renameSession(sessionId, title)
+    override suspend fun listCommands(): List<com.opencode.android.core.api.OpenCodeCommand> =
+        delegate().listCommands()
     override suspend fun listProviders(): ProviderCatalog = delegate().listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = delegate().listAgents()
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =

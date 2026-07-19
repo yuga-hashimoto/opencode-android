@@ -56,6 +56,16 @@ class OpenCodeApiClient(
     suspend fun messages(sessionId: String): List<OpenCodeMessage> =
         getList("session/${encodePath(sessionId)}/message")
 
+    suspend fun deleteSession(sessionId: String): Boolean =
+        delete("session/${encodePath(sessionId)}", Boolean::class.java)
+
+    suspend fun renameSession(sessionId: String, title: String): OpenCodeSession {
+        val body = JsonObject().apply { addProperty("title", title) }
+        return patch("session/${encodePath(sessionId)}", body, OpenCodeSession::class.java)
+    }
+
+    suspend fun commands(): List<OpenCodeCommand> = getList("command")
+
     suspend fun providers(): ProviderCatalog = get("provider", ProviderCatalog::class.java)
 
     suspend fun agents(): List<OpenCodeAgent> = getList("agent")
@@ -280,6 +290,26 @@ class OpenCodeApiClient(
             .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
             .build()
         execute(request) { Unit }
+    }
+
+    private suspend fun <T> patch(
+        path: String,
+        body: JsonObject,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path, queryParameters)
+            .patch(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
+
+    private suspend fun <T> delete(
+        path: String,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        execute(requestBuilder(path, queryParameters).delete().build()) { body -> gson.fromJson(body, clazz) }
     }
 
     private fun <T> execute(request: Request, parse: (String) -> T): T {

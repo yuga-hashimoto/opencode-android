@@ -115,7 +115,7 @@ fun OpenCodeApp(
     val preferences by app.preferences.state.collectAsState()
     val homeViewModel: HomeViewModel = viewModel(
         key = "home",
-        factory = ViewModelFactory { HomeViewModel(app.catalogRepository, app.preferences) }
+        factory = ViewModelFactory { HomeViewModel(app.catalogRepository, app.preferences, app.activityRepository) }
     )
     val homeState by homeViewModel.state.collectAsState()
 
@@ -166,7 +166,9 @@ fun OpenCodeApp(
             ChatViewModel(
                 backend = selectedRuntime,
                 eventFlow = app.activityRepository.events,
-                onPermissionResolved = app.activityRepository::resolvePermission
+                onPermissionResolved = app.activityRepository::resolvePermission,
+                onSessionsChanged = app.catalogRepository::refresh,
+                onActiveSessionChanged = app.activityRepository::setForegroundSessionId
             )
         }
     )
@@ -347,6 +349,13 @@ fun OpenCodeApp(
         destination.route == backStackEntry?.destination?.route
     }
 
+    com.opencode.android.ui.theme.OpenCodeAndroidTheme(
+        themeMode = preferences.themeMode,
+        dynamicColor = preferences.dynamicColorEnabled
+    ) {
+    if (!preferences.onboardingCompleted) {
+        com.opencode.android.feature.onboarding.OnboardingScreen(onFinish = app.preferences::completeOnboarding)
+    } else {
     Scaffold(
         bottomBar = {
             if (showBottomBar) NavigationBar {
@@ -407,6 +416,8 @@ fun OpenCodeApp(
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
+                    recentModels = settingsState.recentModels,
+                    sessions = homeState.sessions,
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
@@ -415,7 +426,11 @@ fun OpenCodeApp(
                     onAbort = chatViewModel::abort,
                     onMic = requestVoiceInput,
                     onAttach = { chatAttachmentLauncher.launch("*/*") },
-                    onRemoveAttachment = chatViewModel::removeAttachment
+                    onRemoveAttachment = chatViewModel::removeAttachment,
+                    onNewChat = chatViewModel::newSession,
+                    onSelectSession = chatViewModel::openSession,
+                    onRenameSession = chatViewModel::renameSession,
+                    onDeleteSession = chatViewModel::deleteSession
                 )
             }
 
@@ -641,6 +656,10 @@ fun OpenCodeApp(
                     onOpenAssistantSettings = onOpenAssistantSettings,
                     onTtsChange = settingsViewModel::setTtsEnabled,
                     onContinuousChange = settingsViewModel::setContinuousConversation,
+                    onAutoAllowReadOnlyChange = settingsViewModel::setAutoAllowReadOnlyTools,
+                    onThemeModeChange = settingsViewModel::setThemeMode,
+                    onDynamicColorChange = settingsViewModel::setDynamicColorEnabled,
+                    onReplayOnboarding = settingsViewModel::replayOnboarding,
                     onDraftProviderId = settingsViewModel::updateDraftProviderId,
                     onDraftApiKey = settingsViewModel::updateDraftApiKey,
                     onSaveApiKey = settingsViewModel::saveApiKey,
@@ -776,5 +795,7 @@ fun OpenCodeApp(
                 }
             }
         }
+    }
+    }
     }
 }

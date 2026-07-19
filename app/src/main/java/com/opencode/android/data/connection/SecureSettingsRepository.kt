@@ -146,6 +146,34 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
                 .apply()
         }
 
+    var recentModels: List<String>
+        get() = preferences.getString(KEY_RECENT_MODELS, null)
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        set(value) {
+            preferences.edit()
+                .putString(KEY_RECENT_MODELS, value.joinToString("\n"))
+                .apply()
+        }
+
+    var themeMode: String?
+        get() = preferences.getString(KEY_THEME_MODE, null)
+        set(value) = preferences.edit().putString(KEY_THEME_MODE, value).apply()
+
+    var dynamicColorEnabled: Boolean
+        get() = preferences.getBoolean(KEY_DYNAMIC_COLOR_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_DYNAMIC_COLOR_ENABLED, value).apply()
+
+    var autoAllowReadOnlyTools: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_ALLOW_READ_ONLY, false)
+        set(value) = preferences.edit().putBoolean(KEY_AUTO_ALLOW_READ_ONLY, value).apply()
+
+    var onboardingCompleted: Boolean
+        get() = preferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        set(value) = preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
     companion object {
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
@@ -166,5 +194,10 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_ASSISTANT_SESSION_PROFILE_KEY = "assistant_session_profile_key"
         private const val KEY_WAKE_WORD_LISTENING_ENABLED = "wake_word_listening_enabled"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
+        private const val KEY_RECENT_MODELS = "recent_models"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_DYNAMIC_COLOR_ENABLED = "dynamic_color_enabled"
+        private const val KEY_AUTO_ALLOW_READ_ONLY = "auto_allow_read_only_tools"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
 }

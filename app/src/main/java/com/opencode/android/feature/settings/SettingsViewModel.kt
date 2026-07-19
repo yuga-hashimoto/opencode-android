@@ -39,7 +39,11 @@ data class SettingsUiState(
     val isLoadingAssistantCatalog: Boolean = false,
     val assistantCatalogError: String? = null,
     val openCodeVersion: String? = null,
-    val credentialMessage: String? = null
+    val credentialMessage: String? = null,
+    val recentModels: List<Pair<String, String>> = emptyList(),
+    val autoAllowReadOnlyTools: Boolean = false,
+    val themeMode: String? = null,
+    val dynamicColorEnabled: Boolean = false
 )
 
 class SettingsViewModel(
@@ -125,7 +129,11 @@ class SettingsViewModel(
             isLoadingAssistantCatalog = draft.assistantCatalog.isLoading,
             assistantCatalogError = draft.assistantCatalog.error,
             openCodeVersion = runtime.health?.version,
-            credentialMessage = draft.message
+            credentialMessage = draft.message,
+            recentModels = prefs.recentModels,
+            autoAllowReadOnlyTools = settings.autoAllowReadOnlyTools,
+            themeMode = prefs.themeMode,
+            dynamicColorEnabled = prefs.dynamicColorEnabled
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
@@ -135,6 +143,15 @@ class SettingsViewModel(
     fun selectAgent(agentId: String) = preferences.selectAgent(agentId)
     fun setTtsEnabled(enabled: Boolean) = preferences.setTtsEnabled(enabled)
     fun setContinuousConversation(enabled: Boolean) = preferences.setContinuousConversation(enabled)
+
+    fun setAutoAllowReadOnlyTools(enabled: Boolean) {
+        settings.autoAllowReadOnlyTools = enabled
+        credentialTick.update { it + 1 }
+    }
+
+    fun setThemeMode(mode: String?) = preferences.setThemeMode(mode)
+    fun setDynamicColorEnabled(enabled: Boolean) = preferences.setDynamicColorEnabled(enabled)
+    fun replayOnboarding() = preferences.resetOnboarding()
 
     fun updateDraftProviderId(value: String) {
         draftProviderId.value = value

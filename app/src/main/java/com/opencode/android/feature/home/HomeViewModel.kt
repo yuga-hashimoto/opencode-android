@@ -3,6 +3,7 @@ package com.opencode.android.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeState
@@ -25,6 +26,8 @@ data class HomeUiState(
     val modelId: String? = null,
     val agentId: String? = null,
     val isRefreshing: Boolean = false,
+    val runningCount: Int = 0,
+    val pendingApprovalCount: Int = 0,
     val error: String? = null
 ) {
     val connected: Boolean get() = version != null
@@ -32,9 +35,16 @@ data class HomeUiState(
 
 class HomeViewModel(
     private val catalog: RuntimeCatalogRepository,
-    preferences: AppPreferencesRepository
+    preferences: AppPreferencesRepository,
+    activity: RuntimeActivityRepository? = null
 ) : ViewModel() {
-    val state: StateFlow<HomeUiState> = combine(catalog.state, preferences.state) { runtime, prefs ->
+    val state: StateFlow<HomeUiState> = combine(
+        catalog.state,
+        preferences.state,
+        activity?.state ?: kotlinx.coroutines.flow.MutableStateFlow(
+            com.opencode.android.data.repository.RuntimeActivityState()
+        )
+    ) { runtime, prefs, activityState ->
         HomeUiState(
             runtimeId = runtime.runtime?.id,
             runtimeName = runtime.runtime?.displayName.orEmpty(),
@@ -47,6 +57,8 @@ class HomeViewModel(
             modelId = prefs.modelId,
             agentId = prefs.agentId,
             isRefreshing = runtime.isRefreshing,
+            runningCount = activityState.activeSessionIds.size,
+            pendingApprovalCount = activityState.permissions.size,
             error = runtime.error
         )
     }.stateIn(

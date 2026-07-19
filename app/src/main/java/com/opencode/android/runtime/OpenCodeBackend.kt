@@ -1,6 +1,7 @@
 package com.opencode.android.runtime
 
 import com.opencode.android.core.api.OpenCodeAgent
+import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileContent
@@ -40,6 +41,10 @@ interface OpenCodeBackend {
         directory: String? = null
     ): OpenCodeSession
     suspend fun listMessages(sessionId: String): List<OpenCodeMessage>
+    suspend fun deleteSession(sessionId: String): Boolean = unsupported("session delete")
+    suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        unsupported("session rename")
+    suspend fun listCommands(): List<OpenCodeCommand> = unsupported("command list")
     suspend fun listProviders(): ProviderCatalog
     suspend fun listAgents(): List<OpenCodeAgent>
     suspend fun listProjects(directory: String? = null): List<OpenCodeProject> = unsupported("projects")

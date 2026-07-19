@@ -30,13 +30,29 @@ data class OpenCodeModelReference(
     @SerializedName("modelID") val modelId: String
 )
 
+data class OpenCodeTokenCache(
+    val read: Int = 0,
+    val write: Int = 0
+)
+
+data class OpenCodeTokenUsage(
+    val input: Int = 0,
+    val output: Int = 0,
+    val reasoning: Int = 0,
+    val cache: OpenCodeTokenCache = OpenCodeTokenCache()
+) {
+    val total: Int get() = input + output + reasoning
+}
+
 data class OpenCodeMessageInfo(
     val id: String,
     @SerializedName("sessionID") val sessionId: String,
     val role: String,
     val time: OpenCodeTime = OpenCodeTime(),
     val agent: String? = null,
-    val model: OpenCodeModelReference? = null
+    val model: OpenCodeModelReference? = null,
+    val cost: Double? = null,
+    val tokens: OpenCodeTokenUsage? = null
 )
 
 data class OpenCodePart(
@@ -168,6 +184,11 @@ data class OpenCodeTodo(
     val content: String,
     val status: String,
     val priority: String
+)
+
+data class OpenCodeCommand(
+    val name: String,
+    val description: String? = null
 )
 
 data class OpenCodeVcsInfo(

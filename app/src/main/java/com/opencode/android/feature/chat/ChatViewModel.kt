@@ -4,9 +4,12 @@ import android.speech.tts.TextToSpeech
 import java.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
+import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeMessage
 import com.opencode.android.core.api.OpenCodePart
+import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.core.api.PromptRequest
@@ -26,7 +29,8 @@ enum class ChatItemKind {
     TEXT,
     TOOL,
     COMMAND,
-    REASONING
+    REASONING,
+    DIFF_SUMMARY
 }
 
 data class PendingAttachment(
@@ -50,7 +54,8 @@ data class ChatMessage(
     val kind: ChatItemKind = ChatItemKind.TEXT,
     val toolName: String? = null,
     val detail: String? = null,
-    val expandedByDefault: Boolean = false
+    val expandedByDefault: Boolean = false,
+    val diffChanges: List<OpenCodeFileChange>? = null
 )
 
 data class ChatUiState(
@@ -71,13 +76,19 @@ data class ChatUiState(
     val selectedModelId: String? = null,
     val selectedAgentId: String? = null,
     val selectedWorkspacePath: String? = null,
+    val todos: List<OpenCodeTodo> = emptyList(),
+    val commands: List<OpenCodeCommand> = emptyList(),
+    val totalCost: Double = 0.0,
+    val totalTokens: Int = 0,
     val error: String? = null
 )
 
 class ChatViewModel(
     private val backend: OpenCodeBackend? = null,
     private val eventFlow: Flow<OpenCodeEvent>? = null,
-    private val onPermissionResolved: (String) -> Unit = {}
+    private val onPermissionResolved: (String) -> Unit = {},
+    private val onSessionsChanged: () -> Unit = {},
+    private val onActiveSessionChanged: (String?) -> Unit = {}
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         ChatUiState(backendName = backend?.displayName.orEmpty())
@@ -113,6 +124,10 @@ class ChatViewModel(
                         _uiState.update { it.copy(error = error.safeMessage()) }
                     }
             }
+            viewModelScope.launch {
+                runCatching { backend.listCommands() }
+                    .onSuccess { commands -> _uiState.update { it.copy(commands = commands) } }
+            }
         }
     }
 
@@ -136,6 +151,7 @@ class ChatViewModel(
         streamedParts.clear()
         textPartIds.clear()
         toolPartIds.clear()
+        onActiveSessionChanged(sessionId)
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -150,10 +166,13 @@ class ChatViewModel(
         viewModelScope.launch {
             runCatching { currentBackend.listMessages(sessionId) }
                 .onSuccess { messages ->
+                    val (cost, tokens) = summarizeUsage(messages)
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
-                            messages = messages.flatMap(::toUiMessages)
+                            messages = messages.flatMap(::toUiMessages),
+                            totalCost = cost,
+                            totalTokens = tokens
                         )
                     }
                 }
@@ -163,12 +182,14 @@ class ChatViewModel(
                     }
                 }
         }
+        fetchTodos(sessionId)
     }
 
     fun newSession() {
         streamedParts.clear()
         textPartIds.clear()
         toolPartIds.clear()
+        onActiveSessionChanged(null)
         _uiState.update {
             it.copy(
                 sessionId = null,
@@ -180,6 +201,9 @@ class ChatViewModel(
                 isThinking = false,
                 isListening = false,
                 partialText = "",
+                todos = emptyList(),
+                totalCost = 0.0,
+                totalTokens = 0,
                 error = null
             )
         }
@@ -255,6 +279,7 @@ class ChatViewModel(
                 }
                 val targetSessionId = existingSessionId ?: requireNotNull(session).id
                 if (session != null) {
+                    onActiveSessionChanged(session.id)
                     _uiState.update {
                         it.copy(sessionId = session.id, sessionTitle = session.title)
                     }
@@ -312,6 +337,37 @@ class ChatViewModel(
             }.onFailure { error ->
                 _uiState.update { it.copy(error = error.safeMessage()) }
             }
+        }
+    }
+
+    fun renameSession(sessionId: String, title: String) {
+        val currentBackend = backend ?: return
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            runCatching { currentBackend.renameSession(sessionId, title) }
+                .onSuccess { session ->
+                    if (_uiState.value.sessionId == sessionId) {
+                        _uiState.update { it.copy(sessionTitle = session.title) }
+                    }
+                    onSessionsChanged()
+                }
+                .onFailure { error -> _uiState.update { it.copy(error = error.safeMessage()) } }
+        }
+    }
+
+    fun deleteSession(sessionId: String) {
+        val currentBackend = backend ?: return
+        viewModelScope.launch {
+            runCatching { currentBackend.deleteSession(sessionId) }
+                .onSuccess { deleted ->
+                    if (deleted) {
+                        onSessionsChanged()
+                        if (_uiState.value.sessionId == sessionId) newSession()
+                    } else {
+                        _uiState.update { it.copy(error = "Failed to delete session") }
+                    }
+                }
+                .onFailure { error -> _uiState.update { it.copy(error = error.safeMessage()) } }
         }
     }
 
@@ -388,6 +444,9 @@ class ChatViewModel(
                         isThinking = false
                     )
                 }
+                fetchDiffSummary(event.sessionId)
+                fetchTodos(event.sessionId)
+                fetchUsageSummary(event.sessionId)
             }
             is OpenCodeEvent.SessionError -> {
                 if (event.sessionId != null && event.sessionId != activeSession) return
@@ -400,6 +459,55 @@ class ChatViewModel(
                 }
             }
             is OpenCodeEvent.Unknown -> Unit
+        }
+    }
+
+    private fun fetchDiffSummary(sessionId: String) {
+        val currentBackend = backend ?: return
+        viewModelScope.launch {
+            val changes = runCatching {
+                currentBackend.sessionDiff(sessionId, _uiState.value.selectedWorkspacePath)
+            }.getOrNull()?.filter { it.additions > 0 || it.deletions > 0 || !it.patch.isNullOrBlank() }
+            if (changes.isNullOrEmpty()) return@launch
+            if (_uiState.value.sessionId != sessionId) return@launch
+            _uiState.update { state ->
+                state.copy(
+                    messages = state.messages + ChatMessage(
+                        id = "diff-summary-$sessionId-${System.currentTimeMillis()}",
+                        text = "",
+                        isUser = false,
+                        kind = ChatItemKind.DIFF_SUMMARY,
+                        diffChanges = changes
+                    )
+                )
+            }
+        }
+    }
+
+    private fun fetchUsageSummary(sessionId: String) {
+        val currentBackend = backend ?: return
+        viewModelScope.launch {
+            val messages = runCatching { currentBackend.listMessages(sessionId) }.getOrNull() ?: return@launch
+            if (_uiState.value.sessionId != sessionId) return@launch
+            val (cost, tokens) = summarizeUsage(messages)
+            _uiState.update { it.copy(totalCost = cost, totalTokens = tokens) }
+        }
+    }
+
+    private fun summarizeUsage(messages: List<OpenCodeMessage>): Pair<Double, Int> {
+        val totalCost = messages.sumOf { it.info.cost ?: 0.0 }
+        val totalTokens = messages.sumOf { it.info.tokens?.total ?: 0 }
+        return totalCost to totalTokens
+    }
+
+    private fun fetchTodos(sessionId: String) {
+        val currentBackend = backend ?: return
+        viewModelScope.launch {
+            val todos = runCatching {
+                currentBackend.sessionTodo(sessionId, _uiState.value.selectedWorkspacePath)
+            }.getOrNull() ?: return@launch
+            if (_uiState.value.sessionId != sessionId) return@launch
+            _uiState.update { it.copy(todos = todos) }
         }
     }
 
@@ -416,6 +524,9 @@ class ChatViewModel(
             ChatItemKind.COMMAND
         } else {
             ChatItemKind.TOOL
+        }
+        if (title.contains("todo", ignoreCase = true)) {
+            (part.sessionId ?: _uiState.value.sessionId)?.let(::fetchTodos)
         }
         _uiState.update { state ->
             val existing = state.messages.indexOfFirst { it.id == id }
@@ -573,6 +684,7 @@ class ChatViewModel(
         eventJob?.cancel()
         tts?.stop()
         tts = null
+        onActiveSessionChanged(null)
         super.onCleared()
     }
 

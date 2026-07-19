@@ -74,6 +74,13 @@ class OpenCodeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
+        // Anyone with a runtime/connection already configured set that up before onboarding
+        // existed — treat them as onboarded instead of showing the first-run wizard on update.
+        if (!settings.onboardingCompleted &&
+            (settings.selectedRuntimeId != null || settings.connections().isNotEmpty())
+        ) {
+            settings.onboardingCompleted = true
+        }
         preferences = AppPreferencesRepository(settings)
         notifications = RuntimeNotificationHelper(this)
         providerCredentials = LocalProviderCredentialStore(settings)
@@ -168,7 +175,8 @@ class OpenCodeApplication : Application() {
             scope = applicationScope,
             onPermissionAsked = notifications::notifyPermission,
             onSessionIdle = notifications::notifySessionComplete,
-            onSessionError = notifications::notifySessionError
+            onSessionError = notifications::notifySessionError,
+            autoAllowReadOnlyTools = { settings.autoAllowReadOnlyTools }
         )
         applicationScope.launch {
             catalogRepository.state.collectLatest { catalog ->

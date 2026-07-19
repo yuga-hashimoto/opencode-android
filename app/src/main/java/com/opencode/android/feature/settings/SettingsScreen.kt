@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -54,6 +55,10 @@ fun SettingsScreen(
     onOpenAssistantSettings: () -> Unit,
     onTtsChange: (Boolean) -> Unit,
     onContinuousChange: (Boolean) -> Unit,
+    onAutoAllowReadOnlyChange: (Boolean) -> Unit = {},
+    onThemeModeChange: (String?) -> Unit = {},
+    onDynamicColorChange: (Boolean) -> Unit = {},
+    onReplayOnboarding: () -> Unit = {},
     onDraftProviderId: (String) -> Unit = {},
     onDraftApiKey: (String) -> Unit = {},
     onSaveApiKey: () -> Unit = {},
@@ -91,6 +96,55 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        item {
+            Text(
+                text = stringResource(R.string.appearance),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    text = stringResource(R.string.theme),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeModeOption(
+                        label = stringResource(R.string.theme_system),
+                        selected = state.themeMode == null,
+                        onClick = { onThemeModeChange(null) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ThemeModeOption(
+                        label = stringResource(R.string.theme_light),
+                        selected = state.themeMode == "light",
+                        onClick = { onThemeModeChange("light") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ThemeModeOption(
+                        label = stringResource(R.string.theme_dark),
+                        selected = state.themeMode == "dark",
+                        onClick = { onThemeModeChange("dark") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    Spacer(Modifier.height(16.dp))
+                    SettingSwitchRow(
+                        icon = Icons.Default.Info,
+                        title = stringResource(R.string.dynamic_color),
+                        description = stringResource(R.string.dynamic_color_help),
+                        checked = state.dynamicColorEnabled,
+                        onCheckedChange = onDynamicColorChange
+                    )
+                }
             }
         }
 
@@ -245,6 +299,26 @@ fun SettingsScreen(
 
         item {
             Text(
+                text = stringResource(R.string.approvals),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        item {
+            SectionCard {
+                SettingSwitchRow(
+                    icon = Icons.Default.Security,
+                    title = stringResource(R.string.auto_allow_read_only),
+                    description = stringResource(R.string.auto_allow_read_only_help),
+                    checked = state.autoAllowReadOnlyTools,
+                    onCheckedChange = onAutoAllowReadOnlyChange
+                )
+            }
+        }
+
+        item {
+            Text(
                 text = stringResource(R.string.provider_credentials),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
@@ -389,6 +463,10 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = onReplayOnboarding, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.replay_onboarding))
                 }
             }
         }
@@ -581,6 +659,21 @@ private fun AssistantAgentSelector(
             }
         }
     }
+}
+
+@Composable
+private fun ThemeModeOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.material3.FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, maxLines = 1) },
+        modifier = modifier
+    )
 }
 
 @Composable
