@@ -55,6 +55,12 @@
     <string name="tool_output_truncated">…output truncated</string>
     <string name="file_changes_title">File changes</string>
     <string name="file_changes_generic">Files were changed</string>
+    <string name="workspace_folder_label">Working folder</string>
+    <string name="default_folder">Default folder</string>
+    <string name="default_folder_description">Use the OpenCode server\'s current location</string>
+    <string name="chat_options_description">Chat options</string>
+    <string name="continue_on_other_runtime">Continue on another runtime</string>
+    <string name="handoff_dialog_title">Choose a runtime</string>
 
     <string name="recent_sessions">Recent sessions</string>
     <string name="view_all">View all</string>

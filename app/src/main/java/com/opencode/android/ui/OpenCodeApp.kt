@@ -47,6 +47,7 @@ import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
 import com.opencode.android.feature.chat.ChatViewModel
 import com.opencode.android.feature.chat.OpenCodeChatScreen
+import com.opencode.android.feature.chat.buildHandoffPrompt
 import com.opencode.android.feature.home.HomeScreen
 import com.opencode.android.feature.home.HomeViewModel
 import com.opencode.android.feature.settings.SettingsScreen
@@ -98,10 +99,12 @@ fun OpenCodeApp(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingSession by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var pendingHandoffPrompt by remember { mutableStateOf<Pair<String, String>?>(null) }
     var selectedWorkspace by remember { mutableStateOf<WorkspaceRef?>(null) }
     var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
+    val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
     val preferences by app.preferences.state.collectAsState()
     val homeViewModel: HomeViewModel = viewModel(
         key = "home",
@@ -285,6 +288,12 @@ fun OpenCodeApp(
         }
     }
 
+    val onHandoff: (String) -> Unit = { targetRuntimeId ->
+        val prompt = buildHandoffPrompt(chatState.messages)
+        pendingHandoffPrompt = targetRuntimeId to prompt
+        app.runtimeRegistry.select(targetRuntimeId)
+    }
+
     val showBottomBar = Destination.entries.any { destination ->
         destination.route == backStackEntry?.destination?.route
     }
@@ -341,6 +350,13 @@ fun OpenCodeApp(
                         pendingSession = null
                     }
                 }
+                LaunchedEffect(pendingHandoffPrompt, selectedRuntime?.id) {
+                    val pending = pendingHandoffPrompt
+                    if (pending != null && selectedRuntime?.id == pending.first) {
+                        chatViewModel.sendMessage(pending.second)
+                        pendingHandoffPrompt = null
+                    }
+                }
                 OpenCodeChatScreen(
                     state = chatState,
                     providers = settingsState.providers,
@@ -349,13 +365,15 @@ fun OpenCodeApp(
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
+                    otherRuntimes = runtimeTargets.filter { it.id != selectedRuntime?.id },
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
-                    onMic = requestVoiceInput
+                    onMic = requestVoiceInput,
+                    onHandoff = onHandoff
                 )
             }
 

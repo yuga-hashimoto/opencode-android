@@ -32,9 +32,11 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,6 +76,7 @@ import com.opencode.android.core.api.OpenCodeModel
 import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.runtime.PermissionResponse
+import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
@@ -89,13 +92,15 @@ fun OpenCodeChatScreen(
     selectedProviderId: String?,
     selectedModelId: String?,
     selectedAgentId: String?,
+    otherRuntimes: List<RuntimeTarget> = emptyList(),
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
     onSelectWorkspace: (String?) -> Unit,
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
-    onMic: () -> Unit
+    onMic: () -> Unit,
+    onHandoff: (String) -> Unit = {}
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -114,9 +119,11 @@ fun OpenCodeChatScreen(
             selectedProviderId = selectedProviderId,
             selectedModelId = selectedModelId,
             selectedAgentId = selectedAgentId,
+            otherRuntimes = otherRuntimes,
             onSelectModel = onSelectModel,
             onSelectAgent = onSelectAgent,
-            onSelectWorkspace = onSelectWorkspace
+            onSelectWorkspace = onSelectWorkspace,
+            onHandoff = onHandoff
         )
 
         if (state.backendName.isBlank()) {
@@ -249,10 +256,16 @@ private fun ChatHeader(
     selectedProviderId: String?,
     selectedModelId: String?,
     selectedAgentId: String?,
+    otherRuntimes: List<RuntimeTarget>,
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
-    onSelectWorkspace: (String?) -> Unit
+    onSelectWorkspace: (String?) -> Unit,
+    onHandoff: (String) -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showHandoffDialog by remember { mutableStateOf(false) }
+    val canHandoff = state.sessionId != null && otherRuntimes.isNotEmpty()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -278,6 +291,31 @@ private fun ChatHeader(
             StatusChip(
                 text = if (state.isConnected) stringResource(R.string.active) else stringResource(R.string.not_set),
                 active = state.isConnected
+            )
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.chat_options_description))
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.continue_on_other_runtime)) },
+                        enabled = canHandoff,
+                        onClick = {
+                            menuExpanded = false
+                            showHandoffDialog = true
+                        }
+                    )
+                }
+            }
+        }
+        if (showHandoffDialog) {
+            HandoffDialog(
+                runtimes = otherRuntimes,
+                onDismiss = { showHandoffDialog = false },
+                onSelect = { runtimeId ->
+                    showHandoffDialog = false
+                    onHandoff(runtimeId)
+                }
             )
         }
         WorkspaceSelector(
@@ -305,6 +343,34 @@ private fun ChatHeader(
 }
 
 @Composable
+private fun HandoffDialog(
+    runtimes: List<RuntimeTarget>,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.handoff_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                runtimes.forEach { runtime ->
+                    Text(
+                        text = runtime.displayName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(runtime.id) }
+                            .padding(vertical = 12.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        }
+    )
+}
+
+@Composable
 private fun WorkspaceSelector(
     workspaces: List<WorkspaceRef>,
     selectedPath: String?,
@@ -322,9 +388,9 @@ private fun WorkspaceSelector(
             Icon(Icons.Default.Folder, contentDescription = null)
             Spacer(Modifier.padding(horizontal = 4.dp))
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
-                Text("作業フォルダ", style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.workspace_folder_label), style = MaterialTheme.typography.labelSmall)
                 Text(
-                    selected?.name ?: selectedPath ?: "既定のフォルダ",
+                    selected?.name ?: selectedPath ?: stringResource(R.string.default_folder),
                     maxLines = 1,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -335,9 +401,9 @@ private fun WorkspaceSelector(
             DropdownMenuItem(
                 text = {
                     Column {
-                        Text("既定のフォルダ")
+                        Text(stringResource(R.string.default_folder))
                         Text(
-                            "OpenCodeサーバーの現在位置を使用",
+                            stringResource(R.string.default_folder_description),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

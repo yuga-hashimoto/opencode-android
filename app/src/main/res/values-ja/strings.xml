@@ -55,6 +55,12 @@
     <string name="tool_output_truncated">…出力を省略しました</string>
     <string name="file_changes_title">ファイル変更</string>
     <string name="file_changes_generic">ファイルが変更されました</string>
+    <string name="workspace_folder_label">作業フォルダ</string>
+    <string name="default_folder">既定のフォルダ</string>
+    <string name="default_folder_description">OpenCodeサーバーの現在位置を使用</string>
+    <string name="chat_options_description">チャット操作</string>
+    <string name="continue_on_other_runtime">別の実行先で続ける</string>
+    <string name="handoff_dialog_title">実行先を選択</string>
 
     <string name="recent_sessions">最近のセッション</string>
     <string name="view_all">すべて表示</string>
