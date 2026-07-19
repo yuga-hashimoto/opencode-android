@@ -83,13 +83,13 @@ Interfaces:
 - Service actions `ACTION_UPDATE` and `ACTION_ROLLBACK`.
 
 Steps:
-- [ ] Test up-to-date no-op, update success, failed startup automatic rollback, manual rollback, and failed rollback restoration.
-- [ ] Confirm tests fail.
-- [ ] Add exhaustive status handling and notifications.
-- [ ] Implement stop, prepare, activate, start, automatic rollback, and prior-version restart under the operation mutex.
-- [ ] Keep URLs/digests out of intents.
-- [ ] Run tests and compile.
-- [ ] Commit `feat: orchestrate runtime updates and rollback`.
+- [x] Test up-to-date no-op, update success, failed startup automatic rollback, manual rollback, and failed rollback restoration.
+- [x] Confirm tests fail.
+- [x] Add exhaustive status handling and notifications.
+- [x] Implement stop, prepare, activate, start, automatic rollback, and prior-version restart under the operation mutex.
+- [x] Keep URLs/digests out of intents.
+- [x] Run tests and compile.
+- [x] Commit `feat: complete runtime update recovery flow`.
 
 ## Task 4: Management UI
 
@@ -100,13 +100,13 @@ Files:
 - Extend ViewModel tests.
 
 Steps:
-- [ ] Test available/up-to-date states, update action, operation messages, rollback action, and disabled controls while updating.
-- [ ] Confirm tests fail.
-- [ ] Show current/latest versions, bounded notes, verified digest, required free space, and update button.
-- [ ] Show rollback version only when present and require confirmation.
-- [ ] Refresh diagnostics and update state after operations.
-- [ ] Run tests, compile, and Lint.
-- [ ] Commit `feat: add runtime update management UI`.
+- [x] Test available/up-to-date states, update action, operation messages, rollback action, and disabled controls while updating.
+- [x] Confirm tests fail.
+- [x] Show current/latest versions, bounded notes, verified digest, required free space, and update button.
+- [x] Show rollback version only when present and require confirmation.
+- [x] Refresh diagnostics and update state after operations.
+- [x] Run tests, compile, and Lint.
+- [x] Commit `feat: add runtime update and rollback management UI`.
 
 ## Task 5: Android verification and docs
 
@@ -117,11 +117,11 @@ Files:
 - Update this plan.
 
 Steps:
-- [ ] Instrument activation and rollback in `targetContext.filesDir`.
-- [ ] Run API 36 `connectedDebugAndroidTest`.
-- [ ] Run official update check in the app and verify installed `1.18.3` is up to date.
+- [x] Instrument activation and rollback in `targetContext.filesDir`.
+- [x] Run API 36 `connectedDebugAndroidTest`.
+- [x] Run official update check in the app and verify installed `1.18.3` is up to date.
 - [ ] Run `testDebugUnitTest lintDebug assembleDebug assembleRelease connectedDebugAndroidTest`.
-- [ ] Update docs only for verified behavior.
+- [x] Update docs only for verified behavior.
 - [ ] Independent review; fix Critical/Important findings.
 
 - [ ] Commit `test: verify local runtime update rollback`.

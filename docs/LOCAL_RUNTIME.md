@@ -22,6 +22,11 @@ OpenCode本体はフォークしない。アプリ専用ストレージ内へLin
 - 作業先画面からのセットアップ、起動、停止、修復・再セットアップ
 - 容量、空き容量、プロセスツリー全体のメモリ、PID、稼働時間、必須ツール、ログの診断画面
 - 確認ダイアログ付きの完全削除。Linux環境、キャッシュ、ログ、ローカル作業領域、残留プロセスを削除
+- OpenCode公式GitHub Release APIによる最新版確認、リリースノート・必要容量表示
+- GitHub Release assetの`sha256:` digest、HTTPS URL、ファイルサイズを検証する更新ダウンロード
+- 候補バイナリの`opencode --version`検証後だけ行うアトミック切り替え
+- 更新失敗時の旧版自動復旧、直前バージョンへの手動ロールバック
+- 更新・ロールバック中断時のトランザクションジャーナル復旧
 - ローカルとPCリモートで共通のREST/SSEクライアント
 
 API 36のARM64エミュレーターで、以下を実動作確認している。
@@ -37,6 +42,8 @@ GET /global/health
 モデル・エージェント取得
 big-pickleによる推論
 SSEによるリアルタイム応答
+公式GitHub Release確認（1.18.3を最新版として判定）
+アプリ専用ストレージ上の更新・ロールバックInstrumentation Test
 ```
 
 ## ディレクトリ構成
@@ -44,16 +51,18 @@ SSEによるリアルタイム応答
 ```text
 files/runtime/
 ├─ metadata.json
+├─ metadata.rollback.json
+├─ update-transaction.json          # 更新中だけ存在
+├─ rollback-transaction.json        # ロールバック中だけ存在
 ├─ cache/
-│  ├─ alpine-minirootfs.tar.gz
-│  └─ opencode-linux-musl.tar.gz
-├─ staging/
 ├─ environment/
-│  ├─ rootfs/
-│  └─ home/
+│  └─ rootfs/
+│     └─ usr/local/bin/
+│        ├─ opencode
+│        └─ opencode.rollback
+├─ command-suite/
+├─ workspace/
 └─ logs/
-   ├─ tools.log
-   └─ opencode.log
 ```
 
 PRoot本体・ローダー・必要共有ライブラリは、APKのABI別ネイティブライブラリとして配置する。AlpineとOpenCode本体は初回セットアップ時に取得するため、APKを不必要に大型化しない。
@@ -88,10 +97,39 @@ opencode serve --hostname 127.0.0.1 --port 4097
 
 完全削除はOpenCodeとPRootのプロセスツリーを停止してから、`files/runtime`全体を削除する。API 36 ARM64エミュレーターで、削除後にOpenCode・PRoot・Foreground Service・ランタイムディレクトリが残らないことを確認している。
 
+## 更新・ロールバックフロー
+
+```text
+公式GitHub Release APIから最新版を取得
+↓
+対象ABIのmusl asset、HTTPS URL、サイズ、SHA-256 digestを検証
+↓
+空き容量を事前確認
+↓
+.partialへダウンロードしSHA-256を照合
+↓
+候補バイナリを展開して実行権限と--versionを検証
+↓
+OpenCodeサーバーを停止
+↓
+更新ジャーナルを永続化
+↓
+opencode / metadata.json と候補を同一ファイルシステム上で切り替え
+↓
+新バージョンを起動してhealthを確認
+↓
+成功時は切り替えを確定、失敗時は旧バージョンを自動復旧
+```
+
+直前バージョンは`opencode.rollback`と`metadata.rollback.json`として1世代だけ保持する。手動ロールバックも同じくジャーナル付きで実行し、対象版を起動できない場合は元の版へ戻す。プロセス強制終了やアプリ中断でジャーナルが残った場合、次回操作時に整合するバイナリとmetadataの組へ復旧する。
+
+API 36 ARM64エミュレーターでは、`targetContext.filesDir`上で実ファイルの更新切り替え、metadata更新、直前版保持、再ロールバック、ジャーナル確定をInstrumentation Testで確認している。
+
 ## セキュリティ
 
-- ダウンロード先URL、期待サイズ、SHA-256をマニフェストへ固定する
-- 不一致のファイルは展開しない
+- 初回セットアップではダウンロード先URL、期待サイズ、SHA-256をマニフェストへ固定する
+- OpenCode更新では公式GitHub Release APIの対象assetだけを選び、HTTPS URL・サイズ・`sha256:` digestを必須とする
+- 不一致のファイルは展開・有効化しない
 - アーカイブ内のパストラバーサルと危険なシンボリックリンクを拒否する
 - OpenCodeサーバーは`127.0.0.1`だけへbindする
 - ランタイムはアプリ専用ストレージへ保存する
@@ -102,11 +140,9 @@ opencode serve --hostname 127.0.0.1 --port 4097
 
 完成版までに次を追加する。
 
-1. OpenCode更新確認と更新内容表示
-2. 新旧環境のアトミック切り替えとロールバック
-3. Storage Access Frameworkによる外部作業フォルダ
-4. ローカルプロバイダー認証情報をKeystoreから安全に設定するUI
-5. 物理端末でのバッテリー・メモリ・容量計測
+1. Storage Access Frameworkによる外部作業フォルダ
+2. ローカルプロバイダー認証情報をKeystoreから安全に設定するUI
+3. 物理端末でのバッテリー・メモリ・容量計測
 
 ## Android上の制約
 
