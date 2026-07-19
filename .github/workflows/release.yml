@@ -28,6 +28,6 @@ jobs:
 
       - name: Upload APK to release
         run: |
-          gh release upload ${{ github.ref_name }} app/build/outputs/apk/release/app-release.apk --clobber
+          gh release upload "${{ github.ref_name }}" app/build/outputs/apk/release/app-release.apk --clobber
         env:
           GH_TOKEN: ${{ github.token }}
