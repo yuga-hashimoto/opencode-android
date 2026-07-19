@@ -8,6 +8,7 @@ import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeMessage
+import com.opencode.android.core.api.OpenCodeModelVariant
 import com.opencode.android.core.api.OpenCodePart
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.PermissionRequest
@@ -55,7 +56,8 @@ data class ChatMessage(
     val toolName: String? = null,
     val detail: String? = null,
     val expandedByDefault: Boolean = false,
-    val diffChanges: List<OpenCodeFileChange>? = null
+    val diffChanges: List<OpenCodeFileChange>? = null,
+    val attachments: List<PendingAttachment> = emptyList()
 )
 
 data class ChatUiState(
@@ -80,6 +82,9 @@ data class ChatUiState(
     val commands: List<OpenCodeCommand> = emptyList(),
     val totalCost: Double = 0.0,
     val totalTokens: Int = 0,
+    val availableVariants: List<String> = emptyList(),
+    val selectedVariant: String? = null,
+    val contextUsagePercent: Int? = null,
     val error: String? = null
 )
 
@@ -100,6 +105,8 @@ class ChatViewModel(
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
     private val textPartIds = mutableSetOf<String>()
     private val toolPartIds = mutableSetOf<String>()
+    private var modelContextLimit: Long? = null
+    private var latestInputTokens: Long? = null
 
     init {
         if (backend != null) {
@@ -146,6 +153,24 @@ class ChatViewModel(
         }
     }
 
+    fun selectModelMetadata(variants: Map<String, OpenCodeModelVariant>, contextLimit: Long?) {
+        val names = variants.keys.sorted()
+        modelContextLimit = contextLimit
+        _uiState.update { state ->
+            state.copy(
+                availableVariants = names,
+                selectedVariant = state.selectedVariant?.takeIf { it in names },
+                contextUsagePercent = contextUsagePercent(latestInputTokens, contextLimit)
+            )
+        }
+    }
+
+    fun selectVariant(variant: String?) {
+        _uiState.update { state ->
+            state.copy(selectedVariant = variant?.takeIf { it in state.availableVariants })
+        }
+    }
+
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
         streamedParts.clear()
@@ -164,15 +189,18 @@ class ChatViewModel(
             )
         }
         viewModelScope.launch {
-            runCatching { currentBackend.listMessages(sessionId) }
+                    runCatching { currentBackend.listMessages(sessionId) }
                 .onSuccess { messages ->
                     val (cost, tokens) = summarizeUsage(messages)
+                    latestInputTokens = messages.lastOrNull { it.info.tokens?.input != null }
+                        ?.info?.tokens?.input?.toLong()
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
                             messages = messages.flatMap(::toUiMessages),
                             totalCost = cost,
-                            totalTokens = tokens
+                            totalTokens = tokens,
+                            contextUsagePercent = contextUsagePercent(latestInputTokens, modelContextLimit)
                         )
                     }
                 }
@@ -189,6 +217,7 @@ class ChatViewModel(
         streamedParts.clear()
         textPartIds.clear()
         toolPartIds.clear()
+        latestInputTokens = null
         onActiveSessionChanged(null)
         _uiState.update {
             it.copy(
@@ -204,6 +233,7 @@ class ChatViewModel(
                 todos = emptyList(),
                 totalCost = 0.0,
                 totalTokens = 0,
+                contextUsagePercent = null,
                 error = null
             )
         }
@@ -254,7 +284,11 @@ class ChatViewModel(
                 append(attachments.joinToString("\n") { "📎 ${it.fileName}" })
             }
         }
-        val userMessage = ChatMessage(text = displayText, isUser = true)
+        val userMessage = ChatMessage(
+            text = displayText,
+            isUser = true,
+            attachments = attachments
+        )
         _uiState.update {
             it.copy(
                 messages = it.messages + userMessage,
@@ -291,6 +325,7 @@ class ChatViewModel(
                         providerId = _uiState.value.selectedProviderId,
                         modelId = _uiState.value.selectedModelId,
                         agent = _uiState.value.selectedAgentId,
+                        variant = _uiState.value.selectedVariant,
                         attachments = attachments.map {
                             PromptAttachment(
                                 fileName = it.fileName,
@@ -436,8 +471,8 @@ class ChatViewModel(
                 if (event.sessionId != activeSession) return
                 streamedParts.clear()
                 _uiState.update { state ->
-                    state.copy(
-                        messages = state.messages.map { message ->
+                state.copy(
+                    messages = state.messages.map { message ->
                             if (message.isStreaming) message.copy(isStreaming = false) else message
                         },
                         isRunning = false,
@@ -490,7 +525,15 @@ class ChatViewModel(
             val messages = runCatching { currentBackend.listMessages(sessionId) }.getOrNull() ?: return@launch
             if (_uiState.value.sessionId != sessionId) return@launch
             val (cost, tokens) = summarizeUsage(messages)
-            _uiState.update { it.copy(totalCost = cost, totalTokens = tokens) }
+            latestInputTokens = messages.lastOrNull { it.info.tokens?.input != null }
+                ?.info?.tokens?.input?.toLong()
+            _uiState.update {
+                it.copy(
+                    totalCost = cost,
+                    totalTokens = tokens,
+                    contextUsagePercent = contextUsagePercent(latestInputTokens, modelContextLimit)
+                )
+            }
         }
     }
 

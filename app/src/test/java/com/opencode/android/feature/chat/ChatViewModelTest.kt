@@ -4,9 +4,11 @@ import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.core.api.OpenCodeMessage
+import com.opencode.android.core.api.OpenCodeModelVariant
 import com.opencode.android.core.api.OpenCodePart
 import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTime
+import com.opencode.android.core.api.OpenCodeTokenUsage
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
@@ -198,6 +200,53 @@ class ChatViewModelTest {
         assertEquals("aGVsbG8=", request.attachments.single().base64Data)
         assertTrue(viewModel.uiState.value.pendingAttachments.isEmpty())
         assertTrue(viewModel.uiState.value.messages.single().text.contains("sample.txt"))
+    }
+
+    @Test
+    fun `selected variant is included in sent prompt`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+
+        viewModel.selectModelMetadata(mapOf("high" to OpenCodeModelVariant()), null)
+        viewModel.selectVariant("high")
+        viewModel.sendMessage("think")
+        advanceUntilIdle()
+
+        assertEquals("high", backend.sentPrompts.single().second.variant)
+    }
+
+    @Test
+    fun `sent user message retains attachment preview data`() = runTest(dispatcher) {
+        val viewModel = ChatViewModel(FakeBackend())
+        viewModel.addAttachment("photo.jpg", "image/jpeg", byteArrayOf(1, 2, 3))
+
+        viewModel.sendMessage("look")
+        advanceUntilIdle()
+
+        assertEquals("photo.jpg", viewModel.uiState.value.messages.single().attachments.single().fileName)
+    }
+
+    @Test
+    fun `history exposes context usage when model limit and input tokens exist`() = runTest(dispatcher) {
+        val backend = FakeBackend().apply {
+            history = listOf(
+                OpenCodeMessage(
+                    info = com.opencode.android.core.api.OpenCodeMessageInfo(
+                        id = "m1",
+                        sessionId = "s1",
+                        role = "assistant",
+                        tokens = OpenCodeTokenUsage(input = 250)
+                    )
+                )
+            )
+        }
+        val viewModel = ChatViewModel(backend)
+        viewModel.selectModelMetadata(emptyMap(), 1_000L)
+
+        viewModel.openSession("s1", "Existing")
+        advanceUntilIdle()
+
+        assertEquals(25, viewModel.uiState.value.contextUsagePercent)
     }
 
     @Test
