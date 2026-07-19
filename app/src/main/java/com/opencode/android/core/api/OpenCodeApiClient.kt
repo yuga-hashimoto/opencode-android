@@ -153,6 +153,7 @@ class OpenCodeApiClient(
                     addProperty("modelID", request.modelId)
                 })
             }
+            request.variant?.takeIf { it.isNotBlank() }?.let { addProperty("variant", it) }
             if (request.noReply) addProperty("noReply", true)
             add("parts", JsonArray().apply {
                 add(JsonObject().apply {

@@ -87,6 +87,20 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `sends selected model variant`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        val client = client()
+
+        client.promptAsync(
+            sessionId = "s1",
+            request = PromptRequest(text = "think", variant = "high")
+        )
+
+        val json = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
+        assertEquals("high", json["variant"].asString)
+    }
+
+    @Test
     fun `sends file attachments as data URL parts`() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
         val client = client()

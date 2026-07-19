@@ -63,7 +63,10 @@ data class OpenCodePart(
     val text: String? = null,
     val tool: String? = null,
     val callID: String? = null,
-    val state: Map<String, JsonElement>? = null
+    val state: Map<String, JsonElement>? = null,
+    @SerializedName("filename") val fileName: String? = null,
+    @SerializedName("mime") val mimeType: String? = null,
+    val url: String? = null
 )
 
 data class OpenCodeMessage(
@@ -74,11 +77,23 @@ data class OpenCodeMessage(
         get() = parts.filter { it.type == "text" }.mapNotNull { it.text }.joinToString("")
 }
 
+data class OpenCodeModelLimit(
+    val context: Long? = null,
+    val output: Long? = null
+)
+
+data class OpenCodeModelVariant(
+    val name: String? = null,
+    val reasoningEffort: String? = null
+)
+
 data class OpenCodeModel(
     val id: String,
     @SerializedName("providerID") val providerId: String? = null,
     val name: String = id,
-    val status: String? = null
+    val status: String? = null,
+    val limit: OpenCodeModelLimit? = null,
+    val variants: Map<String, OpenCodeModelVariant> = emptyMap()
 )
 
 data class OpenCodeProvider(
@@ -207,6 +222,7 @@ data class PromptRequest(
     val providerId: String? = null,
     val modelId: String? = null,
     val agent: String? = null,
+    val variant: String? = null,
     val noReply: Boolean = false,
     val attachments: List<PromptAttachment> = emptyList()
 )
