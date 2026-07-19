@@ -13,6 +13,7 @@ import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -31,8 +32,9 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
-    private val dispatcher = StandardTestDispatcher()
 
+    private val dispatcher = StandardTestDispatcher()
+    private val gson = Gson()
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -227,7 +229,7 @@ class ChatViewModelTest {
                     messageId = "assistant-1",
                     type = "tool",
                     tool = "bash",
-                    state = mapOf("command" to "git status", "stdout" to "clean")
+                    state = mapOf("command" to gson.toJsonTree("git status"), "stdout" to gson.toJsonTree("clean"))
                 )
             )
         )
@@ -257,7 +259,7 @@ class ChatViewModelTest {
                             id = "tool-1",
                             type = "tool",
                             tool = "read",
-                            state = mapOf("status" to "completed")
+                            state = mapOf("status" to gson.toJsonTree("completed"))
                         )
                     )
                 )

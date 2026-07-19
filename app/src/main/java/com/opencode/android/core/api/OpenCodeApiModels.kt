@@ -47,7 +47,7 @@ data class OpenCodePart(
     val text: String? = null,
     val tool: String? = null,
     val callID: String? = null,
-    val state: Map<String, Any?>? = null
+    val state: Map<String, JsonElement>? = null
 )
 
 data class OpenCodeMessage(

@@ -130,6 +130,10 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getString(KEY_ASSISTANT_SESSION_PROFILE_KEY, null)
         set(value) = preferences.edit().putString(KEY_ASSISTANT_SESSION_PROFILE_KEY, value).apply()
 
+    var wakeWordListeningEnabled: Boolean
+        get() = preferences.getBoolean(KEY_WAKE_WORD_LISTENING_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_WAKE_WORD_LISTENING_ENABLED, value).apply()
+
     var safWorkspaceUris: List<String>
         get() = preferences.getString(KEY_SAF_WORKSPACE_URIS, null)
             ?.split('\n')
@@ -160,6 +164,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_ASSISTANT_MODEL_ID = "assistant_model_id"
         private const val KEY_ASSISTANT_AGENT_ID = "assistant_agent_id"
         private const val KEY_ASSISTANT_SESSION_PROFILE_KEY = "assistant_session_profile_key"
+        private const val KEY_WAKE_WORD_LISTENING_ENABLED = "wake_word_listening_enabled"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
     }
 }

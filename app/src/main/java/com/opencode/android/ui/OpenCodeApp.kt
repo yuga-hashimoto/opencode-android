@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -11,11 +15,14 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -72,11 +80,11 @@ private enum class Destination(
 ) {
     HOME("home", R.string.nav_home, Icons.Default.Dashboard),
     CHAT("chat", R.string.nav_chat, Icons.AutoMirrored.Filled.Chat),
-    WORKSPACES("workspaces", R.string.nav_workspaces, Icons.Default.Folder),
     ACTIVITY("activity", R.string.nav_activity, Icons.Default.History),
     SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
 }
 
+private const val WORKSPACES_ROUTE = "workspaces"
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
@@ -168,6 +176,9 @@ fun OpenCodeApp(
     val voiceScope = rememberCoroutineScope()
     var voiceJob by remember { mutableStateOf<Job?>(null) }
     var startVoiceAfterPermission by remember { mutableStateOf(false) }
+    var startWakeAfterPermission by remember { mutableStateOf(false) }
+    var wakeWordListening by remember { mutableStateOf(app.settings.wakeWordListeningEnabled) }
+    var wakeWordStatusMessage by remember { mutableStateOf<String?>(null) }
 
     fun hasMicrophonePermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -205,12 +216,33 @@ fun OpenCodeApp(
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted && startVoiceAfterPermission) {
-            startVoiceAfterPermission = false
-            startOrStopVoiceInput()
-        } else if (!granted) {
-            startVoiceAfterPermission = false
-            chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
+        when {
+            granted && startWakeAfterPermission -> {
+                startWakeAfterPermission = false
+                runCatching { app.wakeWordListeningController.start() }
+                    .onSuccess {
+                        wakeWordListening = true
+                        wakeWordStatusMessage = null
+                    }
+                    .onFailure { error ->
+                        wakeWordListening = false
+                        wakeWordStatusMessage = error.message
+                    }
+            }
+            granted && startVoiceAfterPermission -> {
+                startVoiceAfterPermission = false
+                startOrStopVoiceInput()
+            }
+            !granted -> {
+                val requestedVoice = startVoiceAfterPermission
+                startVoiceAfterPermission = false
+                startWakeAfterPermission = false
+                wakeWordListening = false
+                wakeWordStatusMessage = context.getString(R.string.mic_permission_required)
+                if (requestedVoice) {
+                    chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
+                }
+            }
         }
     }
 
@@ -350,7 +382,7 @@ fun OpenCodeApp(
                         chatViewModel.newSession()
                         navController.navigate(Destination.CHAT.route)
                     },
-                    onOpenWorkspaces = { navController.navigate(Destination.WORKSPACES.route) },
+                    onOpenWorkspaces = { navController.navigate(WORKSPACES_ROUTE) },
                     onOpenActivity = { navController.navigate(Destination.ACTIVITY.route) },
                     onOpenSession = { id, title ->
                         pendingSession = id to title
@@ -387,7 +419,7 @@ fun OpenCodeApp(
                 )
             }
 
-            composable(Destination.WORKSPACES.route) {
+            composable(WORKSPACES_ROUTE) {
                 var quickEditor by remember { mutableStateOf<ConnectionFormState?>(null) }
                 LaunchedEffect(workspaceViewModel) {
                     workspaceViewModel.events.collect { event ->
@@ -593,10 +625,16 @@ fun OpenCodeApp(
 
             composable(Destination.SETTINGS.route) {
                 val wakeWordInstalled = remember { mutableStateOf(app.wakeWordPackManager.isInstalled()) }
+                var showWakeWordInstallDialog by remember { mutableStateOf(false) }
+                var wakeWordManifestUrl by remember { mutableStateOf("") }
+                var wakeWordInstallBusy by remember { mutableStateOf(false) }
                 val wakeWordSummary = remember(wakeWordInstalled.value) {
                     app.wakeWordPackManager.installed()?.let {
                         "${it.name} ${it.version}"
                     }.orEmpty()
+                }
+                LaunchedEffect(Unit) {
+                    wakeWordListening = app.settings.wakeWordListeningEnabled
                 }
                 SettingsScreen(
                     state = settingsState,
@@ -620,11 +658,122 @@ fun OpenCodeApp(
                     },
                     wakeWordPackSummary = wakeWordSummary,
                     wakeWordInstalled = wakeWordInstalled.value,
+                    wakeWordListeningEnabled = wakeWordListening,
+                    wakeWordStatusMessage = wakeWordStatusMessage,
+                    onInstallWakeWord = {
+                        wakeWordStatusMessage = null
+                        showWakeWordInstallDialog = true
+                    },
+                    onWakeWordListeningChange = { enabled ->
+                        if (enabled) {
+                            if (!wakeWordInstalled.value) {
+                                wakeWordStatusMessage = context.getString(R.string.wake_word_not_installed)
+                            } else if (hasMicrophonePermission()) {
+                                runCatching { app.wakeWordListeningController.start() }
+                                    .onSuccess {
+                                        wakeWordListening = true
+                                        wakeWordStatusMessage = null
+                                    }
+                                    .onFailure { error ->
+                                        wakeWordListening = false
+                                        wakeWordStatusMessage = error.message
+                                    }
+                            } else {
+                                startWakeAfterPermission = true
+                                microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        } else {
+                            app.wakeWordListeningController.stop()
+                            wakeWordListening = false
+                            wakeWordStatusMessage = null
+                        }
+                    },
                     onDeleteWakeWord = {
+                        app.wakeWordListeningController.stop()
+                        wakeWordListening = false
                         app.wakeWordPackManager.delete()
                         wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
+                        wakeWordStatusMessage = null
                     }
                 )
+
+                if (showWakeWordInstallDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            if (!wakeWordInstallBusy) showWakeWordInstallDialog = false
+                        },
+                        title = { Text(stringResource(R.string.install_wake_word_pack)) },
+                        text = {
+                            Column {
+                                Text(
+                                    stringResource(R.string.wake_word_manifest_help),
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = wakeWordManifestUrl,
+                                    onValueChange = {
+                                        wakeWordManifestUrl = it
+                                        wakeWordStatusMessage = null
+                                    },
+                                    enabled = !wakeWordInstallBusy,
+                                    label = { Text(stringResource(R.string.wake_word_manifest_url)) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                if (wakeWordInstallBusy) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(stringResource(R.string.installing_wake_word_pack))
+                                }
+                                wakeWordStatusMessage?.takeIf(String::isNotBlank)?.let { message ->
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        message,
+                                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                enabled = !wakeWordInstallBusy && wakeWordManifestUrl.isNotBlank(),
+                                onClick = {
+                                    wakeWordInstallBusy = true
+                                    wakeWordStatusMessage = null
+                                    voiceScope.launch {
+                                        runCatching {
+                                            withContext(Dispatchers.IO) {
+                                                app.wakeWordPackManager.downloadManifestAndInstall(
+                                                    wakeWordManifestUrl.trim()
+                                                )
+                                            }
+                                        }.onSuccess { installed ->
+                                            wakeWordInstalled.value = true
+                                            wakeWordStatusMessage = "${installed.name} ${installed.version}"
+                                            showWakeWordInstallDialog = false
+                                        }.onFailure { error ->
+                                            wakeWordStatusMessage = error.message
+                                                ?: context.getString(R.string.wake_word_not_installed)
+                                        }
+                                        wakeWordInstallBusy = false
+                                    }
+                                }
+                            ) {
+                                Text(stringResource(R.string.save))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                enabled = !wakeWordInstallBusy,
+                                onClick = { showWakeWordInstallDialog = false }
+                            ) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        }
+                    )
+                }
             }
         }
     }

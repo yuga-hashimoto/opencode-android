@@ -101,8 +101,8 @@
     <string name="no_lan_services">OpenCodeサービスはまだ見つかりません</string>
     <string name="handoff_session">セッションを引き継ぐ</string>
     <string name="wake_word_pack">任意ウェイクワードパック</string>
-    <string name="wake_word_pack_help">標準同梱しません。SHA-256検証付きHTTPSパックを導入でき、いつでも削除できます。</string>
+    <string name="wake_word_pack_help">標準同梱しません。管理者署名済みのHTTPSフレーズパックだけを導入できます。署名、容量、SHA-256、ZIP内容を検証してから有効化します。</string>
     <string name="wake_word_installed">導入済み: %1$s %2$s</string>
     <string name="wake_word_not_installed">ウェイクワードパックは未導入</string>
-    <string name="delete_wake_word">パックを削除</string>
+    <string name="delete_wake_word">パックを削除</string>\n <string name="install_wake_word_pack">署名済みパックを導入</string>\n <string name="wake_word_manifest_url">署名済みマニフェストURL</string>\n <string name="wake_word_manifest_help">OpenCode Android向けに署名されたJSONマニフェストのHTTPS URLを入力します。</string>\n <string name="wake_word_listening">ウェイクワード待機</string>\n <string name="wake_word_listening_help">マイクを使うForeground Serviceと常時通知を維持します。端末再起動後に自動起動はしません。</string>\n <string name="installing_wake_word_pack">パックを検証して導入しています…</string>
 </resources>

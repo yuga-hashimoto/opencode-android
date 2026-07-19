@@ -101,8 +101,8 @@
     <string name="no_lan_services">No OpenCode services found yet</string>
     <string name="handoff_session">Hand off session</string>
     <string name="wake_word_pack">Optional wake-word pack</string>
-    <string name="wake_word_pack_help">Not bundled. Install a verified HTTPS pack with SHA-256; delete anytime.</string>
+    <string name="wake_word_pack_help">Not bundled. Install a maintainer-signed HTTPS phrase pack. The signature, size, SHA-256, and ZIP contents are verified before activation.</string>
     <string name="wake_word_installed">Pack installed: %1$s %2$s</string>
     <string name="wake_word_not_installed">No wake-word pack installed</string>
-    <string name="delete_wake_word">Remove pack</string>
+    <string name="delete_wake_word">Remove pack</string>\n <string name="install_wake_word_pack">Install signed pack</string>\n <string name="wake_word_manifest_url">Signed manifest URL</string>\n <string name="wake_word_manifest_help">Enter the HTTPS URL of a JSON manifest signed for OpenCode Android.</string>\n <string name="wake_word_listening">Wake-word listening</string>\n <string name="wake_word_listening_help">Keeps a microphone foreground service and persistent notification active. It does not start automatically after reboot.</string>\n <string name="installing_wake_word_pack">Verifying and installing pack…</string>
 </resources>
