@@ -39,7 +39,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -345,9 +344,12 @@ fun OpenCodeApp(
         }
     }
 
-    val showBottomBar = Destination.entries.any { destination ->
-        destination.route == backStackEntry?.destination?.route
-    }
+    val topLevelRoutes = remember { Destination.entries.mapTo(linkedSetOf()) { it.route } }
+    val selectedTopLevelRoute = topLevelRouteFor(
+        backStackEntry?.destination?.route,
+        topLevelRoutes
+    )
+    val showBottomBar = backStackEntry?.destination?.route != null
 
     com.opencode.android.ui.theme.OpenCodeAndroidTheme(
         themeMode = preferences.themeMode,
@@ -360,17 +362,10 @@ fun OpenCodeApp(
         bottomBar = {
             if (showBottomBar) NavigationBar {
                 Destination.entries.forEach { destination ->
-                    val selected = backStackEntry?.destination?.hierarchy
-                        ?.any { it.route == destination.route } == true
+                    val selected = selectedTopLevelRoute == destination.route
                     NavigationBarItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(Destination.HOME.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onClick = { navController.navigateTopLevel(destination.route, Destination.HOME.route) },
                         icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
                         label = { Text(stringResource(destination.labelRes)) }
                     )
