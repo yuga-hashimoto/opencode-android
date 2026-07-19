@@ -23,6 +23,30 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+internal enum class LocalRuntimeServiceCommand {
+    InstallAndStart,
+    Start,
+    Reinstall,
+    Update,
+    Rollback,
+    Delete,
+    Stop,
+    Restore,
+    Ignore
+}
+
+internal fun localRuntimeServiceCommand(action: String?): LocalRuntimeServiceCommand = when (action) {
+    LocalRuntimeService.ACTION_INSTALL_AND_START -> LocalRuntimeServiceCommand.InstallAndStart
+    LocalRuntimeService.ACTION_START -> LocalRuntimeServiceCommand.Start
+    LocalRuntimeService.ACTION_REINSTALL -> LocalRuntimeServiceCommand.Reinstall
+    LocalRuntimeService.ACTION_UPDATE -> LocalRuntimeServiceCommand.Update
+    LocalRuntimeService.ACTION_ROLLBACK -> LocalRuntimeServiceCommand.Rollback
+    LocalRuntimeService.ACTION_DELETE -> LocalRuntimeServiceCommand.Delete
+    LocalRuntimeService.ACTION_STOP -> LocalRuntimeServiceCommand.Stop
+    null -> LocalRuntimeServiceCommand.Restore
+    else -> LocalRuntimeServiceCommand.Ignore
+}
+
 class LocalRuntimeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var operation: Job? = null
@@ -45,20 +69,28 @@ class LocalRuntimeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_INSTALL_AND_START -> {
+        when (localRuntimeServiceCommand(intent?.action)) {
+            LocalRuntimeServiceCommand.InstallAndStart -> {
                 autoRestartEnabled = true
                 launchOperation { manager.installAndStart() }
             }
-            ACTION_START -> {
+            LocalRuntimeServiceCommand.Start -> {
                 autoRestartEnabled = true
                 launchOperation { manager.start() }
             }
-            ACTION_REINSTALL -> {
+            LocalRuntimeServiceCommand.Reinstall -> {
                 autoRestartEnabled = true
                 launchOperation { manager.reinstall() }
             }
-            ACTION_DELETE -> {
+            LocalRuntimeServiceCommand.Update -> {
+                autoRestartEnabled = true
+                launchOperation { manager.updateToLatest() }
+            }
+            LocalRuntimeServiceCommand.Rollback -> {
+                autoRestartEnabled = true
+                launchOperation { manager.rollback() }
+            }
+            LocalRuntimeServiceCommand.Delete -> {
                 autoRestartEnabled = false
                 launchOperation {
                     manager.deleteRuntime()
@@ -66,7 +98,7 @@ class LocalRuntimeService : Service() {
                     stopSelf()
                 }
             }
-            ACTION_STOP -> {
+            LocalRuntimeServiceCommand.Stop -> {
                 autoRestartEnabled = false
                 launchOperation {
                     manager.stop()
@@ -74,12 +106,13 @@ class LocalRuntimeService : Service() {
                     stopSelf()
                 }
             }
-            null -> {
+            LocalRuntimeServiceCommand.Restore -> {
                 autoRestartEnabled = true
                 if (manager.status() is LocalRuntimeStatus.Stopped) {
                     launchOperation { manager.ensureRunning() }
                 }
             }
+            LocalRuntimeServiceCommand.Ignore -> Unit
         }
         return START_STICKY
     }
@@ -136,6 +169,12 @@ class LocalRuntimeService : Service() {
                 ((status.progress ?: 0f) * 100).toInt()
             )
             is LocalRuntimeStatus.Starting -> NotificationState("ローカルOpenCodeを起動中", "OpenCode ${status.version}", true)
+            is LocalRuntimeStatus.Updating -> NotificationState(
+                "ローカルOpenCodeを更新中",
+                status.step,
+                status.progress == null,
+                ((status.progress ?: 0f) * 100).toInt()
+            )
             is LocalRuntimeStatus.Stopped -> NotificationState("ローカルOpenCodeは停止中", "OpenCode ${status.version}")
             is LocalRuntimeStatus.Ready -> NotificationState("ローカルOpenCodeが稼働中", "OpenCode ${status.version} · 127.0.0.1:${status.port}")
             is LocalRuntimeStatus.Broken -> NotificationState("ローカルOpenCodeで問題が発生", status.reason)
@@ -146,7 +185,12 @@ class LocalRuntimeService : Service() {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(openIntent)
-            .setOngoing(status is LocalRuntimeStatus.Ready || status is LocalRuntimeStatus.Installing || status is LocalRuntimeStatus.Starting)
+            .setOngoing(
+                status is LocalRuntimeStatus.Ready ||
+                    status is LocalRuntimeStatus.Installing ||
+                    status is LocalRuntimeStatus.Starting ||
+                    status is LocalRuntimeStatus.Updating
+            )
             .setOnlyAlertOnce(true)
             .setProgress(if (indeterminate || progress > 0) 100 else 0, progress, indeterminate)
             .addAction(0, "停止", stopIntent)
@@ -179,6 +223,8 @@ class LocalRuntimeService : Service() {
         const val ACTION_START = "com.opencode.android.local.START"
         const val ACTION_STOP = "com.opencode.android.local.STOP"
         const val ACTION_REINSTALL = "com.opencode.android.local.REINSTALL"
+        const val ACTION_UPDATE = "com.opencode.android.local.UPDATE"
+        const val ACTION_ROLLBACK = "com.opencode.android.local.ROLLBACK"
         const val ACTION_DELETE = "com.opencode.android.local.DELETE"
 
         fun send(context: Context, action: String) {
@@ -197,5 +243,7 @@ class LocalRuntimeServiceController(private val context: Context) {
     fun start() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_START)
     fun stop() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_STOP)
     fun reinstall() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_REINSTALL)
+    fun update() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_UPDATE)
+    fun rollback() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_ROLLBACK)
     fun delete() = LocalRuntimeService.send(context, LocalRuntimeService.ACTION_DELETE)
 }

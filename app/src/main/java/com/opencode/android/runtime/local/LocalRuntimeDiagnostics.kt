@@ -232,6 +232,7 @@ private fun File.recursiveFileBytes(): Long = walkTopDown()
 private fun LocalRuntimeStatus.versionOrNull(): String? = when (this) {
     is LocalRuntimeStatus.Ready -> version
     is LocalRuntimeStatus.Starting -> version
+    is LocalRuntimeStatus.Updating -> currentVersion
     is LocalRuntimeStatus.Stopped -> version
     else -> null
 }
@@ -239,6 +240,7 @@ private fun LocalRuntimeStatus.versionOrNull(): String? = when (this) {
 private fun LocalRuntimeStatus.portOrNull(): Int? = when (this) {
     is LocalRuntimeStatus.Ready -> port
     is LocalRuntimeStatus.Starting -> port
+    is LocalRuntimeStatus.Updating -> null
     is LocalRuntimeStatus.Stopped -> port
     else -> null
 }

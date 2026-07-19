@@ -280,6 +280,7 @@ private fun LocalRuntimeStatus.displayName(): String = when (this) {
     LocalRuntimeStatus.NotInstalled -> "未インストール"
     is LocalRuntimeStatus.Installing -> "セットアップ中"
     is LocalRuntimeStatus.Starting -> "起動中"
+    is LocalRuntimeStatus.Updating -> "更新中"
     is LocalRuntimeStatus.Stopped -> "停止中"
     is LocalRuntimeStatus.Ready -> "稼働中"
     is LocalRuntimeStatus.Broken -> "問題あり"

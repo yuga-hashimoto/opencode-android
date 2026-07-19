@@ -169,6 +169,18 @@ fun WorkspacesScreen(
                                 Spacer(Modifier.height(8.dp))
                                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             }
+                            is LocalRuntimeStatus.Updating -> {
+                                Text(local.step, style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(8.dp))
+                                if (local.progress != null) {
+                                    LinearProgressIndicator(
+                                        progress = { local.progress.coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                }
+                            }
                             is LocalRuntimeStatus.Stopped -> {
                                 Button(onClick = onStartLocal, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -197,7 +209,8 @@ fun WorkspacesScreen(
                             OutlinedButton(
                                 onClick = onOpenLocalManagement,
                                 enabled = state.localStatus !is LocalRuntimeStatus.Installing &&
-                                    state.localStatus !is LocalRuntimeStatus.Starting,
+                                    state.localStatus !is LocalRuntimeStatus.Starting &&
+                                    state.localStatus !is LocalRuntimeStatus.Updating,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(Icons.Default.Settings, contentDescription = null)
@@ -305,6 +318,8 @@ private fun targetSubtitle(
         LocalRuntimeStatus.NotInstalled -> "未インストール"
         is LocalRuntimeStatus.Installing -> "セットアップ中 · ${localStatus.step}"
         is LocalRuntimeStatus.Starting -> "OpenCode ${localStatus.version}を起動中"
+        is LocalRuntimeStatus.Updating ->
+            "OpenCode ${localStatus.currentVersion} → ${localStatus.targetVersion} · ${localStatus.step}"
         is LocalRuntimeStatus.Stopped -> "導入済み · OpenCode ${localStatus.version} · 停止中"
         is LocalRuntimeStatus.Ready -> "OpenCode ${localStatus.version} · 稼働中"
         is LocalRuntimeStatus.Broken -> compactRuntimeError(localStatus.reason)

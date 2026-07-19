@@ -7,20 +7,25 @@ import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.local.DefaultLocalRuntimeUpdateEngine
 import com.opencode.android.runtime.local.LocalRuntimeAccessCoordinator
 import com.opencode.android.runtime.local.LocalRuntimeCommandRunner
 import com.opencode.android.runtime.local.LocalRuntimeDiagnosticsCollector
 import com.opencode.android.runtime.local.LocalRuntimeInstaller
 import com.opencode.android.runtime.local.LocalRuntimeManager
 import com.opencode.android.runtime.local.LocalRuntimeProcessLauncher
+import com.opencode.android.runtime.local.LocalRuntimeReleaseClient
 import com.opencode.android.runtime.local.LocalRuntimeServiceController
 import com.opencode.android.runtime.local.LocalRuntimeTarget
+import com.opencode.android.runtime.local.LocalRuntimeUpdater
+import com.opencode.android.runtime.local.VerifiedRuntimeDownloader
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 class OpenCodeApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -66,16 +71,48 @@ class OpenCodeApplication : Application() {
             runtimeDirectory = runtimeDirectory,
             portProbe = LocalRuntimeManager::defaultPortProbe
         )
-        localRuntimeManager = LocalRuntimeManager(
-            runtimeDirectory = runtimeDirectory,
-            abi = abi,
-            installer = installer,
-            processLauncher = launcher
-        )
         val commandRunner = LocalRuntimeCommandRunner(
             runtimeDirectory = runtimeDirectory,
             installedRuntimeProvider = installer::installedRuntime,
             accessCoordinator = accessCoordinator
+        )
+        val httpClient = OkHttpClient()
+        val verifiedDownloader = VerifiedRuntimeDownloader(httpClient)
+        val updater = LocalRuntimeUpdater(
+            runtimeDirectory = runtimeDirectory,
+            abi = abi,
+            downloadAsset = { asset, destination, progress ->
+                verifiedDownloader.download(
+                    url = asset.url,
+                    destination = destination,
+                    expectedSha256 = asset.sha256,
+                    expectedSizeBytes = asset.sizeBytes,
+                    onProgress = progress
+                )
+            },
+            candidateVersionProvider = { candidate ->
+                val result = commandRunner.runShell(
+                    commandText = "/usr/local/bin/${candidate.name} --version",
+                    timeoutSeconds = 30L
+                )
+                require(result.exitCode == 0) {
+                    "OpenCode update candidate validation failed: ${result.output}"
+                }
+                result.output.lineSequence().firstOrNull(String::isNotBlank)
+                    ?: error("OpenCode update candidate returned no version")
+            },
+            accessCoordinator = accessCoordinator
+        )
+        val updateEngine = DefaultLocalRuntimeUpdateEngine(
+            releaseClient = LocalRuntimeReleaseClient(httpClient),
+            updater = updater
+        )
+        localRuntimeManager = LocalRuntimeManager(
+            runtimeDirectory = runtimeDirectory,
+            abi = abi,
+            installer = installer,
+            processLauncher = launcher,
+            updateEngine = updateEngine
         )
         localRuntimeDiagnosticsCollector = LocalRuntimeDiagnosticsCollector(
             runtimeDirectory = runtimeDirectory,

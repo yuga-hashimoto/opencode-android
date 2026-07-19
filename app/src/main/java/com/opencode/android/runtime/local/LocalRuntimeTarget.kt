@@ -159,6 +159,7 @@ class LocalRuntimeTarget(
         is LocalRuntimeStatus.UnsupportedAbi -> RuntimeState.Unavailable("未対応ABI: ${status.abi}")
         is LocalRuntimeStatus.Installing -> RuntimeState.Connecting
         is LocalRuntimeStatus.Starting -> RuntimeState.Connecting
+        is LocalRuntimeStatus.Updating -> RuntimeState.Connecting
         is LocalRuntimeStatus.Stopped -> RuntimeState.Disconnected
         is LocalRuntimeStatus.Broken -> RuntimeState.Failed(status.reason)
         is LocalRuntimeStatus.Ready -> RuntimeState.Connected(status.version)

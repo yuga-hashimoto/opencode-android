@@ -6,7 +6,9 @@ import com.opencode.android.runtime.LocalRuntimeStatus
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,15 +29,26 @@ class LocalRuntimeManager(
     private val abi: String,
     private val portProbe: (Int) -> Boolean = ::defaultPortProbe,
     private val installer: LocalRuntimeInstaller? = null,
-    private val processLauncher: LocalRuntimeProcessLauncher? = null
+    private val processLauncher: LocalRuntimeProcessLauncher? = null,
+    private val updateEngine: LocalRuntimeUpdateEngine? = null,
+    private val runtimeOperations: LocalRuntimeOperations? = null
 ) {
     private val operationMutex = Mutex()
     private val mutableState = MutableStateFlow(computeStatus())
     val state: StateFlow<LocalRuntimeStatus> = mutableState.asStateFlow()
 
+    private val mutableLastOperation = MutableStateFlow<LocalRuntimeOperationResult?>(null)
+    val lastOperation: StateFlow<LocalRuntimeOperationResult?> = mutableLastOperation.asStateFlow()
+
     fun status(): LocalRuntimeStatus {
         val operation = mutableState.value
-        if (operation is LocalRuntimeStatus.Installing || operation is LocalRuntimeStatus.Starting) return operation
+        if (
+            operation is LocalRuntimeStatus.Installing ||
+            operation is LocalRuntimeStatus.Starting ||
+            operation is LocalRuntimeStatus.Updating
+        ) {
+            return operation
+        }
         return computeStatus().also { mutableState.value = it }
     }
 
@@ -53,7 +66,9 @@ class LocalRuntimeManager(
             mutableState.value = LocalRuntimeStatus.Stopped(installed.metadata.version, installed.metadata.port)
             startInstalled(installed)
         }.onFailure { error ->
-            mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルランタイムの導入に失敗しました")
+            mutableState.value = LocalRuntimeStatus.Broken(
+                error.message ?: "ローカルランタイムの導入に失敗しました"
+            )
         }
     }
 
@@ -62,6 +77,7 @@ class LocalRuntimeManager(
     }
 
     suspend fun ensureRunning(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
+        updateEngine?.recover()
         val metadata = readMetadata()
             ?: return@withLock Result.failure(IllegalStateException("Local runtime is not installed"))
         if (portProbe(metadata.port)) {
@@ -79,7 +95,9 @@ class LocalRuntimeManager(
             val metadata = readMetadata() ?: error("Local runtime metadata is missing")
             LocalRuntimeStatus.Stopped(metadata.version, metadata.port).also { mutableState.value = it }
         }.onFailure { error ->
-            mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルOpenCodeを停止できません")
+            mutableState.value = LocalRuntimeStatus.Broken(
+                error.message ?: "ローカルOpenCodeを停止できません"
+            )
         }
     }
 
@@ -93,6 +111,7 @@ class LocalRuntimeManager(
                     }
                 }
             }
+            mutableLastOperation.value = null
             LocalRuntimeStatus.NotInstalled.also { mutableState.value = it }
         }.onFailure { error ->
             mutableState.value = LocalRuntimeStatus.Broken(
@@ -112,11 +131,248 @@ class LocalRuntimeManager(
             }
             startInstalled(installed)
         }.onFailure { error ->
-            mutableState.value = LocalRuntimeStatus.Broken(error.message ?: "ローカルランタイムの再導入に失敗しました")
+            mutableState.value = LocalRuntimeStatus.Broken(
+                error.message ?: "ローカルランタイムの再導入に失敗しました"
+            )
         }
     }
 
+    suspend fun checkForUpdate(): Result<LocalRuntimeUpdateCheck> = operationMutex.withLock {
+        val engine = updateEngine
+            ?: return@withLock Result.failure(IllegalStateException("Local runtime updater is not configured"))
+        val metadata = currentMetadataForOperation()
+            ?: return@withLock Result.failure(IllegalStateException("Local runtime is not installed"))
+        runCatching { engine.check(metadata.version, abi) }
+            .onFailure { error ->
+                if (error is CancellationException) throw error
+                mutableLastOperation.value = LocalRuntimeOperationResult.Failed(
+                    operation = "update-check",
+                    message = error.message ?: "OpenCodeの更新確認に失敗しました"
+                )
+            }
+    }
+
+    suspend fun rollbackVersion(): String? = operationMutex.withLock {
+        updateEngine?.rollbackVersion()
+    }
+
+    suspend fun updateToLatest(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
+        updateToLatestLocked()
+    }
+
+    suspend fun rollback(): Result<LocalRuntimeStatus.Ready> = operationMutex.withLock {
+        rollbackLocked()
+    }
+
+    private suspend fun updateToLatestLocked(): Result<LocalRuntimeStatus.Ready> {
+        val engine = updateEngine
+            ?: return Result.failure(IllegalStateException("Local runtime updater is not configured"))
+        val current = currentMetadataForOperation()
+            ?: return Result.failure(IllegalStateException("Local runtime is not installed"))
+        val check = runCatching { engine.check(current.version, abi) }
+            .getOrElse { error ->
+                if (error is CancellationException) throw error
+                mutableLastOperation.value = LocalRuntimeOperationResult.Failed(
+                    "update-check",
+                    error.message ?: "OpenCodeの更新確認に失敗しました"
+                )
+                return Result.failure(error)
+            }
+
+        if (check is LocalRuntimeUpdateCheck.UpToDate) {
+            val ready = if (portProbe(current.port)) {
+                LocalRuntimeStatus.Ready(current.version, current.port)
+                    .also { mutableState.value = it }
+            } else {
+                startForOperation()
+            }
+            mutableLastOperation.value = LocalRuntimeOperationResult.UpdateSkipped(current.version)
+            return Result.success(ready)
+        }
+
+        val available = check as LocalRuntimeUpdateCheck.Available
+        val targetVersion = available.release.version
+        mutableState.value = LocalRuntimeStatus.Updating(
+            currentVersion = current.version,
+            targetVersion = targetVersion,
+            progress = null,
+            step = "更新を準備しています"
+        )
+        val prepared = runCatching {
+            engine.prepare(available.release) { progress, step ->
+                mutableState.value = LocalRuntimeStatus.Updating(
+                    currentVersion = current.version,
+                    targetVersion = targetVersion,
+                    progress = progress,
+                    step = step
+                )
+            }
+        }.getOrElse { error ->
+            restoreStateBeforeMutation(current)
+            if (error is CancellationException) throw error
+            mutableLastOperation.value = LocalRuntimeOperationResult.Failed(
+                "update-prepare",
+                error.message ?: "OpenCodeの更新準備に失敗しました"
+            )
+            return Result.failure(error)
+        }
+
+        return try {
+            stopForOperation()
+            engine.activate(prepared)
+            val ready = startForOperation()
+            engine.commit()
+            mutableState.value = ready
+            mutableLastOperation.value = LocalRuntimeOperationResult.Updated(
+                fromVersion = current.version,
+                toVersion = ready.version
+            )
+            Result.success(ready)
+        } catch (error: Throwable) {
+            val recovery = withContext(NonCancellable) {
+                restoreAfterFailedMutation(
+                    engine = engine,
+                    fallbackMetadata = current,
+                    attemptedVersion = targetVersion,
+                    originalError = error,
+                    rollbackOperation = false
+                )
+            }
+            if (error is CancellationException) throw error
+            recovery
+        }
+    }
+
+    private suspend fun rollbackLocked(): Result<LocalRuntimeStatus.Ready> {
+        val engine = updateEngine
+            ?: return Result.failure(IllegalStateException("Local runtime updater is not configured"))
+        val current = currentMetadataForOperation()
+            ?: return Result.failure(IllegalStateException("Local runtime is not installed"))
+        val targetVersion = runCatching { engine.rollbackVersion() }
+            .getOrElse { error ->
+                if (error is CancellationException) throw error
+                mutableLastOperation.value = LocalRuntimeOperationResult.Failed(
+                    "rollback-check",
+                    error.message ?: "ロールバック可能なバージョンを確認できません"
+                )
+                return Result.failure(error)
+            }
+            ?: return Result.failure(IllegalStateException("Rollback version is unavailable"))
+
+        mutableState.value = LocalRuntimeStatus.Updating(
+            currentVersion = current.version,
+            targetVersion = targetVersion,
+            progress = null,
+            step = "OpenCode ${targetVersion}へロールバックしています"
+        )
+        return try {
+            stopForOperation()
+            engine.rollback()
+            val ready = startForOperation()
+            engine.commit()
+            mutableState.value = ready
+            mutableLastOperation.value = LocalRuntimeOperationResult.RolledBack(
+                fromVersion = current.version,
+                toVersion = ready.version
+            )
+            Result.success(ready)
+        } catch (error: Throwable) {
+            val recovery = withContext(NonCancellable) {
+                restoreAfterFailedMutation(
+                    engine = engine,
+                    fallbackMetadata = current,
+                    attemptedVersion = targetVersion,
+                    originalError = error,
+                    rollbackOperation = true
+                )
+            }
+            if (error is CancellationException) throw error
+            recovery
+        }
+    }
+
+    private suspend fun restoreAfterFailedMutation(
+        engine: LocalRuntimeUpdateEngine,
+        fallbackMetadata: LocalRuntimeMetadata,
+        attemptedVersion: String,
+        originalError: Throwable,
+        rollbackOperation: Boolean
+    ): Result<LocalRuntimeStatus.Ready> {
+        runCatching { stopForOperation() }
+            .exceptionOrNull()
+            ?.let(originalError::addSuppressed)
+        val recoveryError = runCatching { engine.recover() }.exceptionOrNull()
+        recoveryError?.let(originalError::addSuppressed)
+        val restoredMetadata = currentMetadataForOperation() ?: fallbackMetadata
+        val restart = runCatching { startForOperation() }
+        return restart.fold(
+            onSuccess = { ready ->
+                mutableState.value = ready
+                mutableLastOperation.value = if (rollbackOperation) {
+                    LocalRuntimeOperationResult.RollbackFailedRestored(
+                        attemptedVersion = attemptedVersion,
+                        restoredVersion = ready.version,
+                        reason = originalError.message ?: "ロールバック後の起動に失敗しました"
+                    )
+                } else {
+                    LocalRuntimeOperationResult.AutomaticRollback(
+                        failedVersion = attemptedVersion,
+                        restoredVersion = ready.version,
+                        reason = originalError.message ?: "更新後の起動に失敗しました"
+                    )
+                }
+                Result.failure(originalError)
+            },
+            onFailure = { restartError ->
+                originalError.addSuppressed(restartError)
+                mutableState.value = LocalRuntimeStatus.Broken(
+                    "OpenCode ${restoredMetadata.version}を復元しましたが起動できません: ${restartError.message.orEmpty()}"
+                )
+                mutableLastOperation.value = LocalRuntimeOperationResult.Failed(
+                    operation = if (rollbackOperation) "rollback-recovery" else "update-recovery",
+                    message = originalError.message ?: "OpenCodeランタイムを復元できません"
+                )
+                Result.failure(originalError)
+            }
+        )
+    }
+
+    private fun restoreStateBeforeMutation(metadata: LocalRuntimeMetadata) {
+        mutableState.value = if (portProbe(metadata.port)) {
+            LocalRuntimeStatus.Ready(metadata.version, metadata.port)
+        } else {
+            LocalRuntimeStatus.Stopped(metadata.version, metadata.port)
+        }
+    }
+
+    private fun currentMetadataForOperation(): LocalRuntimeMetadata? =
+        runtimeOperations?.currentMetadata() ?: readMetadata()
+
+    private suspend fun stopForOperation() {
+        val operations = runtimeOperations
+        if (operations != null) {
+            operations.stop()
+        } else {
+            withContext(Dispatchers.IO) { processLauncher?.stop() }
+        }
+    }
+
+    private suspend fun startForOperation(): LocalRuntimeStatus.Ready {
+        runtimeOperations?.let { return it.start() }
+        val configuredInstaller = installer
+            ?: error("Local runtime installer is not configured")
+        val installed = configuredInstaller.installedRuntime()
+            ?: error("Local runtime is not installed")
+        return startInstalled(installed)
+    }
+
     private suspend fun startLocked(): Result<LocalRuntimeStatus.Ready> = runCatching {
+        updateEngine?.recover()
+        runtimeOperations?.let { operations ->
+            val ready = operations.start()
+            mutableState.value = ready
+            return@runCatching ready
+        }
         val configuredInstaller = installer
             ?: error("Local runtime installer is not configured")
         withContext(Dispatchers.IO) {
@@ -136,9 +392,15 @@ class LocalRuntimeManager(
     ): LocalRuntimeStatus.Ready = withContext(Dispatchers.IO) {
         val launcher = processLauncher
             ?: error("Local runtime process launcher is not configured")
-        mutableState.value = LocalRuntimeStatus.Starting(installed.metadata.version, installed.metadata.port)
+        mutableState.value = LocalRuntimeStatus.Starting(
+            installed.metadata.version,
+            installed.metadata.port
+        )
         if (!portProbe(installed.metadata.port)) launcher.start(installed)
-        val ready = LocalRuntimeStatus.Ready(installed.metadata.version, installed.metadata.port)
+        val ready = LocalRuntimeStatus.Ready(
+            installed.metadata.version,
+            installed.metadata.port
+        )
         mutableState.value = ready
         ready
     }
