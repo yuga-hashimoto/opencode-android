@@ -81,7 +81,7 @@ class OpenCodeApplication : Application() {
             runtimeDirectory = runtimeDirectory,
             portProbe = LocalRuntimeManager::defaultPortProbe,
             beforeStart = { installed ->
-                runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
+                providerCredentials.syncToRuntime(installed.rootfs)
             }
         )
         val commandRunner = LocalRuntimeCommandRunner(
