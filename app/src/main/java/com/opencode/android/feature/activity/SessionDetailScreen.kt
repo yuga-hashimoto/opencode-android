@@ -20,13 +20,19 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,13 +50,19 @@ import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SessionDetailScreen(
     state: SessionDetailUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
-    onContinueChat: () -> Unit
+    onContinueChat: () -> Unit,
+    runtimeOptions: List<Pair<String, String>> = emptyList(),
+    handoffMessage: String? = null,
+    onHandoff: (String) -> Unit = {}
 ) {
+    var handoffTarget by remember { mutableStateOf(runtimeOptions.firstOrNull()?.first.orEmpty()) }
+    var handoffExpanded by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -99,6 +111,57 @@ fun SessionDetailScreen(
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
                     Text("このセッションのチャットを続ける")
+                }
+                if (runtimeOptions.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = handoffExpanded,
+                        onExpandedChange = { handoffExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = runtimeOptions.firstOrNull { it.first == handoffTarget }?.second
+                                ?: handoffTarget,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("引き継ぎ先") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(handoffExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = handoffExpanded,
+                            onDismissRequest = { handoffExpanded = false }
+                        ) {
+                            runtimeOptions.forEach { (id, name) ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        handoffTarget = id
+                                        handoffExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { onHandoff(handoffTarget) },
+                        enabled = handoffTarget.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("セッションを引き継ぐ")
+                    }
+                    handoffMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }

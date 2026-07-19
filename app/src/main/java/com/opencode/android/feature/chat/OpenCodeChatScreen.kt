@@ -20,11 +20,19 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -78,7 +86,9 @@ fun OpenCodeChatScreen(
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
-    onMic: () -> Unit
+    onMic: () -> Unit,
+    onAttach: () -> Unit = {},
+    onRemoveAttachment: (String) -> Unit = {}
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -170,6 +180,33 @@ fun OpenCodeChatScreen(
             }
         }
 
+        if (state.pendingAttachments.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                state.pendingAttachments.forEach { attachment ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(attachment.fileName, style = MaterialTheme.typography.labelMedium)
+                            IconButton(onClick = { onRemoveAttachment(attachment.id) }) {
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.delete))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -178,6 +215,9 @@ fun OpenCodeChatScreen(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            IconButton(onClick = onAttach) {
+                Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.attach_file))
+            }
             IconButton(onClick = onMic) {
                 Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.voice))
             }
@@ -189,7 +229,7 @@ fun OpenCodeChatScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(
                     onSend = {
-                        if (input.isNotBlank()) {
+                        if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
                             onSendMessage(input)
                             input = ""
                         }
@@ -205,12 +245,12 @@ fun OpenCodeChatScreen(
             } else {
                 IconButton(
                     onClick = {
-                        if (input.isNotBlank()) {
+                        if (input.isNotBlank() || state.pendingAttachments.isNotEmpty()) {
                             onSendMessage(input)
                             input = ""
                         }
                     },
-                    enabled = input.isNotBlank()
+                    enabled = input.isNotBlank() || state.pendingAttachments.isNotEmpty()
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_description))
                 }
@@ -453,6 +493,10 @@ private fun AgentSelector(
 
 @Composable
 private fun MessageBubble(message: ChatMessage) {
+    if (!message.isUser && message.kind != ChatItemKind.TEXT) {
+        ToolOrCommandCard(message)
+        return
+    }
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (message.isUser) Alignment.CenterEnd else Alignment.CenterStart
@@ -484,6 +528,76 @@ private fun MessageBubble(message: ChatMessage) {
                         style = MaterialTheme.typography.labelSmall
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolOrCommandCard(message: ChatMessage) {
+    var expanded by remember(message.id, message.detail) {
+        mutableStateOf(message.expandedByDefault || message.kind == ChatItemKind.COMMAND)
+    }
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = if (message.kind == ChatItemKind.COMMAND) {
+                        Icons.Default.Terminal
+                    } else {
+                        Icons.Default.Security
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when (message.kind) {
+                            ChatItemKind.COMMAND -> stringResource(R.string.command_card)
+                            ChatItemKind.REASONING -> stringResource(R.string.reasoning_card)
+                            else -> stringResource(R.string.tool_card)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = message.toolName ?: message.text,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
+            }
+            if (expanded && !message.detail.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = message.detail,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (message.isStreaming) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.processing),
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }

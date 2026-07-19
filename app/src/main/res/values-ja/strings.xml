@@ -86,4 +86,17 @@
     <string name="notifications_permission_rationale">バックグラウンドでの承認待ちと完了通知に使います。</string>
     <string name="capability_version">OpenCode %1$s</string>
     <string name="request_notifications">通知を許可</string>
+    <string name="attach_file">ファイルを添付</string>
+    <string name="tool_card">ツール</string>
+    <string name="command_card">コマンド</string>
+    <string name="reasoning_card">推論</string>
+    <string name="scan_qr_or_paste">接続QR / リンクを貼り付け</string>
+    <string name="discover_lan">LANで検出</string>
+    <string name="no_lan_services">OpenCodeサービスはまだ見つかりません</string>
+    <string name="handoff_session">セッションを引き継ぐ</string>
+    <string name="wake_word_pack">任意ウェイクワードパック</string>
+    <string name="wake_word_pack_help">標準同梱しません。SHA-256検証付きHTTPSパックを導入でき、いつでも削除できます。</string>
+    <string name="wake_word_installed">導入済み: %1$s %2$s</string>
+    <string name="wake_word_not_installed">ウェイクワードパックは未導入</string>
+    <string name="delete_wake_word">パックを削除</string>
 </resources>

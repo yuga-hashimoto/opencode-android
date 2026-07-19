@@ -51,6 +51,8 @@ import com.opencode.android.feature.home.HomeScreen
 import com.opencode.android.feature.home.HomeViewModel
 import com.opencode.android.feature.settings.SettingsScreen
 import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.workspace.ConnectionDialog
+import com.opencode.android.feature.workspace.ConnectionFormState
 import com.opencode.android.feature.workspace.LocalRuntimeManagementScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementViewModel
 import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
@@ -116,7 +118,8 @@ fun OpenCodeApp(
                 app.runtimeRegistry,
                 app.catalogRepository,
                 app.localRuntimeManager,
-                app.localRuntimeController
+                app.localRuntimeController,
+                nsdDiscovery = app.nsdDiscovery
             )
         }
     )
@@ -240,6 +243,29 @@ fun OpenCodeApp(
         }
     }
 
+    val chatAttachmentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        voiceScope.launch {
+            uris.forEach { uri ->
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val resolver = context.contentResolver
+                        val mimeType = resolver.getType(uri) ?: "application/octet-stream"
+                        val name = uri.lastPathSegment?.substringAfterLast('/')
+                            ?: "attachment-${System.currentTimeMillis()}"
+                        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                            ?: error("Unable to read attachment")
+                        chatViewModel.addAttachment(name, mimeType, bytes)
+                    }
+                }.onFailure { error ->
+                    chatViewModel.reportSpeechError(error.message ?: "Attachment failed")
+                }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             val granted = ContextCompat.checkSelfPermission(
@@ -355,11 +381,24 @@ fun OpenCodeApp(
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
-                    onMic = requestVoiceInput
+                    onMic = requestVoiceInput,
+                    onAttach = { chatAttachmentLauncher.launch("*/*") },
+                    onRemoveAttachment = chatViewModel::removeAttachment
                 )
             }
 
             composable(Destination.WORKSPACES.route) {
+                var quickEditor by remember { mutableStateOf<ConnectionFormState?>(null) }
+                LaunchedEffect(workspaceViewModel) {
+                    workspaceViewModel.events.collect { event ->
+                        when (event) {
+                            is com.opencode.android.feature.workspace.WorkspaceEvent.OpenEditor -> {
+                                quickEditor = event.form
+                            }
+                            is com.opencode.android.feature.workspace.WorkspaceEvent.Info -> Unit
+                        }
+                    }
+                }
                 WorkspacesScreen(
                     state = workspaceState,
                     onSelectRuntime = workspaceViewModel::selectRuntime,
@@ -377,8 +416,22 @@ fun OpenCodeApp(
                     onReinstallLocal = workspaceViewModel::reinstallLocalRuntime,
                     onOpenLocalManagement = {
                         navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE)
-                    }
+                    },
+                    onApplyQrOrLink = workspaceViewModel::applyQrOrLink,
+                    onAddDiscovered = workspaceViewModel::addDiscovered
                 )
+                quickEditor?.let { form ->
+                    ConnectionDialog(
+                        initial = form,
+                        onDismiss = { quickEditor = null },
+                        onSave = {
+                            workspaceViewModel.saveConnection(it)
+                            quickEditor = null
+                        },
+                        onDelete = null,
+                        onTest = workspaceViewModel::testConnection
+                    )
+                }
             }
 
             composable(LOCAL_RUNTIME_MANAGEMENT_ROUTE) {
@@ -483,6 +536,13 @@ fun OpenCodeApp(
                         }
                     )
                     val detailState by detailViewModel.state.collectAsState()
+                    val handoffMessage = remember { mutableStateOf<String?>(null) }
+                    val handoffScope = rememberCoroutineScope()
+                    val runtimeOptions = remember {
+                        app.runtimeRegistry.targets.value
+                            .filter { it.id != runtime.id }
+                            .map { it.id to it.displayName }
+                    }
                     SessionDetailScreen(
                         state = detailState,
                         onBack = { navController.popBackStack() },
@@ -490,12 +550,54 @@ fun OpenCodeApp(
                         onContinueChat = {
                             pendingSession = session.id to session.title
                             navController.navigate(Destination.CHAT.route)
+                        },
+                        runtimeOptions = runtimeOptions,
+                        handoffMessage = handoffMessage.value,
+                        onHandoff = { targetRuntimeId ->
+                            handoffScope.launch {
+                                val packResult = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        com.opencode.android.feature.chat.SessionHandoff.buildPackage(
+                                            sourceRuntimeId = runtime.id,
+                                            sourceRuntimeName = runtime.displayName,
+                                            sessionId = session.id,
+                                            sessionTitle = session.title,
+                                            directory = session.directory,
+                                            messages = runtime.listMessages(session.id)
+                                        )
+                                    }
+                                }
+                                val pack = packResult.getOrElse {
+                                    handoffMessage.value = it.message ?: "Handoff failed"
+                                    return@launch
+                                }
+                                com.opencode.android.feature.chat.SessionHandoff.handoff(
+                                    app.runtimeRegistry,
+                                    pack,
+                                    targetRuntimeId
+                                ).fold(
+                                    onSuccess = { newSessionId ->
+                                        handoffMessage.value = "Handed off to ${pack.sessionTitle.take(20)} ($newSessionId)"
+                                        pendingSession = newSessionId to pack.sessionTitle
+                                        navController.navigate(Destination.CHAT.route)
+                                    },
+                                    onFailure = { error ->
+                                        handoffMessage.value = error.message ?: "Handoff failed"
+                                    }
+                                )
+                            }
                         }
                     )
                 }
             }
 
             composable(Destination.SETTINGS.route) {
+                val wakeWordInstalled = remember { mutableStateOf(app.wakeWordPackManager.isInstalled()) }
+                val wakeWordSummary = remember(wakeWordInstalled.value) {
+                    app.wakeWordPackManager.installed()?.let {
+                        "${it.name} ${it.version}"
+                    }.orEmpty()
+                }
                 SettingsScreen(
                     state = settingsState,
                     onOpenAssistantSettings = onOpenAssistantSettings,
@@ -512,6 +614,12 @@ fun OpenCodeApp(
                         if (android.os.Build.VERSION.SDK_INT >= 33) {
                             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
+                    },
+                    wakeWordPackSummary = wakeWordSummary,
+                    wakeWordInstalled = wakeWordInstalled.value,
+                    onDeleteWakeWord = {
+                        app.wakeWordPackManager.delete()
+                        wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
                     }
                 )
             }

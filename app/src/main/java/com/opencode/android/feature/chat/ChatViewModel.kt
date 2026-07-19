@@ -1,11 +1,14 @@
 package com.opencode.android.feature.chat
 
 import android.speech.tts.TextToSpeech
+import java.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeMessage
+import com.opencode.android.core.api.OpenCodePart
 import com.opencode.android.core.api.PermissionRequest
+import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
@@ -19,12 +22,35 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+enum class ChatItemKind {
+    TEXT,
+    TOOL,
+    COMMAND,
+    REASONING
+}
+
+data class PendingAttachment(
+    val id: String = UUID.randomUUID().toString(),
+    val fileName: String,
+    val mimeType: String,
+    val bytes: ByteArray
+) {
+    override fun equals(other: Any?): Boolean =
+        other is PendingAttachment && id == other.id
+
+    override fun hashCode(): Int = id.hashCode()
+}
+
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),
-    val isStreaming: Boolean = false
+    val isStreaming: Boolean = false,
+    val kind: ChatItemKind = ChatItemKind.TEXT,
+    val toolName: String? = null,
+    val detail: String? = null,
+    val expandedByDefault: Boolean = false
 )
 
 data class ChatUiState(
@@ -33,6 +59,7 @@ data class ChatUiState(
     val sessionTitle: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val permissions: List<PermissionRequest> = emptyList(),
+    val pendingAttachments: List<PendingAttachment> = emptyList(),
     val isConnected: Boolean = false,
     val isRunning: Boolean = false,
     val isLoadingHistory: Boolean = false,
@@ -61,6 +88,7 @@ class ChatViewModel(
     private var tts: TextToSpeech? = null
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
     private val textPartIds = mutableSetOf<String>()
+    private val toolPartIds = mutableSetOf<String>()
 
     init {
         if (backend != null) {
@@ -107,6 +135,7 @@ class ChatViewModel(
         val currentBackend = backend ?: return
         streamedParts.clear()
         textPartIds.clear()
+        toolPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -114,6 +143,7 @@ class ChatViewModel(
                 isLoadingHistory = true,
                 messages = emptyList(),
                 permissions = emptyList(),
+                pendingAttachments = emptyList(),
                 error = null
             )
         }
@@ -123,7 +153,7 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
-                            messages = messages.mapNotNull(::toUiMessage)
+                            messages = messages.flatMap(::toUiMessages)
                         )
                     }
                 }
@@ -138,12 +168,14 @@ class ChatViewModel(
     fun newSession() {
         streamedParts.clear()
         textPartIds.clear()
+        toolPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = null,
                 sessionTitle = "",
                 messages = emptyList(),
                 permissions = emptyList(),
+                pendingAttachments = emptyList(),
                 isRunning = false,
                 isThinking = false,
                 isListening = false,
@@ -153,19 +185,56 @@ class ChatViewModel(
         }
     }
 
+    fun addAttachment(fileName: String, mimeType: String, bytes: ByteArray) {
+        if (bytes.isEmpty()) return
+        if (bytes.size > MAX_ATTACHMENT_BYTES) {
+            _uiState.update { it.copy(error = "Attachment exceeds ${MAX_ATTACHMENT_BYTES / 1024}KB limit") }
+            return
+        }
+        if (_uiState.value.pendingAttachments.size >= MAX_ATTACHMENTS) {
+            _uiState.update { it.copy(error = "At most $MAX_ATTACHMENTS attachments allowed") }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                pendingAttachments = it.pendingAttachments + PendingAttachment(
+                    fileName = fileName,
+                    mimeType = mimeType.ifBlank { "application/octet-stream" },
+                    bytes = bytes
+                ),
+                error = null
+            )
+        }
+    }
+
+    fun removeAttachment(id: String) {
+        _uiState.update {
+            it.copy(pendingAttachments = it.pendingAttachments.filterNot { item -> item.id == id })
+        }
+    }
+
     fun sendMessage(text: String) {
         val normalized = text.trim()
-        if (normalized.isEmpty()) return
+        val attachments = _uiState.value.pendingAttachments
+        if (normalized.isEmpty() && attachments.isEmpty()) return
         val currentBackend = backend
         if (currentBackend == null) {
             _uiState.update { it.copy(error = "OpenCode connection is not configured") }
             return
         }
 
-        val userMessage = ChatMessage(text = normalized, isUser = true)
+        val displayText = buildString {
+            if (normalized.isNotEmpty()) append(normalized)
+            if (attachments.isNotEmpty()) {
+                if (isNotEmpty()) append("\n")
+                append(attachments.joinToString("\n") { "📎 ${it.fileName}" })
+            }
+        }
+        val userMessage = ChatMessage(text = displayText, isUser = true)
         _uiState.update {
             it.copy(
                 messages = it.messages + userMessage,
+                pendingAttachments = emptyList(),
                 isRunning = true,
                 isThinking = true,
                 partialText = "",
@@ -178,7 +247,7 @@ class ChatViewModel(
                 val existingSessionId = _uiState.value.sessionId
                 val session = if (existingSessionId == null) {
                     currentBackend.createSession(
-                        title = normalized.take(60),
+                        title = (normalized.ifBlank { attachments.firstOrNull()?.fileName.orEmpty() }).take(60),
                         directory = _uiState.value.selectedWorkspacePath
                     )
                 } else {
@@ -193,10 +262,17 @@ class ChatViewModel(
                 currentBackend.sendMessage(
                     targetSessionId,
                     PromptRequest(
-                        text = normalized,
+                        text = normalized.ifBlank { "Please review the attached file(s)." },
                         providerId = _uiState.value.selectedProviderId,
                         modelId = _uiState.value.selectedModelId,
-                        agent = _uiState.value.selectedAgentId
+                        agent = _uiState.value.selectedAgentId,
+                        attachments = attachments.map {
+                            PromptAttachment(
+                                fileName = it.fileName,
+                                mimeType = it.mimeType,
+                                base64Data = Base64.getEncoder().encodeToString(it.bytes)
+                            )
+                        }
                     )
                 )
             }.onFailure { error ->
@@ -263,13 +339,23 @@ class ChatViewModel(
             }
             is OpenCodeEvent.MessagePartUpdated -> {
                 val part = event.part
-                if (part.sessionId != activeSession || part.type != "text") return
-                val messageId = part.messageId ?: part.id ?: return
-                val partId = part.id ?: messageId
-                textPartIds += partId
-                val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
-                messageParts[partId] = part.text.orEmpty()
-                updateStreamingMessage(messageId, messageParts.values.joinToString(""))
+                if (part.sessionId != activeSession) return
+                when {
+                    part.type == "text" -> {
+                        val messageId = part.messageId ?: part.id ?: return
+                        val partId = part.id ?: messageId
+                        textPartIds += partId
+                        val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
+                        messageParts[partId] = part.text.orEmpty()
+                        updateStreamingMessage(messageId, messageParts.values.joinToString(""))
+                    }
+                    part.type == "tool" || part.type == "tool-invocation" || part.type == "tool-result" -> {
+                        upsertToolCard(part)
+                    }
+                    part.type == "reasoning" -> {
+                        upsertReasoningCard(part)
+                    }
+                }
             }
             is OpenCodeEvent.MessagePartDelta -> {
                 if (
@@ -317,19 +403,93 @@ class ChatViewModel(
         }
     }
 
+    private fun upsertToolCard(part: OpenCodePart) {
+        val id = part.id ?: part.callID ?: return
+        toolPartIds += id
+        val title = part.tool ?: part.type
+        val detail = formatToolState(part.state)
+        val kind = if (
+            title.contains("bash", ignoreCase = true) ||
+            title.contains("shell", ignoreCase = true) ||
+            title.contains("command", ignoreCase = true)
+        ) {
+            ChatItemKind.COMMAND
+        } else {
+            ChatItemKind.TOOL
+        }
+        _uiState.update { state ->
+            val existing = state.messages.indexOfFirst { it.id == id }
+            val card = ChatMessage(
+                id = id,
+                text = title,
+                isUser = false,
+                kind = kind,
+                toolName = title,
+                detail = detail,
+                isStreaming = true,
+                expandedByDefault = false
+            )
+            val messages = if (existing >= 0) {
+                state.messages.toMutableList().apply { this[existing] = card }
+            } else {
+                state.messages + card
+            }
+            state.copy(messages = messages, isRunning = true, isThinking = false)
+        }
+    }
+
+    private fun upsertReasoningCard(part: OpenCodePart) {
+        val id = part.id ?: part.messageId ?: return
+        val text = part.text.orEmpty()
+        if (text.isBlank()) return
+        _uiState.update { state ->
+            val existing = state.messages.indexOfFirst { it.id == id }
+            val card = ChatMessage(
+                id = id,
+                text = "Reasoning",
+                isUser = false,
+                kind = ChatItemKind.REASONING,
+                detail = text,
+                isStreaming = true,
+                expandedByDefault = false
+            )
+            val messages = if (existing >= 0) {
+                state.messages.toMutableList().apply { this[existing] = card }
+            } else {
+                state.messages + card
+            }
+            state.copy(messages = messages, isRunning = true, isThinking = false)
+        }
+    }
+
+    private fun formatToolState(state: Map<String, Any?>?): String? {
+        if (state.isNullOrEmpty()) return null
+        val preferredKeys = listOf("status", "input", "output", "error", "title", "command", "stdout", "stderr")
+        val lines = preferredKeys.mapNotNull { key ->
+            state[key]?.let { value ->
+                val rendered = value.toString().trim()
+                if (rendered.isEmpty()) null else "$key: $rendered"
+            }
+        }
+        return (lines.ifEmpty {
+            state.entries.map { "${it.key}: ${it.value}" }
+        }).joinToString("\n").take(4_000)
+    }
+
     private fun updateStreamingMessage(messageId: String, text: String) {
         _uiState.update { state ->
             val index = state.messages.indexOfFirst { it.id == messageId }
             val updated = if (index >= 0) {
                 state.messages.toMutableList().apply {
-                    this[index] = this[index].copy(text = text, isStreaming = true)
+                    this[index] = this[index].copy(text = text, isStreaming = true, kind = ChatItemKind.TEXT)
                 }
             } else {
                 state.messages + ChatMessage(
                     id = messageId,
                     text = text,
                     isUser = false,
-                    isStreaming = true
+                    isStreaming = true,
+                    kind = ChatItemKind.TEXT
                 )
             }
             state.copy(
@@ -340,16 +500,47 @@ class ChatViewModel(
         }
     }
 
-    private fun toUiMessage(message: OpenCodeMessage): ChatMessage? {
+    private fun toUiMessages(message: OpenCodeMessage): List<ChatMessage> {
+        val items = mutableListOf<ChatMessage>()
         val text = message.text
-        if (text.isBlank()) return null
-        return ChatMessage(
-            id = message.info.id,
-            text = text,
-            isUser = message.info.role == "user",
-            timestamp = message.info.time.created,
-            isStreaming = false
-        )
+        if (text.isNotBlank()) {
+            items += ChatMessage(
+                id = message.info.id,
+                text = text,
+                isUser = message.info.role == "user",
+                timestamp = message.info.time.created,
+                kind = ChatItemKind.TEXT
+            )
+        }
+        message.parts.forEach { part ->
+            when (part.type) {
+                "tool", "tool-invocation", "tool-result" -> {
+                    val id = part.id ?: "${message.info.id}-tool-${part.tool}"
+                    items += ChatMessage(
+                        id = id,
+                        text = part.tool ?: part.type,
+                        isUser = false,
+                        timestamp = message.info.time.created,
+                        kind = ChatItemKind.TOOL,
+                        toolName = part.tool,
+                        detail = formatToolState(part.state)
+                    )
+                }
+                "reasoning" -> {
+                    if (!part.text.isNullOrBlank()) {
+                        items += ChatMessage(
+                            id = part.id ?: "${message.info.id}-reasoning",
+                            text = "Reasoning",
+                            isUser = false,
+                            timestamp = message.info.time.created,
+                            kind = ChatItemKind.REASONING,
+                            detail = part.text
+                        )
+                    }
+                }
+            }
+        }
+        return items
     }
 
     fun setTTS(textToSpeech: TextToSpeech) {
@@ -386,4 +577,9 @@ class ChatViewModel(
 
     private fun Throwable.safeMessage(): String =
         message?.takeIf { it.isNotBlank() } ?: "OpenCode operation failed"
+
+    companion object {
+        private const val MAX_ATTACHMENTS = 5
+        private const val MAX_ATTACHMENT_BYTES = 512 * 1024
+    }
 }

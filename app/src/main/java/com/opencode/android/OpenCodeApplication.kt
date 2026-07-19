@@ -62,12 +62,22 @@ class OpenCodeApplication : Application() {
     lateinit var providerCredentials: LocalProviderCredentialStore
         private set
 
+    lateinit var nsdDiscovery: com.opencode.android.feature.connection.OpenCodeNsdDiscovery
+        private set
+
+    lateinit var wakeWordPackManager: com.opencode.android.feature.assistant.WakeWordPackManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
         preferences = AppPreferencesRepository(settings)
         notifications = RuntimeNotificationHelper(this)
         providerCredentials = LocalProviderCredentialStore(settings)
+        nsdDiscovery = com.opencode.android.feature.connection.OpenCodeNsdDiscovery(this)
+        wakeWordPackManager = com.opencode.android.feature.assistant.WakeWordPackManager(
+            rootDirectory = File(filesDir, "assistant").apply { mkdirs() }
+        )
         val runtimeDirectory = File(filesDir, "runtime")
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         val accessCoordinator = LocalRuntimeAccessCoordinator()

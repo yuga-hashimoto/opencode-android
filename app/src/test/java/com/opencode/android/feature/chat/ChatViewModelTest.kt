@@ -180,6 +180,98 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `attachment only message is encoded and sent`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+
+        viewModel.addAttachment("sample.txt", "text/plain", "hello".toByteArray())
+        viewModel.sendMessage("")
+        advanceUntilIdle()
+
+        assertEquals(1, backend.createSessionCalls)
+        val request = backend.sentPrompts.single().second
+        assertEquals("Please review the attached file(s).", request.text)
+        assertEquals(1, request.attachments.size)
+        assertEquals("sample.txt", request.attachments.single().fileName)
+        assertEquals("aGVsbG8=", request.attachments.single().base64Data)
+        assertTrue(viewModel.uiState.value.pendingAttachments.isEmpty())
+        assertTrue(viewModel.uiState.value.messages.single().text.contains("sample.txt"))
+    }
+
+    @Test
+    fun `oversized attachment is rejected without changing pending list`() = runTest(dispatcher) {
+        val viewModel = ChatViewModel(FakeBackend())
+
+        viewModel.addAttachment(
+            fileName = "large.bin",
+            mimeType = "application/octet-stream",
+            bytes = ByteArray(512 * 1024 + 1)
+        )
+
+        assertTrue(viewModel.uiState.value.pendingAttachments.isEmpty())
+        assertTrue(viewModel.uiState.value.error.orEmpty().contains("512KB"))
+    }
+
+    @Test
+    fun `tool and command events create structured activity cards`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+        viewModel.sendMessage("Run status")
+        advanceUntilIdle()
+
+        backend.events.emit(
+            OpenCodeEvent.MessagePartUpdated(
+                OpenCodePart(
+                    id = "tool-1",
+                    sessionId = "s1",
+                    messageId = "assistant-1",
+                    type = "tool",
+                    tool = "bash",
+                    state = mapOf("command" to "git status", "stdout" to "clean")
+                )
+            )
+        )
+        advanceUntilIdle()
+
+        val card = viewModel.uiState.value.messages.last()
+        assertEquals(ChatItemKind.COMMAND, card.kind)
+        assertEquals("bash", card.toolName)
+        assertTrue(card.detail.orEmpty().contains("git status"))
+        assertTrue(card.detail.orEmpty().contains("clean"))
+    }
+
+    @Test
+    fun `historical tool and reasoning parts become separate cards`() = runTest(dispatcher) {
+        val backend = FakeBackend().apply {
+            history = listOf(
+                OpenCodeMessage(
+                    info = com.opencode.android.core.api.OpenCodeMessageInfo(
+                        id = "m1",
+                        sessionId = "s1",
+                        role = "assistant",
+                        time = OpenCodeTime(created = 2)
+                    ),
+                    parts = listOf(
+                        OpenCodePart(id = "reason-1", type = "reasoning", text = "considering"),
+                        OpenCodePart(
+                            id = "tool-1",
+                            type = "tool",
+                            tool = "read",
+                            state = mapOf("status" to "completed")
+                        )
+                    )
+                )
+            )
+        }
+        val viewModel = ChatViewModel(backend)
+
+        viewModel.openSession("s1", "Existing")
+        advanceUntilIdle()
+
+        assertEquals(listOf(ChatItemKind.REASONING, ChatItemKind.TOOL), viewModel.uiState.value.messages.map { it.kind })
+    }
+
+    @Test
     fun `abort stops current session and clears running state`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)
@@ -199,6 +291,7 @@ class ChatViewModelTest {
         override val displayName: String = "Fake"
         override val kind: BackendKind = BackendKind.REMOTE
         val events = MutableSharedFlow<OpenCodeEvent>(extraBufferCapacity = 20)
+        var history: List<OpenCodeMessage> = emptyList()
         var createSessionCalls = 0
         var lastCreateDirectory: String? = null
         val sentPrompts = mutableListOf<Pair<String, PromptRequest>>()
@@ -217,7 +310,7 @@ class ChatViewModelTest {
                 time = OpenCodeTime(created = 1)
             )
         }
-        override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = emptyList()
+        override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = history
         override suspend fun listProviders(): ProviderCatalog = ProviderCatalog()
         override suspend fun listAgents(): List<OpenCodeAgent> = emptyList()
         override suspend fun sendMessage(sessionId: String, request: PromptRequest) {

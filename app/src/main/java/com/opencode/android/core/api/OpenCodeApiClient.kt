@@ -149,6 +149,17 @@ class OpenCodeApiClient(
                     addProperty("type", "text")
                     addProperty("text", request.text)
                 })
+                request.attachments.forEach { attachment ->
+                    add(JsonObject().apply {
+                        addProperty("type", "file")
+                        addProperty("mime", attachment.mimeType)
+                        addProperty("filename", attachment.fileName)
+                        addProperty(
+                            "url",
+                            "data:${attachment.mimeType};base64,${attachment.base64Data}"
+                        )
+                    })
+                }
             })
         }
         postWithoutResponse("session/${encodePath(sessionId)}/prompt_async", json)

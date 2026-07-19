@@ -57,7 +57,7 @@ import com.opencode.android.ui.components.StatusChip
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun ConnectionDialog(
+fun ConnectionDialog(
     initial: ConnectionFormState,
     onDismiss: () -> Unit,
     onSave: (ConnectionFormState) -> Unit,
