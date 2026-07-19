@@ -83,6 +83,10 @@
     <string name="api_key_hint">API key</string>
     <string name="save_api_key">Save key</string>
     <string name="clear_api_key">Clear key</string>
+    <string name="oauth_authentication">OAuth authentication</string>
+    <string name="oauth_code_hint">Authorization code</string>
+    <string name="oauth_browser_opened">Complete authentication in the browser, then tap Complete.</string>
+    <string name="oauth_complete">Complete</string>
     <string name="key_saved">Saved</string>
     <string name="key_missing">Not set</string>
     <string name="assistant_runtime">Assistant runtime</string>

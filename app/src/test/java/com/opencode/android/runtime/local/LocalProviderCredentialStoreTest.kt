@@ -93,6 +93,24 @@ class LocalProviderCredentialStoreTest {
     }
 
     @Test
+    fun `unmanage provider preserves encrypted key but stops runtime overwrite`() {
+        val rootfs = temp.newFolder("oauth-rootfs")
+        val authFile = File(rootfs, "root/.local/share/opencode/auth.json").apply {
+            parentFile.mkdirs()
+            writeText("""{"openai":{"type":"oauth","access":"oauth-token"}}""")
+        }
+        val memory = memoryStore(mapOf("openai" to "api-key"), setOf("openai"))
+
+        memory.store.unmanageProvider("openai")
+        memory.store.syncToRuntime(rootfs)
+
+        val payload = JsonParser.parseString(authFile.readText()).asJsonObject
+        assertEquals("oauth", payload.getAsJsonObject("openai")["type"].asString)
+        assertEquals("api-key", memory.store.credentials()["openai"])
+        assertFalse("openai" in memory.managedIds)
+    }
+
+    @Test
     fun `malformed existing auth file is preserved and sync fails`() {
         val rootfs = temp.newFolder("malformed-rootfs")
         val authFile = File(rootfs, "root/.local/share/opencode/auth.json").apply {

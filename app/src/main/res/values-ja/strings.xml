@@ -83,6 +83,10 @@
     <string name="api_key_hint">APIキー</string>
     <string name="save_api_key">キーを保存</string>
     <string name="clear_api_key">キーを削除</string>
+    <string name="oauth_authentication">OAuth認証</string>
+    <string name="oauth_code_hint">認証コード</string>
+    <string name="oauth_browser_opened">ブラウザで認証を完了してから「完了」を押してください。</string>
+    <string name="oauth_complete">完了</string>
     <string name="key_saved">保存済み</string>
     <string name="key_missing">未設定</string>
     <string name="assistant_runtime">アシスト実行先</string>

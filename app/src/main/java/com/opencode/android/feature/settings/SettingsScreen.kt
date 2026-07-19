@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -30,7 +31,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,7 +79,11 @@ fun SettingsScreen(
     wakeWordStatusMessage: String? = null,
     onInstallWakeWord: () -> Unit = {},
     onWakeWordListeningChange: (Boolean) -> Unit = {},
-    onDeleteWakeWord: () -> Unit = {}
+    onDeleteWakeWord: () -> Unit = {},
+    onStartOAuth: (String, Int) -> Unit = { _, _ -> },
+    onLaunchOAuthBrowser: (String) -> Unit = {},
+    onSubmitOAuthCode: (String, Int, String?) -> Unit = { _, _, _ -> },
+    onDismissOAuth: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -353,6 +360,25 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                 }
+                state.providerAuthMethods.toSortedMap().forEach { (providerId, methods) ->
+                    Text(
+                        text = providerId,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    methods.forEachIndexed { methodIndex, method ->
+                        if (method.type == "oauth") {
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = { onStartOAuth(providerId, methodIndex) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(method.label)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 OutlinedTextField(
                     value = state.draftProviderId,
                     onValueChange = onDraftProviderId,
@@ -376,6 +402,10 @@ fun SettingsScreen(
                     Text(stringResource(R.string.save_api_key))
                 }
                 state.credentialMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                state.oauthMessage?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
@@ -530,6 +560,57 @@ fun SettingsScreen(
         }
 
         item { Spacer(Modifier.height(72.dp)) }
+    }
+
+    val authorization = state.oauthAuthorization
+    val providerId = state.oauthProviderId
+    if (authorization != null && providerId != null) {
+        var code by remember(authorization.url) { mutableStateOf("") }
+        LaunchedEffect(authorization.url) {
+            onLaunchOAuthBrowser(authorization.url)
+        }
+        AlertDialog(
+            onDismissRequest = onDismissOAuth,
+            title = { Text(stringResource(R.string.oauth_authentication)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(authorization.instructions)
+                    if (authorization.method == "code") {
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = { code = it },
+                            label = { Text(stringResource(R.string.oauth_code_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.oauth_browser_opened),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = authorization.method != "code" || code.isNotBlank(),
+                    onClick = {
+                        val methodIndex = state.oauthMethodIndex ?: -1
+                        if (methodIndex >= 0) {
+                            onSubmitOAuthCode(providerId, methodIndex, code.takeIf(String::isNotBlank))
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.oauth_complete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissOAuth) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 

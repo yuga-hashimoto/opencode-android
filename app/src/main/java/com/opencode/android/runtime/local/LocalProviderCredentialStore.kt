@@ -58,6 +58,12 @@ class LocalProviderCredentialStore(
 
     fun clearCredential(providerId: String) = setCredential(providerId, null)
 
+    fun unmanageProvider(providerId: String) {
+        val normalizedId = providerId.trim()
+        if (normalizedId.isEmpty()) return
+        saveManagedProviderIds(managedProviderIds() - normalizedId)
+    }
+
     fun hasCredential(providerId: String): Boolean =
         !credentials()[providerId.trim()].isNullOrBlank()
 

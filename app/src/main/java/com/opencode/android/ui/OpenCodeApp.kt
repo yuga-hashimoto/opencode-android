@@ -1,6 +1,7 @@
 package com.opencode.android.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -702,14 +703,26 @@ fun OpenCodeApp(
                             wakeWordStatusMessage = null
                         }
                     },
-                    onDeleteWakeWord = {
+                     onDeleteWakeWord = {
                         app.wakeWordListeningController.stop()
                         wakeWordListening = false
                         app.wakeWordPackManager.delete()
-                        wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
-                        wakeWordStatusMessage = null
-                    }
-                )
+                         wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
+                         wakeWordStatusMessage = null
+                     },
+                     onStartOAuth = settingsViewModel::startOAuth,
+                     onLaunchOAuthBrowser = { url ->
+                         runCatching {
+                             context.startActivity(
+                                 Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                             )
+                         }.onFailure { error ->
+                             settingsViewModel.reportOAuthError(error.message.orEmpty())
+                         }
+                     },
+                     onSubmitOAuthCode = settingsViewModel::completeOAuth,
+                     onDismissOAuth = settingsViewModel::dismissOAuth
+                 )
 
                 if (showWakeWordInstallDialog) {
                     AlertDialog(

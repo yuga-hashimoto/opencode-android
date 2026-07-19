@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeProvider
+import com.opencode.android.core.api.ProviderAuthAuthorization
+import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.data.connection.SecureSettingsRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
@@ -43,7 +45,12 @@ data class SettingsUiState(
     val recentModels: List<Pair<String, String>> = emptyList(),
     val autoAllowReadOnlyTools: Boolean = false,
     val themeMode: String? = null,
-    val dynamicColorEnabled: Boolean = false
+    val dynamicColorEnabled: Boolean = false,
+    val providerAuthMethods: Map<String, List<ProviderAuthMethod>> = emptyMap(),
+    val oauthProviderId: String? = null,
+    val oauthMethodIndex: Int? = null,
+    val oauthAuthorization: ProviderAuthAuthorization? = null,
+    val oauthMessage: String? = null
 )
 
 class SettingsViewModel(
@@ -58,6 +65,7 @@ class SettingsViewModel(
     private val draftApiKey = MutableStateFlow("")
     private val credentialMessage = MutableStateFlow<String?>(null)
     private val assistantCatalog = MutableStateFlow(AssistantCatalogState())
+    private val oauthState = MutableStateFlow(OAuthState())
 
     private data class AssistantCatalogState(
         val runtimeId: String? = null,
@@ -75,10 +83,23 @@ class SettingsViewModel(
         val assistantCatalog: AssistantCatalogState
     )
 
+    private data class OAuthState(
+        val methods: Map<String, List<ProviderAuthMethod>> = emptyMap(),
+        val providerId: String? = null,
+        val methodIndex: Int? = null,
+        val authorization: ProviderAuthAuthorization? = null,
+        val message: String? = null
+    )
+
     init {
         viewModelScope.launch {
             registry.targets.collect {
                 refreshAssistantCatalog()
+            }
+        }
+        viewModelScope.launch {
+            registry.selected.collect {
+                refreshProviderAuth()
             }
         }
     }
@@ -95,8 +116,9 @@ class SettingsViewModel(
             assistantCatalog
         ) { tick, provider, key, message, assistant ->
             DraftState(provider, key, message, tick, assistant)
-        }
-    ) { core, draft ->
+        },
+        oauthState
+    ) { core, draft, oauth ->
         val runtime = core[0] as com.opencode.android.data.repository.RuntimeCatalogState
         val prefs = core[1] as com.opencode.android.data.settings.AppPreferences
         @Suppress("UNCHECKED_CAST")
@@ -133,7 +155,12 @@ class SettingsViewModel(
             recentModels = prefs.recentModels,
             autoAllowReadOnlyTools = settings.autoAllowReadOnlyTools,
             themeMode = prefs.themeMode,
-            dynamicColorEnabled = prefs.dynamicColorEnabled
+            dynamicColorEnabled = prefs.dynamicColorEnabled,
+            providerAuthMethods = oauth.methods,
+            oauthProviderId = oauth.providerId,
+            oauthMethodIndex = oauth.methodIndex,
+            oauthAuthorization = oauth.authorization,
+            oauthMessage = oauth.message
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
@@ -182,6 +209,89 @@ class SettingsViewModel(
         credentials.clearCredential(providerId)
         credentialMessage.value = "API key cleared for $providerId"
         credentialTick.update { it + 1 }
+    }
+
+    fun refreshProviderAuth() {
+        val target = registry.selected.value ?: return
+        viewModelScope.launch {
+            runCatching { target.providerAuthMethods() }
+                .onSuccess { methods ->
+                    oauthState.update { it.copy(methods = methods, message = null) }
+                }
+                .onFailure { error ->
+                    oauthState.update {
+                        it.copy(
+                            methods = emptyMap(),
+                            message = error.message?.takeIf(String::isNotBlank)
+                                ?: "Provider authentication methods are unavailable"
+                        )
+                    }
+                }
+        }
+    }
+
+    fun startOAuth(providerId: String, methodIndex: Int) {
+        val target = registry.selected.value ?: run {
+            oauthState.update { it.copy(message = "Select an OpenCode runtime first") }
+            return
+        }
+        viewModelScope.launch {
+            runCatching { target.authorizeProvider(providerId, methodIndex) }
+                .onSuccess { authorization ->
+                    credentials.unmanageProvider(providerId)
+                    oauthState.update {
+                        it.copy(
+                            providerId = providerId,
+                            methodIndex = methodIndex,
+                            authorization = authorization,
+                            message = null
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    oauthState.update {
+                        it.copy(message = error.message?.takeIf(String::isNotBlank) ?: "OAuth authorization failed")
+                    }
+                }
+        }
+    }
+
+    fun completeOAuth(providerId: String, methodIndex: Int, code: String?) {
+        val target = registry.selected.value ?: return
+        viewModelScope.launch {
+            runCatching { target.completeProviderOAuth(providerId, methodIndex, code) }
+                .onSuccess { completed ->
+                    if (completed) {
+                        oauthState.value = OAuthState(
+                            methods = oauthState.value.methods,
+                            message = "OAuth authentication completed for $providerId"
+                        )
+                        credentialTick.update { it + 1 }
+                        refreshProviderAuth()
+                    } else {
+                        oauthState.update { it.copy(message = "OAuth authentication was not completed") }
+                    }
+                }
+                .onFailure { error ->
+                    oauthState.update {
+                        it.copy(message = error.message?.takeIf(String::isNotBlank) ?: "OAuth callback failed")
+                    }
+                }
+        }
+    }
+
+    fun consumeOAuthAuthorization() {
+        oauthState.update { it.copy(authorization = null) }
+    }
+
+    fun dismissOAuth() {
+        oauthState.update { it.copy(providerId = null, methodIndex = null, authorization = null) }
+    }
+
+    fun reportOAuthError(message: String) {
+        oauthState.update {
+            it.copy(message = message.takeIf(String::isNotBlank) ?: "Unable to open the OAuth browser")
+        }
     }
 
     fun setAssistantRuntimeId(runtimeId: String?) {
