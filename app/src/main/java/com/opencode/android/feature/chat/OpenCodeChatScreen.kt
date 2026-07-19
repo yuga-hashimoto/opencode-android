@@ -1,9 +1,11 @@
 package com.opencode.android.feature.chat
 
+import android.graphics.BitmapFactory
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -65,6 +68,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -96,10 +101,14 @@ fun OpenCodeChatScreen(
     selectedProviderId: String?,
     selectedModelId: String?,
     selectedAgentId: String?,
+    availableVariants: List<String> = emptyList(),
+    selectedVariant: String? = null,
+    contextUsagePercent: Int? = null,
     recentModels: List<Pair<String, String>> = emptyList(),
     sessions: List<com.opencode.android.core.api.OpenCodeSession> = emptyList(),
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
+    onSelectVariant: (String?) -> Unit = {},
     onSelectWorkspace: (String?) -> Unit,
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
@@ -110,7 +119,8 @@ fun OpenCodeChatScreen(
     onNewChat: () -> Unit = {},
     onSelectSession: (String, String) -> Unit = { _, _ -> },
     onRenameSession: (String, String) -> Unit = { _, _ -> },
-    onDeleteSession: (String) -> Unit = {}
+    onDeleteSession: (String) -> Unit = {},
+    onOpenAdditionalSettings: () -> Unit = {}
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -142,17 +152,7 @@ fun OpenCodeChatScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         ChatHeader(
             state = state,
-            providers = providers,
-            agents = agents,
-            workspaces = workspaces,
-            selectedProviderId = selectedProviderId,
-            selectedModelId = selectedModelId,
-            selectedAgentId = selectedAgentId,
-            recentModels = recentModels,
             sessions = sessions,
-            onSelectModel = onSelectModel,
-            onSelectAgent = onSelectAgent,
-            onSelectWorkspace = onSelectWorkspace,
             onNewChat = onNewChat,
             onSelectSession = onSelectSession,
             onRenameSession = onRenameSession,
@@ -294,20 +294,10 @@ fun OpenCodeChatScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 state.pendingAttachments.forEach { attachment ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(attachment.fileName, style = MaterialTheme.typography.labelMedium)
-                            IconButton(onClick = { onRemoveAttachment(attachment.id) }) {
-                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.delete))
-                            }
-                        }
-                    }
+                    AttachmentCard(
+                        attachment = attachment,
+                        onRemove = { onRemoveAttachment(attachment.id) }
+                    )
                 }
             }
         }
@@ -361,23 +351,33 @@ fun OpenCodeChatScreen(
                 }
             }
         }
+
+        ComposerControls(
+            providers = providers,
+            agents = agents,
+            workspaces = workspaces,
+            selectedProviderId = selectedProviderId,
+            selectedModelId = selectedModelId,
+            selectedAgentId = selectedAgentId,
+            selectedWorkspacePath = state.selectedWorkspacePath,
+            workspaceSelectionEnabled = state.sessionId == null,
+            availableVariants = availableVariants.ifEmpty { state.availableVariants },
+            selectedVariant = selectedVariant ?: state.selectedVariant,
+            contextUsagePercent = contextUsagePercent ?: state.contextUsagePercent,
+            recentModels = recentModels,
+            onSelectModel = onSelectModel,
+            onSelectAgent = onSelectAgent,
+            onSelectVariant = onSelectVariant,
+            onSelectWorkspace = onSelectWorkspace,
+            onOpenAdditionalSettings = onOpenAdditionalSettings
+        )
     }
 }
 
 @Composable
 private fun ChatHeader(
     state: ChatUiState,
-    providers: List<OpenCodeProvider>,
-    agents: List<OpenCodeAgent>,
-    workspaces: List<WorkspaceRef>,
-    selectedProviderId: String?,
-    selectedModelId: String?,
-    selectedAgentId: String?,
-    recentModels: List<Pair<String, String>>,
     sessions: List<com.opencode.android.core.api.OpenCodeSession>,
-    onSelectModel: (String, String) -> Unit,
-    onSelectAgent: (String) -> Unit,
-    onSelectWorkspace: (String?) -> Unit,
     onNewChat: () -> Unit,
     onSelectSession: (String, String) -> Unit,
     onRenameSession: (String, String) -> Unit,
@@ -446,28 +446,6 @@ private fun ChatHeader(
         if (state.todos.isNotEmpty()) {
             TodoProgressStrip(state.todos)
         }
-        WorkspaceSelector(
-            workspaces = workspaces,
-            selectedPath = state.selectedWorkspacePath,
-            enabled = state.sessionId == null,
-            onSelect = onSelectWorkspace
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModelSelector(
-                providers = providers,
-                providerId = selectedProviderId,
-                modelId = selectedModelId,
-                recentModels = recentModels,
-                onSelect = onSelectModel,
-                modifier = Modifier.weight(1f)
-            )
-            AgentSelector(
-                agents = agents,
-                selectedAgentId = selectedAgentId,
-                onSelect = onSelectAgent,
-                modifier = Modifier.weight(1f)
-            )
-        }
     }
 }
 
@@ -509,15 +487,148 @@ private fun TodoProgressStrip(todos: List<com.opencode.android.core.api.OpenCode
 }
 
 @Composable
+private fun ComposerControls(
+    providers: List<OpenCodeProvider>,
+    agents: List<OpenCodeAgent>,
+    workspaces: List<WorkspaceRef>,
+    selectedProviderId: String?,
+    selectedModelId: String?,
+    selectedAgentId: String?,
+    selectedWorkspacePath: String?,
+    workspaceSelectionEnabled: Boolean,
+    availableVariants: List<String>,
+    selectedVariant: String?,
+    contextUsagePercent: Int?,
+    recentModels: List<Pair<String, String>>,
+    onSelectModel: (String, String) -> Unit,
+    onSelectAgent: (String) -> Unit,
+    onSelectVariant: (String?) -> Unit,
+    onSelectWorkspace: (String?) -> Unit,
+    onOpenAdditionalSettings: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ModelSelector(
+                providers = providers,
+                providerId = selectedProviderId,
+                modelId = selectedModelId,
+                recentModels = recentModels,
+                onSelect = onSelectModel,
+                modifier = Modifier.widthIn(min = 150.dp)
+            )
+            VariantSelector(
+                variants = availableVariants,
+                selectedVariant = selectedVariant,
+                onSelect = onSelectVariant,
+                modifier = Modifier.widthIn(min = 120.dp)
+            )
+            AgentSelector(
+                agents = agents,
+                selectedAgentId = selectedAgentId,
+                onSelect = onSelectAgent,
+                modifier = Modifier.widthIn(min = 130.dp)
+            )
+            WorkspaceSelector(
+                workspaces = workspaces,
+                selectedPath = selectedWorkspacePath,
+                enabled = workspaceSelectionEnabled,
+                onSelect = onSelectWorkspace,
+                modifier = Modifier.widthIn(min = 180.dp)
+            )
+            IconButton(onClick = onOpenAdditionalSettings) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = stringResource(R.string.additional_settings)
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (contextUsagePercent != null) {
+                    stringResource(R.string.context_usage, contextUsagePercent)
+                } else {
+                    stringResource(R.string.context_unavailable)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = selectedAgentId ?: "build",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun VariantSelector(
+    variants: List<String>,
+    selectedVariant: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = variants.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+                Text(stringResource(R.string.variant), style = MaterialTheme.typography.labelSmall)
+                Text(selectedVariant ?: "Default", maxLines = 1, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Default") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            variants.forEach { variant ->
+                DropdownMenuItem(
+                    text = { Text(variant) },
+                    onClick = {
+                        onSelect(variant)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun WorkspaceSelector(
     workspaces: List<WorkspaceRef>,
     selectedPath: String?,
     enabled: Boolean,
-    onSelect: (String?) -> Unit
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = workspaces.firstOrNull { it.path == selectedPath }
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = modifier) {
         OutlinedButton(
             onClick = { expanded = true },
             enabled = enabled && workspaces.isNotEmpty(),
@@ -690,6 +801,10 @@ private fun MessageBubble(message: ChatMessage) {
             contentColor = contentColor
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
+                if (message.attachments.isNotEmpty()) {
+                    AttachmentStrip(message.attachments, contentColor)
+                    Spacer(Modifier.height(8.dp))
+                }
                 MarkdownText(text = message.text, contentColor = contentColor)
                 if (message.isStreaming) {
                     Spacer(Modifier.height(6.dp))
@@ -720,6 +835,71 @@ private fun MessageBubble(message: ChatMessage) {
                         context.startActivity(Intent.createChooser(sendIntent, null))
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentStrip(attachments: List<PendingAttachment>, contentColor: androidx.compose.ui.graphics.Color) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        attachments.forEach { attachment ->
+            AttachmentCard(
+                attachment = attachment,
+                onRemove = null,
+                contentColor = contentColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttachmentCard(
+    attachment: PendingAttachment,
+    onRemove: (() -> Unit)?,
+    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSecondaryContainer
+) {
+    val bitmap = remember(attachment.id) {
+        if (attachment.mimeType.startsWith("image/")) {
+            BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size)
+        } else {
+            null
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = contentColor
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = stringResource(R.string.attachment_preview, attachment.fileName),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .height(42.dp)
+                        .widthIn(min = 42.dp, max = 64.dp)
+                )
+            } else {
+                Icon(Icons.Default.Description, contentDescription = null)
+            }
+            Text(
+                attachment.fileName,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
+            onRemove?.let {
+                IconButton(onClick = it) {
+                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.delete))
+                }
             }
         }
     }

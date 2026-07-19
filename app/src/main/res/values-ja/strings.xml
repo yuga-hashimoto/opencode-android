@@ -39,6 +39,11 @@
     <string name="no_connection_chat">チャットを始める前にPC接続先を追加して選択してください。</string>
     <string name="model">モデル</string>
     <string name="agent">エージェント</string>
+    <string name="variant">思考度合い</string>
+    <string name="context_usage">コンテキスト %1$d%%</string>
+    <string name="context_unavailable">コンテキスト使用率 unavailable</string>
+    <string name="additional_settings">その他の設定</string>
+    <string name="attachment_preview">添付: %1$s</string>
     <string name="permission_required">操作の承認が必要です</string>
     <string name="allow_once">今回だけ許可</string>
     <string name="always_allow">常に許可</string>

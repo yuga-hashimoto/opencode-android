@@ -39,6 +39,11 @@
     <string name="no_connection_chat">Add and select a PC connection before starting a chat.</string>
     <string name="model">Model</string>
     <string name="agent">Agent</string>
+    <string name="variant">Thinking</string>
+    <string name="context_usage">Context %1$d%%</string>
+    <string name="context_unavailable">Context unavailable</string>
+    <string name="additional_settings">Additional settings</string>
+    <string name="attachment_preview">Attachment: %1$s</string>
     <string name="permission_required">Approval required</string>
     <string name="allow_once">Allow once</string>
     <string name="always_allow">Always allow</string>
