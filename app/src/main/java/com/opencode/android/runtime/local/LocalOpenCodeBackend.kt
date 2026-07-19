@@ -15,6 +15,8 @@ import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
+import com.opencode.android.core.api.ProviderAuthAuthorization
+import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.OpenCodeBackend
@@ -74,6 +76,11 @@ class LocalOpenCodeBackend(
         delegate().listCommands()
     override suspend fun listProviders(): ProviderCatalog = delegate().listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = delegate().listAgents()
+    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> = delegate().providerAuthMethods()
+    override suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
+        delegate().authorizeProvider(providerId, methodIndex)
+    override suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
+        delegate().completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =
         delegate().listProjects(directory)
     override suspend fun currentProject(directory: String?): OpenCodeProject =

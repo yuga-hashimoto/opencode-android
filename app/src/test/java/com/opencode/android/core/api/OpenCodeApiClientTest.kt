@@ -130,6 +130,37 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `loads provider auth methods and completes oauth callback`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"openai":[{"type":"oauth","label":"ChatGPT Plus/Pro"},{"type":"api","label":"API key"}]}"""
+            )
+        )
+        server.enqueue(
+            MockResponse().setBody(
+                """{"url":"https://auth.example/login","method":"code","instructions":"Enter the code"}"""
+            )
+        )
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        val methods = client.providerAuthMethods()
+        val authorization = client.authorizeProvider("openai", 0)
+        val completed = client.completeProviderOAuth("openai", 0, "abc")
+
+        assertEquals("ChatGPT Plus/Pro", methods["openai"]!!.first().label)
+        assertEquals("https://auth.example/login", authorization.url)
+        assertTrue(completed)
+        assertEquals("/provider/auth", server.takeRequest().path)
+        assertEquals("/provider/openai/oauth/authorize", server.takeRequest().path)
+        val callback = server.takeRequest()
+        assertEquals("/provider/openai/oauth/callback", callback.path)
+        val callbackJson = JsonParser.parseString(callback.body.readUtf8()).asJsonObject
+        assertEquals(0, callbackJson["method"].asInt)
+        assertEquals("abc", callbackJson["code"].asString)
+    }
+
+    @Test
     fun `responds to permission request`() = runBlocking {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()

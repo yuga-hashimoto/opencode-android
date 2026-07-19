@@ -16,6 +16,8 @@ import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
+import com.opencode.android.core.api.ProviderAuthAuthorization
+import com.opencode.android.core.api.ProviderAuthMethod
 import kotlinx.coroutines.flow.Flow
 
 enum class BackendKind {
@@ -47,6 +49,12 @@ interface OpenCodeBackend {
     suspend fun listCommands(): List<OpenCodeCommand> = unsupported("command list")
     suspend fun listProviders(): ProviderCatalog
     suspend fun listAgents(): List<OpenCodeAgent>
+    suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        unsupported("provider auth methods")
+    suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
+        unsupported("provider OAuth authorization")
+    suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
+        unsupported("provider OAuth callback")
     suspend fun listProjects(directory: String? = null): List<OpenCodeProject> = unsupported("projects")
     suspend fun currentProject(directory: String? = null): OpenCodeProject = unsupported("current project")
     suspend fun pathInfo(directory: String? = null): OpenCodePathInfo = unsupported("path info")

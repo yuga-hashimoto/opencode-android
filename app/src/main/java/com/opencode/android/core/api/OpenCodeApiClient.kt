@@ -70,6 +70,36 @@ class OpenCodeApiClient(
 
     suspend fun agents(): List<OpenCodeAgent> = getList("agent")
 
+    suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        withContext(Dispatchers.IO) {
+            val type = object : TypeToken<Map<String, List<ProviderAuthMethod>>>() {}.type
+            execute(requestBuilder("provider/auth").get().build()) { body ->
+                gson.fromJson<Map<String, List<ProviderAuthMethod>>>(body, type).orEmpty()
+            }
+        }
+
+    suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
+        post(
+            "provider/${encodePath(providerId)}/oauth/authorize",
+            JsonObject().apply { addProperty("method", methodIndex) },
+            ProviderAuthAuthorization::class.java
+        )
+
+    suspend fun completeProviderOAuth(
+        providerId: String,
+        methodIndex: Int,
+        code: String?
+    ): Boolean = withContext(Dispatchers.IO) {
+        val body = JsonObject().apply {
+            addProperty("method", methodIndex)
+            code?.takeIf { it.isNotBlank() }?.let { addProperty("code", it) }
+        }
+        val request = requestBuilder("provider/${encodePath(providerId)}/oauth/callback")
+            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, Boolean::class.java) }
+    }
+
     suspend fun projects(directory: String? = null): List<OpenCodeProject> =
         getList("project", query("directory" to directory))
 
