@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +51,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.opencode.android.OpenCodeApplication
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
@@ -137,7 +139,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
             ?: app.runtimeRegistry.selected.value
         if (target == null) {
             assistantState.value = VoiceState.ERROR
-            errorText.value = "OpenCodeの実行先を設定してください。"
+            errorText.value = context.getString(R.string.voice_no_runtime_configured)
             return
         }
 
@@ -174,7 +176,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         eventJob?.cancel()
         eventJob = scope.launch {
             activeBackend.events()
-                .catch { error -> showError(error.message ?: "OpenCodeイベント接続に失敗しました") }
+                .catch { error -> showError(error.message ?: context.getString(R.string.voice_event_connection_failed)) }
                 .collect { event ->
                     when (event) {
                         is OpenCodeEvent.MessagePartUpdated -> {
@@ -208,7 +210,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                         }
                         is OpenCodeEvent.SessionError -> {
                             if (event.sessionId == null || event.sessionId == sessionId) {
-                                showError(event.message ?: "OpenCodeの処理に失敗しました")
+                                showError(event.message ?: context.getString(R.string.voice_processing_failed))
                             }
                         }
                         OpenCodeEvent.ServerConnected,
@@ -270,14 +272,14 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                         agent = settings.selectedAgentId
                     )
                 )
-            }.onFailure { showError(it.message ?: "OpenCodeへ送信できませんでした") }
+            }.onFailure { showError(it.message ?: context.getString(R.string.voice_send_failed)) }
         }
     }
 
     private fun onResponseComplete() {
         val answer = responseText.value.trim()
         if (answer.isEmpty()) {
-            showError("OpenCodeから回答テキストを取得できませんでした")
+            showError(context.getString(R.string.voice_no_answer_text))
             return
         }
         scope.launch {
@@ -305,7 +307,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
             }.onSuccess {
                 permissionRequest.value = null
                 assistantState.value = VoiceState.THINKING
-            }.onFailure { showError(it.message ?: "承認結果を送信できませんでした") }
+            }.onFailure { showError(it.message ?: context.getString(R.string.voice_permission_send_failed)) }
         }
     }
 
@@ -358,10 +360,10 @@ private fun VoiceAssistantSurface(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("OpenCode Android", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Text("ホームアシスト", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.home_assistant), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "閉じる")
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close_description))
             }
         }
 
@@ -383,13 +385,13 @@ private fun VoiceAssistantSurface(
 
         Text(
             text = when (state) {
-                VoiceState.LISTENING -> "話してください"
-                VoiceState.THINKING -> "OpenCodeが処理しています"
-                VoiceState.PERMISSION -> "操作の承認が必要です"
-                VoiceState.SPEAKING -> "回答を読み上げています"
-                VoiceState.DONE -> "完了"
-                VoiceState.ERROR -> "エラー"
-                VoiceState.IDLE -> "準備中"
+                VoiceState.LISTENING -> stringResource(R.string.voice_state_listening)
+                VoiceState.THINKING -> stringResource(R.string.voice_state_thinking)
+                VoiceState.PERMISSION -> stringResource(R.string.permission_required)
+                VoiceState.SPEAKING -> stringResource(R.string.voice_state_speaking)
+                VoiceState.DONE -> stringResource(R.string.voice_state_done)
+                VoiceState.ERROR -> stringResource(R.string.voice_state_error)
+                VoiceState.IDLE -> stringResource(R.string.voice_state_idle)
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium
@@ -438,15 +440,15 @@ private fun VoiceAssistantSurface(
                         TextButton(
                             onClick = { onPermission(PermissionResponse.REJECT) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("拒否") }
+                        ) { Text(stringResource(R.string.reject)) }
                         FilledTonalButton(
                             onClick = { onPermission(PermissionResponse.ONCE) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("今回だけ許可") }
+                        ) { Text(stringResource(R.string.allow_once)) }
                         Button(
                             onClick = { onPermission(PermissionResponse.ALWAYS) },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("常に許可") }
+                        ) { Text(stringResource(R.string.always_allow)) }
                     }
                 }
             }
@@ -454,7 +456,7 @@ private fun VoiceAssistantSurface(
 
         error?.let {
             Text(it, color = MaterialTheme.colorScheme.error)
-            Button(onClick = onRetry) { Text("もう一度話す") }
+            Button(onClick = onRetry) { Text(stringResource(R.string.voice_retry_button)) }
         }
         Spacer(Modifier.height(8.dp))
     }

@@ -42,10 +42,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileNode
 import com.opencode.android.ui.components.SectionCard
@@ -63,7 +65,11 @@ fun WorkspaceExplorerScreen(
     onRefreshChanges: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("ファイル", "検索", "変更")
+    val tabs = listOf(
+        stringResource(R.string.tab_files),
+        stringResource(R.string.tab_search),
+        stringResource(R.string.tab_changes)
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -74,7 +80,7 @@ fun WorkspaceExplorerScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back))
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -94,7 +100,7 @@ fun WorkspaceExplorerScreen(
                 onClick = if (selectedTab == 2) onRefreshChanges else onRefresh,
                 enabled = !state.isLoadingFiles && !state.isLoadingChanges
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "更新")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
             }
         }
 
@@ -136,7 +142,7 @@ private fun FilesTab(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     IconButton(onClick = onCloseFile) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "ファイル一覧へ戻る")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_to_file_list))
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -157,13 +163,13 @@ private fun FilesTab(
             }
 
             if (state.isLoadingFiles) {
-                item { LoadingCard("ファイルを読み込んでいます") }
+                item { LoadingCard(stringResource(R.string.loading_files)) }
             } else {
                 state.selectedFile?.let { file ->
                     item {
                         SectionCard {
                             if (file.type == "binary") {
-                                Text("バイナリファイルはプレビューできません。")
+                                Text(stringResource(R.string.binary_file_no_preview))
                             } else {
                                 SelectionContainer {
                                     Text(
@@ -205,18 +211,18 @@ private fun FilesTab(
                         overflow = TextOverflow.Ellipsis
                     )
                     IconButton(onClick = onNavigateUp, enabled = state.currentPath != ".") {
-                        Icon(Icons.Default.ArrowUpward, contentDescription = "上のフォルダ")
+                        Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.parent_folder))
                     }
                 }
             }
         }
 
         if (state.isLoadingFiles) {
-            item { LoadingCard("ファイル一覧を読み込んでいます") }
+            item { LoadingCard(stringResource(R.string.loading_file_list)) }
         } else if (state.files.isEmpty()) {
             item {
                 SectionCard {
-                    Text("このフォルダは空です", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.folder_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -246,7 +252,7 @@ private fun FilesTab(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        if (node.ignored) StatusChip("除外", active = false)
+                        if (node.ignored) StatusChip(stringResource(R.string.ignored_label), active = false)
                     }
                 }
             }
@@ -273,7 +279,7 @@ private fun SearchTab(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("ファイル名または本文を検索") },
+                label = { Text(stringResource(R.string.search_files_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true
             )
@@ -283,12 +289,12 @@ private fun SearchTab(
                 enabled = query.isNotBlank() && !state.isSearching,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("検索")
+                Text(stringResource(R.string.tab_search))
             }
         }
 
         if (state.isSearching) {
-            item { LoadingCard("検索しています") }
+            item { LoadingCard(stringResource(R.string.searching)) }
         }
 
         if (!state.isSearching && state.searchQuery.isNotBlank() &&
@@ -296,13 +302,13 @@ private fun SearchTab(
         ) {
             item {
                 SectionCard {
-                    Text("一致する結果はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.no_search_results), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
         if (state.fileMatches.isNotEmpty()) {
-            item { SectionTitle("ファイル名", state.fileMatches.size) }
+            item { SectionTitle(stringResource(R.string.section_title_file_names), state.fileMatches.size) }
             items(state.fileMatches, key = { "file-$it" }) { path ->
                 SectionCard {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -314,7 +320,7 @@ private fun SearchTab(
         }
 
         if (state.textMatches.isNotEmpty()) {
-            item { SectionTitle("本文", state.textMatches.size) }
+            item { SectionTitle(stringResource(R.string.section_title_content), state.textMatches.size) }
             items(
                 state.textMatches,
                 key = { "${it.path.text}:${it.lineNumber}:${it.absoluteOffset}" }
@@ -365,22 +371,23 @@ private fun ChangesTab(state: WorkspaceExplorerUiState) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Git", fontWeight = FontWeight.SemiBold)
                         Text(
-                            state.vcsInfo?.branch?.let { "ブランチ: $it" } ?: "Gitリポジトリ情報なし",
+                            state.vcsInfo?.branch?.let { stringResource(R.string.branch_label, it) }
+                                ?: stringResource(R.string.no_git_info),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    Text("${state.changes.size}件")
+                    Text(stringResource(R.string.item_count, state.changes.size))
                 }
             }
         }
 
         if (state.isLoadingChanges) {
-            item { LoadingCard("変更を取得しています") }
+            item { LoadingCard(stringResource(R.string.loading_changes)) }
         } else if (state.changes.isEmpty()) {
             item {
                 SectionCard {
-                    Text("未コミットの変更はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.no_uncommitted_changes), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -414,7 +421,7 @@ private fun ChangeCard(change: OpenCodeFileChange) {
             }
             if (!change.patch.isNullOrBlank()) {
                 OutlinedButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "閉じる" else "差分")
+                    Text(if (expanded) stringResource(R.string.collapse) else stringResource(R.string.diff_label))
                 }
             }
         }
@@ -436,7 +443,7 @@ private fun ChangeCard(change: OpenCodeFileChange) {
 private fun SectionTitle(title: String, count: Int) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Text("${count}件", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.item_count, count), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -453,7 +460,7 @@ private fun LoadingCard(text: String) {
 @Composable
 private fun ErrorCard(message: String) {
     SectionCard {
-        Text("取得に失敗しました", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.fetch_failed), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

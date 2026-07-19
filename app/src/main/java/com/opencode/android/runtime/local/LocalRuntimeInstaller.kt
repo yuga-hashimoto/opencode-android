@@ -2,6 +2,7 @@ package com.opencode.android.runtime.local
 
 import android.content.Context
 import com.google.gson.Gson
+import com.opencode.android.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +27,7 @@ class LocalRuntimeInstaller(
     suspend fun install(onProgress: (Float?, String) -> Unit = { _, _ -> }): InstalledRuntime =
         withContext(Dispatchers.IO) {
             runtimeDirectory.mkdirs()
-            onProgress(0.02f, "Androidコマンド環境を準備しています")
+            onProgress(0.02f, context.getString(R.string.install_step_preparing_command_env))
             val commandSuite = EmbeddedCommandSuite(context, runtimeDirectory, abi).ensureInstalled()
             val manifest = manifestReader.read()
             val architecture = manifest.architecture(abi)
@@ -52,7 +53,7 @@ class LocalRuntimeInstaller(
                     architecture.alpineSha256,
                     0.05f,
                     0.22f,
-                    "Alpine Linuxをダウンロードしています",
+                    context.getString(R.string.install_step_downloading_alpine),
                     onProgress
                 )
                 val openCodeArchive = File(cache, "opencode-${manifest.openCodeVersion}-$abi.tar.gz")
@@ -62,16 +63,16 @@ class LocalRuntimeInstaller(
                     architecture.openCodeSha256,
                     0.24f,
                     0.72f,
-                    "OpenCodeをダウンロードしています",
+                    context.getString(R.string.install_step_downloading_opencode),
                     onProgress
                 )
 
                 val rootfs = File(staging, "rootfs").apply { mkdirs() }
-                onProgress(0.75f, "Linux環境を展開しています")
+                onProgress(0.75f, context.getString(R.string.install_step_extracting_linux_env))
                 alpineArchive.inputStream().use { RuntimeArchive.extractTarGz(it, rootfs) }
 
                 val openCodeExtract = File(staging, "opencode-extract").apply { mkdirs() }
-                onProgress(0.85f, "OpenCodeを展開しています")
+                onProgress(0.85f, context.getString(R.string.install_step_extracting_opencode))
                 openCodeArchive.inputStream().use { RuntimeArchive.extractTarGz(it, openCodeExtract) }
                 val sourceBinary = openCodeExtract.walkTopDown()
                     .firstOrNull { it.isFile && it.name == "opencode" }
@@ -84,7 +85,7 @@ class LocalRuntimeInstaller(
                 }
                 openCodeExtract.deleteRecursively()
                 configureRootfs(rootfs, commandSuite)
-                onProgress(0.91f, "Gitと開発ツールを導入しています")
+                onProgress(0.91f, context.getString(R.string.install_step_installing_dev_tools))
                 installDevelopmentTools(rootfs, commandSuite)
 
                 val metadata = LocalRuntimeMetadata(
@@ -95,7 +96,7 @@ class LocalRuntimeInstaller(
                     abi = abi
                 )
                 File(staging, METADATA_FILE).writeText(Gson().toJson(metadata))
-                onProgress(0.96f, "ランタイムを有効化しています")
+                onProgress(0.96f, context.getString(R.string.install_step_activating_runtime))
                 accessCoordinator.write {
                     activateRuntimeEnvironment(
                         active = active,
@@ -109,7 +110,7 @@ class LocalRuntimeInstaller(
                         }
                     )
                 }
-                onProgress(1f, "ローカルOpenCodeを導入しました")
+                onProgress(1f, context.getString(R.string.install_step_done))
                 InstalledRuntime(metadata, commandSuite, File(active, "rootfs"), File(active, "rootfs/usr/local/bin/opencode"))
             } catch (error: Throwable) {
                 staging.deleteRecursively()

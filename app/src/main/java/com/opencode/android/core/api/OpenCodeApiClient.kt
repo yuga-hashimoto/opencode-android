@@ -157,6 +157,27 @@ class OpenCodeApiClient(
     suspend fun abortSession(sessionId: String): Boolean =
         post("session/${encodePath(sessionId)}/abort", JsonObject(), Boolean::class.java)
 
+    suspend fun renameSession(
+        sessionId: String,
+        title: String,
+        directory: String? = null
+    ): OpenCodeSession {
+        val body = JsonObject().apply { addProperty("title", title) }
+        return patch(
+            "session/${encodePath(sessionId)}",
+            body,
+            OpenCodeSession::class.java,
+            query("directory" to directory)
+        )
+    }
+
+    suspend fun deleteSession(sessionId: String, directory: String? = null): Boolean =
+        delete(
+            "session/${encodePath(sessionId)}",
+            Boolean::class.java,
+            query("directory" to directory)
+        )
+
     suspend fun respondPermission(
         sessionId: String,
         permissionId: String,
@@ -260,6 +281,29 @@ class OpenCodeApiClient(
     ): T = withContext(Dispatchers.IO) {
         val request = requestBuilder(path, queryParameters)
             .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
+
+    private suspend fun <T> patch(
+        path: String,
+        body: JsonObject,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path, queryParameters)
+            .patch(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
+
+    private suspend fun <T> delete(
+        path: String,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path, queryParameters)
+            .delete()
             .build()
         execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
     }

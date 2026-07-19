@@ -15,7 +15,7 @@
 - [x] Home / Chat / Workspaces / Activity / Settingsの5画面
 - [x] RuntimeRegistryによるAndroidローカル・PCリモートの統一
 - [x] 巨大なAppViewModelを機能別ViewModelへ分割
-- [~] 日本語・英語の完全対応（主要文字列は resources 化、一部UI文言は残存）
+- [~] 日本語・英語の完全対応（UI表示文字列はほぼ resources 化。Context を持たないビジネスロジック層（LocalRuntimeManager / LocalRuntimeUpdater / LocalRuntimeCommandRunner / LocalRuntimeDiagnostics / LocalRuntimeTarget / RuntimeActivityRepository / RuntimeCatalogRepository / 一部ViewModelのフォールバックエラー文言）は日本語ハードコードのまま）
 - [ ] 320dp・一般端末・タブレット幅のUI試験
 - [ ] Compose UI Testによる主要フロー検証
 
@@ -26,12 +26,13 @@
 - [x] Basic認証と暗号化保存
 - [x] `/global/health`、セッション、モデル、エージェント取得
 - [x] 新規セッション作成・メッセージ送信
+- [x] セッションの名前変更・削除（PATCH/DELETE `/session/{id}`）
 - [x] OpenCode 1.18.3 SSE `message.part.updated` / `message.part.delta`対応
 - [x] 中断API
 - [x] 承認APIと承認UI（Chat / Activity / 通知アクション）
 - [~] 接続時capability保存・API互換性表示（health version 表示）
-- [ ] mDNS/NSDによるLAN実行先検出
-- [ ] QRコードによる接続入力
+- [x] mDNS/NSDによるLAN実行先検出
+- [x] QRコードによる接続入力
 
 ## C. Androidローカルランタイム
 
@@ -56,16 +57,16 @@
 - [x] モデル・エージェント選択
 - [x] 既存セッション再開
 - [x] 複数message part・順不同・deltaの統合表示
-- [~] reasoning / tool / commandイベントのアクティビティ表示
-- [ ] ツール実行カードの詳細表示
-- [ ] コマンド出力の折りたたみ表示
+- [x] reasoning / tool / commandイベントのアクティビティ表示
+- [x] ツール実行カードの詳細表示
+- [x] コマンド出力の折りたたみ表示
 - [x] ファイル一覧
 - [x] ファイル検索
 - [x] Git状態
 - [x] セッション差分
 - [x] セッションTodo
 - [ ] 添付ファイル
-- [ ] AndroidローカルとPCリモート間のハンドオフ
+- [x] AndroidローカルとPCリモート間のハンドオフ
 
 ## E. モバイル統合
 
@@ -101,5 +102,7 @@
 
 ## 現在の完了判定
 
-主要機能（ローカル/リモート、承認、通知、プロバイダキー、SAF取込）は実装済み。
-残課題は実機マトリクス検証、Compose UIテスト、公開レビュー、一部高度なチャットUX。
+主要機能（ローカル/リモート、承認、通知、プロバイダキー、SAF取込、構造化ツールタイムライン、
+セッション改名・削除、QR/LAN接続、実行先間ハンドオフ）は実装済み。
+残課題は実機マトリクス検証、Compose UIテスト、公開レビュー、添付ファイル対応、
+Context を持たないランタイム層に残る日本語ハードコード文言の解消。

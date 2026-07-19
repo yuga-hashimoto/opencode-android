@@ -83,7 +83,7 @@ fun HomeScreen(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = state.runtimeName.ifBlank { "実行先を選択してください" },
+                            text = state.runtimeName.ifBlank { stringResource(R.string.select_a_runtime) },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -94,7 +94,7 @@ fun HomeScreen(
                         )
                     }
                     StatusChip(
-                        text = if (state.connected) "接続済み" else "未接続",
+                        text = if (state.connected) stringResource(R.string.connected_label) else stringResource(R.string.disconnected_label),
                         active = state.connected
                     )
                 }
@@ -121,28 +121,28 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.Default.Folder, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("作業先")
+                    Text(stringResource(R.string.nav_workspaces))
                 }
             }
         }
 
         item {
-            Text("現在の構成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.current_configuration), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
 
         item {
             SectionCard {
-                ConfigurationRow("作業フォルダ", state.workspace?.path ?: "未選択")
+                ConfigurationRow(stringResource(R.string.workspace_folder_label), state.workspace?.path ?: stringResource(R.string.not_selected))
                 Spacer(Modifier.height(12.dp))
-                ConfigurationRow("モデル", state.modelId ?: "OpenCodeの既定値")
+                ConfigurationRow(stringResource(R.string.model), state.modelId ?: stringResource(R.string.opencode_default_value))
                 Spacer(Modifier.height(12.dp))
-                ConfigurationRow("エージェント", state.agentId ?: "build")
+                ConfigurationRow(stringResource(R.string.agent), state.agentId ?: "build")
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(horizontal = 5.dp))
                     Text(
-                        text = state.providerId ?: "AIサービス未選択",
+                        text = state.providerId ?: stringResource(R.string.no_ai_service_selected),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -153,7 +153,7 @@ fun HomeScreen(
         state.error?.let { error ->
             item {
                 SectionCard {
-                    Text("接続または取得に失敗しました", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.connection_or_fetch_failed), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(6.dp))
                     Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -217,11 +217,12 @@ private fun ConfigurationRow(label: String, value: String) {
     }
 }
 
+@Composable
 private fun runtimeDescription(state: HomeUiState): String = when {
-    state.connected -> "OpenCode ${state.version}"
-    state.isRefreshing -> "接続と状態を確認しています"
+    state.connected -> stringResource(R.string.capability_version, state.version.orEmpty())
+    state.isRefreshing -> stringResource(R.string.checking_connection_status)
     state.runtimeState is RuntimeState.Unavailable -> state.runtimeState.reason
     state.runtimeState is RuntimeState.Failed -> state.runtimeState.message
-    state.runtimeId == null -> "AndroidローカルまたはPCを選択できます"
-    else -> "OpenCodeへ未接続"
+    state.runtimeId == null -> stringResource(R.string.choose_local_or_pc_runtime)
+    else -> stringResource(R.string.not_connected_to_opencode)
 }

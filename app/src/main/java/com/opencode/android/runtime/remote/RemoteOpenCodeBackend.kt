@@ -69,6 +69,9 @@ class RemoteOpenCodeBackend(
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) =
         client.promptAsync(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = client.abortSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        client.renameSession(sessionId, title)
+    override suspend fun deleteSession(sessionId: String): Boolean = client.deleteSession(sessionId)
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,
