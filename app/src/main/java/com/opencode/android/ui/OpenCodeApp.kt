@@ -325,12 +325,17 @@ fun OpenCodeApp(
                     factory = ViewModelFactory {
                         LocalRuntimeManagementViewModel(
                             runtimeState = app.localRuntimeManager.state,
+                            lastOperationState = app.localRuntimeManager.lastOperation,
                             diagnosticsProvider = {
                                 withContext(Dispatchers.IO) {
                                     app.localRuntimeDiagnosticsCollector.collect()
                                 }
                             },
+                            updateCheckProvider = app.localRuntimeManager::checkForUpdate,
+                            rollbackVersionProvider = app.localRuntimeManager::rollbackVersion,
                             repairAction = app.localRuntimeController::reinstall,
+                            updateAction = app.localRuntimeController::update,
+                            rollbackAction = app.localRuntimeController::rollback,
                             deleteAction = app.localRuntimeController::delete
                         )
                     }
@@ -347,7 +352,14 @@ fun OpenCodeApp(
                     state = managementState,
                     onBack = { navController.popBackStack() },
                     onRefresh = managementViewModel::refresh,
+                    onCheckForUpdate = managementViewModel::checkForUpdate,
                     onRepair = managementViewModel::repair,
+                    onRequestUpdate = managementViewModel::requestUpdate,
+                    onDismissUpdate = managementViewModel::dismissUpdate,
+                    onConfirmUpdate = managementViewModel::confirmUpdate,
+                    onRequestRollback = managementViewModel::requestRollback,
+                    onDismissRollback = managementViewModel::dismissRollback,
+                    onConfirmRollback = managementViewModel::confirmRollback,
                     onRequestDelete = managementViewModel::requestDelete,
                     onDismissDelete = managementViewModel::dismissDelete,
                     onConfirmDelete = managementViewModel::confirmDelete
