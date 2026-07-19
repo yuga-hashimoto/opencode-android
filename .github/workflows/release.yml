@@ -1,140 +1,33 @@
-name: Release
+name: Build and Release APK
 
 on:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Parse version from tag
-        id: version
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
-            echo "Tag must look like v0.1.0 (got: $TAG)"
-            exit 1
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Cache generated Android runtime
-        uses: actions/cache@v4
-        with:
-          path: |
-            build/generated/runtime-assets
-            build/generated/runtime-jni
-          key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
-
-      - name: Decode release keystore (optional)
-        id: signing
+      - name: Build signed APK
+        run: ./gradlew assembleRelease
         env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "store_file=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "No RELEASE_KEYSTORE_BASE64 secret; building unsigned release APK."
-          fi
+          OPENCODE_STORE_FILE: app/release.keystore
+          OPENCODE_STORE_PASSWORD: opencode123
+          OPENCODE_KEY_ALIAS: opencode-android
+          OPENCODE_KEY_PASSWORD: opencode123
 
-      - name: Test, lint and build APKs
+      - name: Upload APK to release
+        run: |
+          gh release upload ${{ github.ref_name }} app/build/outputs/apk/release/app-release-unsigned.apk --clobber
         env:
-          OPENCODE_STORE_FILE: ${{ steps.signing.outputs.store_file }}
-          OPENCODE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          OPENCODE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          OPENCODE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: |
-          ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
-
-      - name: Collect release artifacts
-        id: artifacts
-        run: |
-          mkdir -p dist
-          VERSION="${{ steps.version.outputs.version }}"
-          TAG="${{ steps.version.outputs.tag }}"
-
-          DEBUG_SRC="app/build/outputs/apk/debug/app-debug.apk"
-          cp "$DEBUG_SRC" "dist/opencode-android-${VERSION}-debug.apk"
-
-          RELEASE_SIGNED="app/build/outputs/apk/release/app-release.apk"
-          RELEASE_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
-
-          if [ -f "$RELEASE_SIGNED" ]; then
-            cp "$RELEASE_SIGNED" "dist/opencode-android-${VERSION}-release.apk"
-            echo "signed=true" >> "$GITHUB_OUTPUT"
-            PRIMARY="dist/opencode-android-${VERSION}-release.apk"
-          elif [ -f "$RELEASE_UNSIGNED" ]; then
-            cp "$RELEASE_UNSIGNED" "dist/opencode-android-${VERSION}-release-unsigned.apk"
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            PRIMARY="dist/opencode-android-${VERSION}-release-unsigned.apk"
-          else
-            echo "No release APK found"
-            ls -la app/build/outputs/apk/release/ || true
-            exit 1
-          fi
-
-          {
-            echo "### OpenCode Android ${TAG}"
-            echo
-            if [ "${{ steps.signing.outputs.enabled }}" = "true" ] && [ -f "$RELEASE_SIGNED" ]; then
-              echo "- **Release APK (signed):** \`opencode-android-${VERSION}-release.apk\`"
-            else
-              echo "- **Release APK (unsigned):** \`opencode-android-${VERSION}-release-unsigned.apk\`"
-              echo "- Sign locally before distributing outside testing, or configure repository signing secrets."
-            fi
-            echo "- **Debug APK:** \`opencode-android-${VERSION}-debug.apk\`"
-            echo
-            echo "Install on a device/emulator with:"
-            echo
-            echo '```bash'
-            echo "adb install -r ${PRIMARY##*/}"
-            echo '```'
-          } > dist/notes.md
-
-          ls -lah dist/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: OpenCode Android ${{ steps.version.outputs.tag }}
-          body_path: dist/notes.md
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.tag, '-') || contains(steps.version.outputs.tag, 'alpha') || contains(steps.version.outputs.tag, 'beta') || contains(steps.version.outputs.tag, 'rc') }}
-          files: |
-            dist/*.apk
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
