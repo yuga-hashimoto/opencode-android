@@ -43,6 +43,18 @@
     <string name="allow_once">Allow once</string>
     <string name="always_allow">Always allow</string>
     <string name="reject">Reject</string>
+    <string name="chat_intro_title">OpenCode</string>
+    <string name="chat_intro_body">You can request implementation, research, and file operations here. Running tool actions and approval requests are shown inline.</string>
+    <string name="reasoning_card_title">Reasoning</string>
+    <string name="tool_status_pending">Pending</string>
+    <string name="tool_status_running">Running</string>
+    <string name="tool_status_completed">Completed</string>
+    <string name="tool_status_error">Error</string>
+    <string name="tool_input_label">Input</string>
+    <string name="tool_output_label">Output</string>
+    <string name="tool_output_truncated">…output truncated</string>
+    <string name="file_changes_title">File changes</string>
+    <string name="file_changes_generic">Files were changed</string>
 
     <string name="recent_sessions">Recent sessions</string>
     <string name="view_all">View all</string>

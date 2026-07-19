@@ -37,6 +37,20 @@ class OpenCodeEventParserTest {
     }
 
     @Test
+    fun `parses tool part update preserving state map`() {
+        val event = parser.parse(
+            """{"type":"message.part.updated","properties":{"part":{"id":"p1","sessionID":"s1","messageID":"m1","type":"tool","tool":"bash","callID":"call-1","state":{"status":"running","input":{"command":"ls -la"}}}}}"""
+        ) as OpenCodeEvent.MessagePartUpdated
+
+        assertEquals("tool", event.part.type)
+        assertEquals("bash", event.part.tool)
+        assertEquals("call-1", event.part.callID)
+        assertEquals("running", event.part.state?.get("status"))
+        val input = event.part.state?.get("input") as Map<*, *>
+        assertEquals("ls -la", input["command"])
+    }
+
+    @Test
     fun `parses permission request`() {
         val event = parser.parse(
             """{"type":"permission.asked","properties":{"id":"perm1","sessionID":"s1","permission":"bash","patterns":["git status"]}}"""

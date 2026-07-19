@@ -43,6 +43,18 @@
     <string name="allow_once">今回だけ許可</string>
     <string name="always_allow">常に許可</string>
     <string name="reject">拒否</string>
+    <string name="chat_intro_title">OpenCode</string>
+    <string name="chat_intro_body">実装、調査、ファイル操作などを依頼できます。実行中のツール操作や承認要求もここに表示されます。</string>
+    <string name="reasoning_card_title">思考</string>
+    <string name="tool_status_pending">保留中</string>
+    <string name="tool_status_running">実行中</string>
+    <string name="tool_status_completed">完了</string>
+    <string name="tool_status_error">エラー</string>
+    <string name="tool_input_label">入力</string>
+    <string name="tool_output_label">出力</string>
+    <string name="tool_output_truncated">…出力を省略しました</string>
+    <string name="file_changes_title">ファイル変更</string>
+    <string name="file_changes_generic">ファイルが変更されました</string>
 
     <string name="recent_sessions">最近のセッション</string>
     <string name="view_all">すべて表示</string>

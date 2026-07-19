@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeMessage
+import com.opencode.android.core.api.OpenCodePart
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.runtime.OpenCodeBackend
@@ -19,13 +20,101 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+enum class ToolStatus { PENDING, RUNNING, COMPLETED, ERROR, UNKNOWN }
+
+sealed interface ChatPart {
+    val id: String
+
+    data class Text(override val id: String, val text: String) : ChatPart
+    data class Reasoning(override val id: String, val text: String) : ChatPart
+    data class Tool(
+        override val id: String,
+        val name: String,
+        val status: ToolStatus,
+        val title: String? = null,
+        val input: String? = null,
+        val output: String? = null,
+        val outputTruncated: Boolean = false,
+        val error: String? = null
+    ) : ChatPart
+    data class Patch(override val id: String, val files: List<String>) : ChatPart
+}
+
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
-    val text: String,
     val isUser: Boolean,
+    val parts: List<ChatPart> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
     val isStreaming: Boolean = false
-)
+) {
+    val text: String
+        get() = parts.filterIsInstance<ChatPart.Text>().joinToString("") { it.text }
+}
+
+private const val MAX_TOOL_OUTPUT_CHARS = 4000
+
+private fun OpenCodePart.toChatPart(): ChatPart? {
+    val partId = id ?: return null
+    val stateMap = state.orEmpty()
+    return when (type) {
+        "text" -> ChatPart.Text(partId, text.orEmpty())
+        "reasoning" -> ChatPart.Reasoning(partId, text.orEmpty())
+        "tool" -> {
+            val inputText = formatToolInput(stateMap["input"] as? Map<*, *>)
+            val rawOutput = stateMap["output"] as? String
+            val truncated = rawOutput != null && rawOutput.length > MAX_TOOL_OUTPUT_CHARS
+            ChatPart.Tool(
+                id = partId,
+                name = tool ?: "tool",
+                status = parseToolStatus(stateMap["status"]),
+                title = (stateMap["title"] as? String)?.takeIf { it.isNotBlank() }
+                    ?: inputText?.lineSequence()?.firstOrNull(),
+                input = inputText,
+                output = if (truncated) rawOutput?.takeLast(MAX_TOOL_OUTPUT_CHARS) else rawOutput,
+                outputTruncated = truncated,
+                error = stateMap["error"] as? String
+            )
+        }
+        "patch" -> ChatPart.Patch(partId, extractPatchFiles(stateMap))
+        else -> null
+    }
+}
+
+private fun parseToolStatus(value: Any?): ToolStatus = when (value as? String) {
+    "pending" -> ToolStatus.PENDING
+    "running" -> ToolStatus.RUNNING
+    "completed" -> ToolStatus.COMPLETED
+    "error" -> ToolStatus.ERROR
+    else -> ToolStatus.UNKNOWN
+}
+
+private fun formatToolInput(input: Map<*, *>?): String? {
+    if (input.isNullOrEmpty()) return null
+    (input["command"] as? String)?.let { return it }
+    (input["filePath"] as? String)?.let { path ->
+        val extra = input.entries.filterNot { it.key == "filePath" }
+        return if (extra.isEmpty()) {
+            path
+        } else {
+            path + "\n" + extra.joinToString("\n") { (key, value) -> "$key: $value" }
+        }
+    }
+    return input.entries.joinToString("\n") { (key, value) -> "$key: $value" }
+}
+
+private fun extractPatchFiles(state: Map<String, Any?>): List<String> {
+    return when (val files = state["files"]) {
+        is List<*> -> files.mapNotNull { entry ->
+            when (entry) {
+                is String -> entry
+                is Map<*, *> -> (entry["path"] ?: entry["file"] ?: entry["filename"])?.toString()
+                else -> null
+            }
+        }
+        is Map<*, *> -> files.keys.mapNotNull { it?.toString() }
+        else -> emptyList()
+    }
+}
 
 data class ChatUiState(
     val backendName: String = "",
@@ -59,8 +148,7 @@ class ChatViewModel(
 
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
-    private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
-    private val textPartIds = mutableSetOf<String>()
+    private val streamedParts = mutableMapOf<String, LinkedHashMap<String, ChatPart>>()
 
     init {
         if (backend != null) {
@@ -106,7 +194,6 @@ class ChatViewModel(
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
         streamedParts.clear()
-        textPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -137,7 +224,6 @@ class ChatViewModel(
 
     fun newSession() {
         streamedParts.clear()
-        textPartIds.clear()
         _uiState.update {
             it.copy(
                 sessionId = null,
@@ -162,7 +248,10 @@ class ChatViewModel(
             return
         }
 
-        val userMessage = ChatMessage(text = normalized, isUser = true)
+        val userMessage = ChatMessage(
+            isUser = true,
+            parts = listOf(ChatPart.Text(id = UUID.randomUUID().toString(), text = normalized))
+        )
         _uiState.update {
             it.copy(
                 messages = it.messages + userMessage,
@@ -263,23 +352,25 @@ class ChatViewModel(
             }
             is OpenCodeEvent.MessagePartUpdated -> {
                 val part = event.part
-                if (part.sessionId != activeSession || part.type != "text") return
+                if (part.sessionId != activeSession) return
                 val messageId = part.messageId ?: part.id ?: return
                 val partId = part.id ?: messageId
-                textPartIds += partId
+                val chatPart = part.toChatPart() ?: return
                 val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
-                messageParts[partId] = part.text.orEmpty()
-                updateStreamingMessage(messageId, messageParts.values.joinToString(""))
+                messageParts[partId] = chatPart
+                updateStreamingMessage(messageId, messageParts.values.toList())
             }
             is OpenCodeEvent.MessagePartDelta -> {
-                if (
-                    event.sessionId != activeSession ||
-                    event.field != "text" ||
-                    event.partId !in textPartIds
-                ) return
-                val messageParts = streamedParts.getOrPut(event.messageId) { linkedMapOf() }
-                messageParts[event.partId] = messageParts[event.partId].orEmpty() + event.delta
-                updateStreamingMessage(event.messageId, messageParts.values.joinToString(""))
+                if (event.sessionId != activeSession || event.field != "text") return
+                val messageParts = streamedParts[event.messageId] ?: return
+                val existing = messageParts[event.partId] ?: return
+                val updatedPart = when (existing) {
+                    is ChatPart.Text -> existing.copy(text = existing.text + event.delta)
+                    is ChatPart.Reasoning -> existing.copy(text = existing.text + event.delta)
+                    else -> return
+                }
+                messageParts[event.partId] = updatedPart
+                updateStreamingMessage(event.messageId, messageParts.values.toList())
             }
             is OpenCodeEvent.PermissionAsked -> {
                 if (event.request.sessionId != activeSession) return
@@ -317,18 +408,18 @@ class ChatViewModel(
         }
     }
 
-    private fun updateStreamingMessage(messageId: String, text: String) {
+    private fun updateStreamingMessage(messageId: String, parts: List<ChatPart>) {
         _uiState.update { state ->
             val index = state.messages.indexOfFirst { it.id == messageId }
             val updated = if (index >= 0) {
                 state.messages.toMutableList().apply {
-                    this[index] = this[index].copy(text = text, isStreaming = true)
+                    this[index] = this[index].copy(parts = parts, isStreaming = true)
                 }
             } else {
                 state.messages + ChatMessage(
                     id = messageId,
-                    text = text,
                     isUser = false,
+                    parts = parts,
                     isStreaming = true
                 )
             }
@@ -341,12 +432,12 @@ class ChatViewModel(
     }
 
     private fun toUiMessage(message: OpenCodeMessage): ChatMessage? {
-        val text = message.text
-        if (text.isBlank()) return null
+        val parts = message.parts.mapNotNull { it.toChatPart() }
+        if (parts.isEmpty()) return null
         return ChatMessage(
             id = message.info.id,
-            text = text,
             isUser = message.info.role == "user",
+            parts = parts,
             timestamp = message.info.time.created,
             isStreaming = false
         )
