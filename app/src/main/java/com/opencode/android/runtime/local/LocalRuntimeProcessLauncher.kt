@@ -10,7 +10,8 @@ class LocalRuntimeProcessLauncher(
     private val procRoot: File = File("/proc"),
     private val processSignal: (Long) -> Unit = { pid ->
         android.os.Process.killProcess(pid.toInt())
-    }
+    },
+    private val beforeStart: (LocalRuntimeInstaller.InstalledRuntime) -> Unit = {}
 ) {
     @Volatile
     private var process: Process? = null
@@ -26,6 +27,7 @@ class LocalRuntimeProcessLauncher(
             terminate(current)
             process = null
         }
+        beforeStart(runtime)
         val rootfs = runtime.rootfs
         val suite = runtime.commandSuite
         val logs = File(runtimeDirectory, "logs").apply { mkdirs() }

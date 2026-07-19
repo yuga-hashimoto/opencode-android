@@ -48,7 +48,12 @@ class LocalRuntimeTarget(
 
     init {
         scope.launch {
-            runtimeManager.state.collect { status -> mutableState.value = mapStatus(status) }
+            runtimeManager.state.collect { status ->
+                if (status !is LocalRuntimeStatus.Ready) {
+                    backend.invalidate()
+                }
+                mutableState.value = mapStatus(status)
+            }
         }
     }
 

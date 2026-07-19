@@ -17,23 +17,34 @@ import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.runtime.BackendKind
-import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
 import com.opencode.android.runtime.remote.RemoteOpenCodeBackend
 import kotlinx.coroutines.flow.Flow
 
 class LocalOpenCodeBackend(
-    private val runtimeManager: LocalRuntimeManager
+    private val portProvider: () -> Int?,
+    private val backendFactory: (ConnectionProfile) -> RemoteOpenCodeBackend = { profile ->
+        RemoteOpenCodeBackend(profile)
+    }
 ) : OpenCodeBackend {
+    constructor(runtimeManager: LocalRuntimeManager) : this(
+        portProvider = runtimeManager::installedPort
+    )
+
     override val id: String = "local-android"
     override val displayName: String = "Android local"
     override val kind: BackendKind = BackendKind.LOCAL
 
-    private fun delegate(): RemoteOpenCodeBackend {
-        val port = runtimeManager.installedPort()
+    @Volatile
+    private var cached: CachedDelegate? = null
+
+    internal fun delegate(): RemoteOpenCodeBackend {
+        val port = portProvider()
             ?: error("Android local OpenCode runtime is not installed")
-        return RemoteOpenCodeBackend(
+        cached?.takeIf { it.port == port }?.let { return it.backend }
+
+        val backend = backendFactory(
             ConnectionProfile(
                 id = id,
                 name = displayName,
@@ -42,6 +53,12 @@ class LocalOpenCodeBackend(
                 allowInsecureLan = true
             )
         )
+        cached = CachedDelegate(port, backend)
+        return backend
+    }
+
+    fun invalidate() {
+        cached = null
     }
 
     override suspend fun health(): OpenCodeHealth = delegate().health()
@@ -93,4 +110,9 @@ class LocalOpenCodeBackend(
         remember: Boolean
     ): Boolean = delegate().respondToPermission(sessionId, permissionId, response, remember)
     override fun events(): Flow<OpenCodeEvent> = delegate().events()
+
+    private data class CachedDelegate(
+        val port: Int,
+        val backend: RemoteOpenCodeBackend
+    )
 }

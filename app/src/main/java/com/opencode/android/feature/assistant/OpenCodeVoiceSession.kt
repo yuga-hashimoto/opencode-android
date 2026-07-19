@@ -1,6 +1,7 @@
 package com.opencode.android.feature.assistant
 
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.view.View
@@ -52,11 +53,8 @@ import com.opencode.android.OpenCodeApplication
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
+import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
-import com.opencode.android.runtime.remote.RemoteOpenCodeBackend
-import com.opencode.android.feature.assistant.SpeechRecognizerManager
-import com.opencode.android.feature.assistant.SpeechResult
-import com.opencode.android.feature.assistant.TTSManager
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,7 +81,8 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var speech: SpeechRecognizerManager
     private lateinit var tts: TTSManager
-    private var backend: RemoteOpenCodeBackend? = null
+    private var backend: OpenCodeBackend? = null
+    private var preferredWorkspace: String? = null
     private var eventJob: Job? = null
     private var listeningJob: Job? = null
     private var sessionId: String? = null
@@ -132,14 +131,20 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
-        val connection = settings.selectedConnection()
-        if (connection == null) {
+        val preferredRuntimeId = settings.assistantRuntimeId
+        val target = app.runtimeRegistry.targets.value
+            .firstOrNull { it.id == preferredRuntimeId }
+            ?: app.runtimeRegistry.selected.value
+        if (target == null) {
             assistantState.value = VoiceState.ERROR
-            errorText.value = "OpenCodeのPC接続先を設定してください。"
+            errorText.value = "OpenCodeの実行先を設定してください。"
             return
         }
 
-        backend = RemoteOpenCodeBackend(connection)
+        backend = target
+        preferredWorkspace = settings.assistantWorkspacePath
+            ?.takeIf { it.isNotBlank() }
+            ?: "/workspace"
         sessionId = settings.assistantSessionId.takeIf { settings.continuousConversation }
         startEventCollection()
         startListening()
@@ -226,7 +231,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         assistantState.value = VoiceState.LISTENING
 
         listeningJob = scope.launch {
-            speech.startListening(language = "ja-JP").collect { result ->
+            speech.startListening(language = speechLanguageTag(context)).collect { result ->
                 when (result) {
                     SpeechResult.Ready,
                     SpeechResult.Listening -> assistantState.value = VoiceState.LISTENING
@@ -250,7 +255,10 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
         responseText.value = ""
         scope.launch {
             runCatching {
-                val targetSessionId = sessionId ?: activeBackend.createSession("Voice: ${text.take(48)}").id
+                val targetSessionId = sessionId ?: activeBackend.createSession(
+                    title = "Voice: ${text.take(48)}",
+                    directory = preferredWorkspace
+                ).id
                 sessionId = targetSessionId
                 if (settings.continuousConversation) settings.assistantSessionId = targetSessionId
                 activeBackend.sendMessage(
@@ -315,6 +323,16 @@ private enum class VoiceState {
     SPEAKING,
     DONE,
     ERROR
+}
+
+private fun speechLanguageTag(context: Context): String {
+    val locale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        context.resources.configuration.locales[0]
+    } else {
+        @Suppress("DEPRECATION")
+        context.resources.configuration.locale
+    }
+    return locale?.toLanguageTag()?.takeIf { it.isNotBlank() } ?: "en-US"
 }
 
 @Composable

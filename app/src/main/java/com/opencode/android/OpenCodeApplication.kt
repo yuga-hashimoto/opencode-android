@@ -2,6 +2,7 @@ package com.opencode.android
 
 import android.app.Application
 import android.os.Build
+import com.opencode.android.core.notification.RuntimeNotificationHelper
 import com.opencode.android.data.connection.SecureSettingsRepository
 import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
@@ -18,6 +19,7 @@ import com.opencode.android.runtime.local.LocalRuntimeReleaseClient
 import com.opencode.android.runtime.local.LocalRuntimeServiceController
 import com.opencode.android.runtime.local.LocalRuntimeTarget
 import com.opencode.android.runtime.local.LocalRuntimeUpdater
+import com.opencode.android.runtime.local.LocalProviderCredentialStore
 import com.opencode.android.runtime.local.VerifiedRuntimeDownloader
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -54,10 +56,18 @@ class OpenCodeApplication : Application() {
     lateinit var activityRepository: RuntimeActivityRepository
         private set
 
+    lateinit var notifications: RuntimeNotificationHelper
+        private set
+
+    lateinit var providerCredentials: LocalProviderCredentialStore
+        private set
+
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
         preferences = AppPreferencesRepository(settings)
+        notifications = RuntimeNotificationHelper(this)
+        providerCredentials = LocalProviderCredentialStore(settings)
         val runtimeDirectory = File(filesDir, "runtime")
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         val accessCoordinator = LocalRuntimeAccessCoordinator()
@@ -69,7 +79,10 @@ class OpenCodeApplication : Application() {
         )
         val launcher = LocalRuntimeProcessLauncher(
             runtimeDirectory = runtimeDirectory,
-            portProbe = LocalRuntimeManager::defaultPortProbe
+            portProbe = LocalRuntimeManager::defaultPortProbe,
+            beforeStart = { installed ->
+                runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
+            }
         )
         val commandRunner = LocalRuntimeCommandRunner(
             runtimeDirectory = runtimeDirectory,
@@ -127,7 +140,13 @@ class OpenCodeApplication : Application() {
             localTarget = LocalRuntimeTarget(localRuntimeManager)
         )
         catalogRepository = RuntimeCatalogRepository(runtimeRegistry, applicationScope)
-        activityRepository = RuntimeActivityRepository(runtimeRegistry, applicationScope)
+        activityRepository = RuntimeActivityRepository(
+            registry = runtimeRegistry,
+            scope = applicationScope,
+            onPermissionAsked = notifications::notifyPermission,
+            onSessionIdle = notifications::notifySessionComplete,
+            onSessionError = notifications::notifySessionError
+        )
         applicationScope.launch {
             catalogRepository.state.collectLatest { catalog ->
                 if (catalog.health != null) {

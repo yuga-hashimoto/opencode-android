@@ -18,9 +18,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -31,10 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.runtime.PermissionResponse
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
@@ -43,7 +48,8 @@ fun ActivityScreen(
     state: ActivityUiState,
     onRefresh: () -> Unit,
     onInspectSession: (OpenCodeSession) -> Unit,
-    onOpenSession: (String, String) -> Unit
+    onOpenSession: (String, String) -> Unit,
+    onPermission: (String, PermissionResponse, Boolean) -> Unit = { _, _, _ -> }
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("実行中", "承認", "セッション", "ログ")
@@ -76,7 +82,7 @@ fun ActivityScreen(
 
         when (selectedTab) {
             0 -> RunningTab(state, onInspectSession, onOpenSession)
-            1 -> ApprovalTab(state)
+            1 -> ApprovalTab(state, onPermission)
             2 -> SessionsTab(state, onInspectSession, onOpenSession)
             else -> LogsTab(state)
         }
@@ -114,9 +120,13 @@ private fun RunningTab(
 }
 
 @Composable
-private fun ApprovalTab(state: ActivityUiState) {
+private fun ApprovalTab(
+    state: ActivityUiState,
+    onPermission: (String, PermissionResponse, Boolean) -> Unit
+) {
     ActivityList(emptyText = "承認待ちはありません", isEmpty = state.permissions.isEmpty()) {
         items(state.permissions, key = { it.id }) { permission ->
+            val busy = permission.id in state.permissionBusyIds
             SectionCard {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
@@ -130,8 +140,31 @@ private fun ApprovalTab(state: ActivityUiState) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text("チャット画面で許可または拒否できます。", style = MaterialTheme.typography.labelSmall)
                     }
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { onPermission(permission.id, PermissionResponse.REJECT, false) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.reject))
+                }
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = { onPermission(permission.id, PermissionResponse.ONCE, false) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.allow_once))
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { onPermission(permission.id, PermissionResponse.ALWAYS, true) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.always_allow))
                 }
             }
         }

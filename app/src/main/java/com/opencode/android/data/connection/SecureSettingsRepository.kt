@@ -75,6 +75,42 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getString(KEY_AGENT_ID, null)
         set(value) = preferences.edit().putString(KEY_AGENT_ID, value).apply()
 
+    var providerApiKeys: Map<String, String>
+        get() = providerApiKeys()
+        set(value) {
+            preferences.edit()
+                .putString(
+                    KEY_PROVIDER_API_KEYS,
+                    com.opencode.android.runtime.local.LocalProviderCredentialStore.encodeMap(value)
+                )
+                .apply()
+        }
+
+    fun providerApiKeys(): Map<String, String> =
+        com.opencode.android.runtime.local.LocalProviderCredentialStore.decodeMap(
+            preferences.getString(KEY_PROVIDER_API_KEYS, null)
+        )
+
+    var assistantRuntimeId: String?
+        get() = preferences.getString(KEY_ASSISTANT_RUNTIME_ID, null)
+        set(value) = preferences.edit().putString(KEY_ASSISTANT_RUNTIME_ID, value).apply()
+
+    var assistantWorkspacePath: String?
+        get() = preferences.getString(KEY_ASSISTANT_WORKSPACE_PATH, null)
+        set(value) = preferences.edit().putString(KEY_ASSISTANT_WORKSPACE_PATH, value).apply()
+
+    var safWorkspaceUris: List<String>
+        get() = preferences.getString(KEY_SAF_WORKSPACE_URIS, null)
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        set(value) {
+            preferences.edit()
+                .putString(KEY_SAF_WORKSPACE_URIS, value.joinToString("\n"))
+                .apply()
+        }
+
     companion object {
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
@@ -85,5 +121,9 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_PROVIDER_ID = "provider_id"
         private const val KEY_MODEL_ID = "model_id"
         private const val KEY_AGENT_ID = "agent_id"
+        private const val KEY_PROVIDER_API_KEYS = "provider_api_keys"
+        private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"
+        private const val KEY_ASSISTANT_WORKSPACE_PATH = "assistant_workspace_path"
+        private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
     }
 }

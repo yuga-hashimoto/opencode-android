@@ -9,33 +9,56 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
 import com.opencode.android.ui.components.LabelValueRow
 import com.opencode.android.ui.components.SectionCard
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     state: SettingsUiState,
     onOpenAssistantSettings: () -> Unit,
     onTtsChange: (Boolean) -> Unit,
-    onContinuousChange: (Boolean) -> Unit
+    onContinuousChange: (Boolean) -> Unit,
+    onDraftProviderId: (String) -> Unit = {},
+    onDraftApiKey: (String) -> Unit = {},
+    onSaveApiKey: () -> Unit = {},
+    onClearApiKey: (String) -> Unit = {},
+    onAssistantRuntime: (String?) -> Unit = {},
+    onAssistantWorkspace: (String?) -> Unit = {},
+    onImportWorkspace: () -> Unit = {},
+    onRequestNotifications: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -48,6 +71,14 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold
             )
+            state.openCodeVersion?.let { version ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.capability_version, version),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         item {
@@ -69,7 +100,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.set_default_assistant), fontWeight = FontWeight.Medium)
                         Text(
-                            text = "ホームジェスチャーや電源ボタン長押しからOpenCodeを呼び出します。",
+                            text = stringResource(R.string.notifications_permission_rationale),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -79,11 +110,49 @@ fun SettingsScreen(
                 Button(onClick = onOpenAssistantSettings, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.set_default_assistant))
                 }
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "常時ウェイクワードは標準APKに含めません。将来、任意ダウンロード機能として追加します。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.request_notifications))
+                }
+                Spacer(Modifier.height(12.dp))
+                var runtimeExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = runtimeExpanded,
+                    onExpandedChange = { runtimeExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = state.runtimeOptions.firstOrNull { it.first == state.assistantRuntimeId }?.second
+                            ?: state.assistantRuntimeId.orEmpty(),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.assistant_runtime)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = runtimeExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = runtimeExpanded,
+                        onDismissRequest = { runtimeExpanded = false }
+                    ) {
+                        state.runtimeOptions.forEach { (id, name) ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    onAssistantRuntime(id)
+                                    runtimeExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = state.assistantWorkspacePath.orEmpty(),
+                    onValueChange = onAssistantWorkspace,
+                    label = { Text(stringResource(R.string.assistant_workspace)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         }
@@ -101,7 +170,7 @@ fun SettingsScreen(
                 SettingSwitchRow(
                     icon = Icons.Default.RecordVoiceOver,
                     title = stringResource(R.string.voice_response),
-                    description = "OpenCodeの最終回答をAndroidの音声で読み上げます。",
+                    description = stringResource(R.string.auto_start_mic),
                     checked = state.ttsEnabled,
                     onCheckedChange = onTtsChange
                 )
@@ -118,7 +187,7 @@ fun SettingsScreen(
 
         item {
             Text(
-                text = stringResource(R.string.model),
+                text = stringResource(R.string.provider_credentials),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -126,26 +195,58 @@ fun SettingsScreen(
 
         item {
             SectionCard {
-                LabelValueRow(
-                    label = "AIサービス",
-                    value = state.providerId ?: "未選択"
-                )
-                Spacer(Modifier.height(12.dp))
-                LabelValueRow(
-                    label = stringResource(R.string.model),
-                    value = state.modelId ?: "既定"
-                )
-                Spacer(Modifier.height(12.dp))
-                LabelValueRow(
-                    label = stringResource(R.string.agent),
-                    value = state.agentId ?: "build"
-                )
-                Spacer(Modifier.height(8.dp))
                 Text(
-                    "モデルとエージェントはチャット画面で選択できます。ホームアシストも同じ設定を利用します。",
+                    text = stringResource(R.string.provider_credentials_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(12.dp))
+                state.credentialStatuses.forEach { (providerId, saved) ->
+                    LabelValueRow(
+                        label = providerId,
+                        value = if (saved) {
+                            stringResource(R.string.key_saved)
+                        } else {
+                            stringResource(R.string.key_missing)
+                        }
+                    )
+                    if (saved) {
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = { onClearApiKey(providerId) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.clear_api_key))
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                OutlinedTextField(
+                    value = state.draftProviderId,
+                    onValueChange = onDraftProviderId,
+                    label = { Text(stringResource(R.string.provider_id_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) }
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = state.draftApiKey,
+                    onValueChange = onDraftApiKey,
+                    label = { Text(stringResource(R.string.api_key_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onSaveApiKey, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.save_api_key))
+                }
+                state.credentialMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
             }
         }
 
@@ -164,7 +265,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Icon(Icons.Default.Android, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.experimental_not_installed), fontWeight = FontWeight.Medium)
                         Text(
                             stringResource(R.string.local_runtime_note),
@@ -173,6 +274,32 @@ fun SettingsScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(onClick = onImportWorkspace, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.import_workspace_folder))
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = stringResource(R.string.model),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        item {
+            SectionCard {
+                LabelValueRow(
+                    label = stringResource(R.string.model),
+                    value = state.modelId ?: stringResource(R.string.not_set)
+                )
+                Spacer(Modifier.height(12.dp))
+                LabelValueRow(
+                    label = stringResource(R.string.agent),
+                    value = state.agentId ?: "build"
+                )
             }
         }
 
@@ -192,7 +319,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Column {
-                        Text("OpenCode Android 0.2.0", fontWeight = FontWeight.Medium)
+                        Text("OpenCode Android 0.1.0", fontWeight = FontWeight.Medium)
                         Text(
                             stringResource(R.string.unofficial_client),
                             style = MaterialTheme.typography.bodySmall,
@@ -207,6 +334,8 @@ fun SettingsScreen(
                 }
             }
         }
+
+        item { Spacer(Modifier.height(72.dp)) }
     }
 }
 

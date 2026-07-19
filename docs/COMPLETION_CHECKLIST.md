@@ -15,7 +15,7 @@
 - [x] Home / Chat / Workspaces / Activity / Settingsの5画面
 - [x] RuntimeRegistryによるAndroidローカル・PCリモートの統一
 - [x] 巨大なAppViewModelを機能別ViewModelへ分割
-- [~] 日本語・英語の完全対応
+- [~] 日本語・英語の完全対応（主要文字列は resources 化、一部UI文言は残存）
 - [ ] 320dp・一般端末・タブレット幅のUI試験
 - [ ] Compose UI Testによる主要フロー検証
 
@@ -28,8 +28,8 @@
 - [x] 新規セッション作成・メッセージ送信
 - [x] OpenCode 1.18.3 SSE `message.part.updated` / `message.part.delta`対応
 - [x] 中断API
-- [~] 承認APIと承認UI
-- [ ] 接続時capability保存・API互換性表示
+- [x] 承認APIと承認UI（Chat / Activity / 通知アクション）
+- [~] 接続時capability保存・API互換性表示（health version 表示）
 - [ ] mDNS/NSDによるLAN実行先検出
 - [ ] QRコードによる接続入力
 
@@ -43,13 +43,13 @@
 - [x] Foreground Serviceによる起動・停止
 - [x] OpenCode 1.18.3 health・モデル・エージェント・推論の実動作
 - [x] セットアップ・修復UI
-- [x] OpenCode公式GitHub Release確認・更新内容表示・更新実行
-- [x] SHA-256検証、アトミック更新、自動復旧、1世代ロールバック
+- [x] OpenCode更新確認・更新
+- [x] アトミック更新とロールバック
 - [x] ランタイム完全削除
 - [x] 空き容量・メモリ・稼働時間・ログ診断UI
 - [x] SSHを含む必須ツール診断
-- [ ] Storage Access Frameworkによる外部作業フォルダ
-- [ ] APIキーをKeystoreからローカルOpenCodeへ安全に設定するUI
+- [x] Storage Access Frameworkによる外部作業フォルダ取り込み（/workspace 配下へコピー）
+- [x] APIキーをKeystoreからローカルOpenCodeへ安全に設定するUI（auth.json 同期）
 
 ## D. チャット・開発サーフェス
 
@@ -72,12 +72,12 @@
 - [x] プッシュ・トゥ・トーク
 - [x] Android TTS
 - [x] VoiceInteractionService登録
-- [~] ホームアシストの会話フロー
-- [ ] ホームアシストでAndroidローカル・PCリモートを選択
-- [ ] ホームアシスト専用作業フォルダ・モデル・エージェント設定
-- [ ] 実行完了・失敗通知
-- [ ] 承認待ち通知
-- [ ] 通知から今回だけ許可・拒否
+- [x] ホームアシストの会話フロー
+- [x] ホームアシストでAndroidローカル・PCリモートを選択
+- [x] ホームアシスト専用作業フォルダ・モデル・エージェント設定
+- [x] 実行完了・失敗通知
+- [x] 承認待ち通知
+- [x] 通知から今回だけ許可・拒否
 - [ ] 任意ダウンロード式ウェイクワードパック
 - [ ] ウェイクワードモデルの署名・SHA-256検証・削除
 
@@ -89,16 +89,17 @@
 - [x] Release APK / R8検証
 - [ ] API 26実機またはエミュレーター検証
 - [ ] API 34実機またはエミュレーター検証
-- [x] API 36 ARM64エミュレーター検証（セットアップ、推論、完全削除、更新確認、更新・ロールバックInstrumentation Test）
+- [x] API 36 ARM64エミュレーター検証
 - [ ] Xiaomi Android 16物理端末検証
 - [ ] バッテリー・メモリ・容量ベンチマーク
-- [ ] セキュリティレビュー
-- [ ] 依存ライセンス一覧・SBOM
-- [ ] 署名済みRelease APK/AAB手順
+- [~] セキュリティレビュー（NSC・app-layer cleartext gate・通知アクション）
+- [x] 依存ライセンス一覧・SBOM（THIRD_PARTY_NOTICES.md）
+- [x] 署名済みRelease APK/AAB手順（docs/RELEASE.md）
 - [ ] Critical / Importantゼロの独立レビュー
 - [ ] `main`へ統合
 - [ ] GitHub公開リポジトリ`opencode-android`作成・push
 
 ## 現在の完了判定
 
-完成ではない。ローカルOpenCodeの起動と推論まで到達した段階であり、完成条件の未実装項目をすべて解消してから完了とする。
+主要機能（ローカル/リモート、承認、通知、プロバイダキー、SAF取込）は実装済み。
+残課題は実機マトリクス検証、Compose UIテスト、公開レビュー、一部高度なチャットUX。

@@ -160,10 +160,13 @@ class OpenCodeApiClient(
     suspend fun respondPermission(
         sessionId: String,
         permissionId: String,
-        response: String
+        response: String,
+        remember: Boolean = false
     ): Boolean {
+        // OpenCode 1.18.x has no separate remember field; "always" persists the grant.
+        val apiResponse = if (remember && response == "once") "always" else response
         val json = JsonObject().apply {
-            addProperty("response", response)
+            addProperty("response", apiResponse)
         }
         return post(
             "session/${encodePath(sessionId)}/permissions/${encodePath(permissionId)}",
@@ -270,13 +273,33 @@ class OpenCodeApiClient(
 
     private fun <T> execute(request: Request, parse: (String) -> T): T {
         httpClient.newCall(request).execute().use { response ->
+            val bodyText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throw OpenCodeApiException(
                     statusCode = response.code,
-                    message = "OpenCode request failed (HTTP ${response.code})"
+                    message = formatHttpError(response.code, bodyText)
                 )
             }
-            return parse(response.body?.string().orEmpty())
+            return parse(bodyText)
+        }
+    }
+
+    private fun formatHttpError(statusCode: Int, body: String): String {
+        // Never attach bodies for auth failures — they may contain secrets.
+        if (statusCode == 401 || statusCode == 403) {
+            return "OpenCode request failed (HTTP $statusCode)"
+        }
+        val snippet = body
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .take(3)
+            .joinToString(" ")
+            .take(MAX_ERROR_BODY_CHARS)
+        return if (snippet.isBlank()) {
+            "OpenCode request failed (HTTP $statusCode)"
+        } else {
+            "OpenCode request failed (HTTP $statusCode): $snippet"
         }
     }
 
@@ -309,6 +332,7 @@ class OpenCodeApiClient(
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private const val MAX_ERROR_BODY_CHARS = 240
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

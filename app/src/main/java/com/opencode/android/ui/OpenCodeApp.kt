@@ -79,6 +79,16 @@ private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
 
+private fun speechLocaleTag(context: android.content.Context): String {
+    val locale = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+        context.resources.configuration.locales[0]
+    } else {
+        @Suppress("DEPRECATION")
+        context.resources.configuration.locale
+    }
+    return locale?.toLanguageTag()?.takeIf { it.isNotBlank() } ?: "en-US"
+}
+
 @Composable
 fun OpenCodeApp(
     onOpenAssistantSettings: () -> Unit
@@ -115,7 +125,12 @@ fun OpenCodeApp(
     val activityViewModel: ActivityViewModel = viewModel(
         key = "activity",
         factory = ViewModelFactory {
-            ActivityViewModel(app.catalogRepository, app.activityRepository)
+            ActivityViewModel(
+                catalog = app.catalogRepository,
+                activity = app.activityRepository,
+                registry = app.runtimeRegistry,
+                onPermissionResolved = app.notifications::cancelPermission
+            )
         }
     )
     val activityState by activityViewModel.state.collectAsState()
@@ -123,7 +138,13 @@ fun OpenCodeApp(
     val settingsViewModel: SettingsViewModel = viewModel(
         key = "settings",
         factory = ViewModelFactory {
-            SettingsViewModel(app.catalogRepository, app.preferences)
+            SettingsViewModel(
+                catalog = app.catalogRepository,
+                preferences = app.preferences,
+                credentials = app.providerCredentials,
+                settings = app.settings,
+                registry = app.runtimeRegistry
+            )
         }
     )
     val settingsState by settingsViewModel.state.collectAsState()
@@ -158,7 +179,7 @@ fun OpenCodeApp(
         chatViewModel.startListening()
         voiceJob = voiceScope.launch {
             try {
-                speechManager.startListening("ja-JP").collect { result ->
+                speechManager.startListening(speechLocaleTag(context)).collect { result ->
                     when (result) {
                         SpeechResult.Ready,
                         SpeechResult.Listening,
@@ -187,6 +208,47 @@ fun OpenCodeApp(
         } else if (!granted) {
             startVoiceAfterPermission = false
             chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* optional */ }
+
+    val workspaceImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        voiceScope.launch {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                val imported = withContext(Dispatchers.IO) {
+                    com.opencode.android.runtime.local.SafWorkspaceImporter(context).importTree(uri)
+                }
+                val existing = app.settings.safWorkspaceUris.toMutableList()
+                if (uri.toString() !in existing) {
+                    existing += uri.toString()
+                    app.settings.safWorkspaceUris = existing
+                }
+                settingsViewModel.setAssistantWorkspacePath(imported.absolutePath)
+                workspaceViewModel.refresh()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
@@ -403,7 +465,8 @@ fun OpenCodeApp(
                     onOpenSession = { id, title ->
                         pendingSession = id to title
                         navController.navigate(Destination.CHAT.route)
-                    }
+                    },
+                    onPermission = activityViewModel::respondToPermission
                 )
             }
 
@@ -437,7 +500,19 @@ fun OpenCodeApp(
                     state = settingsState,
                     onOpenAssistantSettings = onOpenAssistantSettings,
                     onTtsChange = settingsViewModel::setTtsEnabled,
-                    onContinuousChange = settingsViewModel::setContinuousConversation
+                    onContinuousChange = settingsViewModel::setContinuousConversation,
+                    onDraftProviderId = settingsViewModel::updateDraftProviderId,
+                    onDraftApiKey = settingsViewModel::updateDraftApiKey,
+                    onSaveApiKey = settingsViewModel::saveApiKey,
+                    onClearApiKey = settingsViewModel::clearApiKey,
+                    onAssistantRuntime = settingsViewModel::setAssistantRuntimeId,
+                    onAssistantWorkspace = settingsViewModel::setAssistantWorkspacePath,
+                    onImportWorkspace = { workspaceImportLauncher.launch(null) },
+                    onRequestNotifications = {
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
                 )
             }
         }

@@ -36,10 +36,15 @@ data class RuntimeActivityState(
 class RuntimeActivityRepository(
     registry: RuntimeRegistry,
     scope: CoroutineScope,
-    private val retryDelayMillis: Long = 2_000L
+    private val retryDelayMillis: Long = 2_000L,
+    private val maxRetryDelayMillis: Long = 30_000L,
+    private val onPermissionAsked: ((PermissionRequest) -> Unit)? = null,
+    private val onSessionIdle: ((String) -> Unit)? = null,
+    private val onSessionError: ((String?, String?) -> Unit)? = null
 ) {
     init {
         require(retryDelayMillis >= 0L)
+        require(maxRetryDelayMillis >= retryDelayMillis)
     }
 
     private val mutableState = MutableStateFlow(RuntimeActivityState())
@@ -65,14 +70,18 @@ class RuntimeActivityRepository(
                     if (runtimeState !is RuntimeState.Connected) return@state
 
                     flow { emitAll(target.events()) }
-                        .retryWhen { error, _ ->
+                        .retryWhen { error, attempt ->
                             mutableState.update {
                                 it.copy(
                                     streamError = error.message
                                         ?: "OpenCodeイベント接続に失敗しました"
                                 )
                             }
-                            if (retryDelayMillis > 0L) delay(retryDelayMillis)
+                            if (retryDelayMillis > 0L) {
+                                val backoff = (retryDelayMillis * (1L shl attempt.toInt().coerceAtMost(4)))
+                                    .coerceAtMost(maxRetryDelayMillis)
+                                delay(backoff)
+                            }
                             true
                         }
                         .collect { event ->
@@ -117,12 +126,14 @@ class RuntimeActivityRepository(
                     )
                 }
                 appendLog("承認待ち", event.request.permission, event.request.sessionId)
+                onPermissionAsked?.invoke(event.request)
             }
             is OpenCodeEvent.SessionIdle -> {
                 mutableState.update { current ->
                     current.copy(activeSessionIds = current.activeSessionIds - event.sessionId)
                 }
                 appendLog("実行完了", null, event.sessionId)
+                onSessionIdle?.invoke(event.sessionId)
             }
             is OpenCodeEvent.SessionError -> {
                 event.sessionId?.let { sessionId ->
@@ -131,6 +142,7 @@ class RuntimeActivityRepository(
                     }
                 }
                 appendLog("実行エラー", event.message, event.sessionId)
+                onSessionError?.invoke(event.sessionId, event.message)
             }
             is OpenCodeEvent.Unknown -> appendLog("未対応イベント", event.type)
         }

@@ -102,6 +102,28 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `remember once maps to always response`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        val result = client.respondPermission("s1", "perm1", "once", remember = true)
+
+        assertTrue(result)
+        val json = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
+        assertEquals("always", json["response"].asString)
+    }
+
+    @Test
+    fun `failed requests include truncated response body`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
+        val client = client()
+
+        val error = runCatching { client.health() }.exceptionOrNull() as OpenCodeApiException
+        assertEquals(500, error.statusCode)
+        assertTrue(error.message!!.contains("boom"))
+    }
+
+    @Test
     fun `lists and reads files for a workspace directory`() = runBlocking {
         server.enqueue(
             MockResponse().setBody(

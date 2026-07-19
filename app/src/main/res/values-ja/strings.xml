@@ -64,4 +64,26 @@
 
 
     <string name="about">このアプリについて</string>
+
+    <string name="notification_channel_approvals">承認</string>
+    <string name="notification_channel_status">タスク状態</string>
+    <string name="notification_approval_title">OpenCodeの承認が必要です</string>
+    <string name="notification_complete_title">OpenCodeが完了しました</string>
+    <string name="notification_complete_body">セッション %1$s が待機中です</string>
+    <string name="notification_error_title">OpenCodeエラー</string>
+    <string name="notification_error_body">セッションが失敗しました</string>
+    <string name="provider_credentials">プロバイダーAPIキー</string>
+    <string name="provider_credentials_help">キーはAndroid Keystore対応の設定に保存され、ローカルOpenCode起動時に同期されます。</string>
+    <string name="provider_id_hint">プロバイダーID（例: openai）</string>
+    <string name="api_key_hint">APIキー</string>
+    <string name="save_api_key">キーを保存</string>
+    <string name="clear_api_key">キーを削除</string>
+    <string name="key_saved">保存済み</string>
+    <string name="key_missing">未設定</string>
+    <string name="assistant_runtime">アシスト実行先</string>
+    <string name="assistant_workspace">アシスト作業フォルダ</string>
+    <string name="import_workspace_folder">フォルダをローカル作業領域へ取り込む</string>
+    <string name="notifications_permission_rationale">バックグラウンドでの承認待ちと完了通知に使います。</string>
+    <string name="capability_version">OpenCode %1$s</string>
+    <string name="request_notifications">通知を許可</string>
 </resources>

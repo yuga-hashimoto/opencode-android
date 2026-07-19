@@ -28,7 +28,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.OpenCodeAndroid"
-        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="34">
 
         <activity
@@ -77,6 +77,14 @@
                 <action android:name="android.speech.RecognitionService" />
             </intent-filter>
         </service>
+
+        <receiver
+            android:name=".core.notification.PermissionActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.opencode.android.PERMISSION_RESPONSE" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>
