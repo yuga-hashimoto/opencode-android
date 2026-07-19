@@ -82,6 +82,12 @@
     <string name="key_missing">Not set</string>
     <string name="assistant_runtime">Assistant runtime</string>
     <string name="assistant_workspace">Assistant workspace path</string>
+    <string name="assistant_role_help">Choose the OpenCode runtime, workspace, model, and agent used when Android launches this app as the default assistant.</string>
+    <string name="assistant_model">Assistant model</string>
+    <string name="assistant_agent">Assistant agent</string>
+    <string name="assistant_catalog_loading">Loading models from the assistant runtime…</string>
+    <string name="use_chat_defaults">Use chat defaults</string>
+    <string name="voice_response_help">Speak the final OpenCode answer with Android text-to-speech.</string>
     <string name="import_workspace_folder">Import folder into local workspace</string>
     <string name="notifications_permission_rationale">Notifications are used for approvals and task completion while the app is in the background.</string>
     <string name="capability_version">OpenCode %1$s</string>

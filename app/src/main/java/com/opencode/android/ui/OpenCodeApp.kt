@@ -609,6 +609,9 @@ fun OpenCodeApp(
                     onClearApiKey = settingsViewModel::clearApiKey,
                     onAssistantRuntime = settingsViewModel::setAssistantRuntimeId,
                     onAssistantWorkspace = settingsViewModel::setAssistantWorkspacePath,
+                    onAssistantModel = settingsViewModel::setAssistantModel,
+                    onAssistantAgent = settingsViewModel::setAssistantAgent,
+                    onUseChatDefaultsForAssistant = settingsViewModel::useChatDefaultsForAssistant,
                     onImportWorkspace = { workspaceImportLauncher.launch(null) },
                     onRequestNotifications = {
                         if (android.os.Build.VERSION.SDK_INT >= 33) {

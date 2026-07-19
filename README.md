@@ -132,6 +132,17 @@ app/build/outputs/apk/release/app-release-unsigned.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## リリース
+
+`vX.Y.Z` 形式のタグをpushすると、`.github/workflows/release.yml` がテスト・Lint・署名済みRelease APKをビルドし、GitHub Releasesタブへ公開します。リポジトリに `RELEASE_KEYSTORE_BASE64` 等のシークレットが設定されている場合は署名済みAPKが、未設定の場合はunsigned APKがアップロードされます。
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+詳細は [docs/RELEASE.md](docs/RELEASE.md) を参照。
+
 ## テスト対象
 
 - URL安全性、LAN・Tailscale判定
@@ -149,6 +160,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - [OpenCode Android v2設計書](docs/superpowers/specs/2026-07-18-opencode-android-v2-design.md)
 - [第一完成版の実装計画](docs/superpowers/plans/2026-07-18-initial-mvp.md)
 - [Androidローカル実行設計](docs/LOCAL_RUNTIME.md)
+- [リリース手順](docs/RELEASE.md)
+- [実機検証チェックリスト](docs/DEVICE_VALIDATION.md)
+- [デバイスマトリクス](docs/device-matrix.md)
+- [完成版チェックリスト](docs/COMPLETION_CHECKLIST.md)
 
 ## 第三者ソフトウェア
 

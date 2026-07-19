@@ -82,6 +82,12 @@
     <string name="key_missing">未設定</string>
     <string name="assistant_runtime">アシスト実行先</string>
     <string name="assistant_workspace">アシスト作業フォルダ</string>
+    <string name="assistant_role_help">Androidの既定アシスタントとして起動した際に使うOpenCode実行先、作業フォルダ、モデル、エージェントを指定します。</string>
+    <string name="assistant_model">アシスト用モデル</string>
+    <string name="assistant_agent">アシスト用エージェント</string>
+    <string name="assistant_catalog_loading">アシスト実行先からモデルを取得しています…</string>
+    <string name="use_chat_defaults">通常チャットの設定を使う</string>
+    <string name="voice_response_help">OpenCodeの最終回答をAndroidの音声合成で読み上げます。</string>
     <string name="import_workspace_folder">フォルダをローカル作業領域へ取り込む</string>
     <string name="notifications_permission_rationale">バックグラウンドでの承認待ちと完了通知に使います。</string>
     <string name="capability_version">OpenCode %1$s</string>

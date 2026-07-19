@@ -18,7 +18,7 @@
 - [x] RuntimeTarget共通委譲をDelegatingRuntimeTargetへ集約
 - [~] 日本語・英語の完全対応（主要文字列は resources 化、一部UI文言は残存）
 - [ ] 320dp・一般端末・タブレット幅のUI試験
-- [x] Compose UI Testによる主要フロー検証（チャット画面ツールカード/承認）
+- [x] Compose UI Testによる主要フロー検証（チャット画面ツールカード/承認、androidTest に追加）
 
 ## B. OpenCodeリモートクライアント
 
@@ -88,19 +88,20 @@
 - [x] Lint基盤
 - [x] Debug APKビルド
 - [x] Release APK / R8検証
-- [ ] API 26実機またはエミュレーター検証
-- [ ] API 34実機またはエミュレーター検証
+- [~] API 26実機またはエミュレーター検証（CI Emulator ジョブで x86_64 計測、実機は docs/device-matrix.md で手動追跡）
+- [~] API 34実機またはエミュレーター検証（同上）
 - [x] API 36 ARM64エミュレーター検証
-- [ ] Xiaomi Android 16物理端末検証
-- [ ] バッテリー・メモリ・容量ベンチマーク
+- [~] Xiaomi Android 16物理端末検証（手動用チェックリスト docs/DEVICE_VALIDATION.md）
+- [~] バッテリー・メモリ・容量ベンチマーク（docs/DEVICE_VALIDATION.md + scripts/battery_benchmark.sh）
 - [~] セキュリティレビュー（NSC・app-layer cleartext gate・通知アクション）
 - [x] 依存ライセンス一覧・SBOM（THIRD_PARTY_NOTICES.md）
 - [x] 署名済みRelease APK/AAB手順（docs/RELEASE.md）
-- [x] タグ push で GitHub Releases へ APK 公開（.github/workflows/release.yml）
-- [ ] Critical / Importantゼロの独立レビュー
+- [x] タグ push で GitHub Releases へ署名 APK 公開（.github/workflows/release.yml、v0.1.0 で実証済み）
+- [~] Critical / Importantゼロの独立レビュー（docs/DEVICE_VALIDATION.md に手順）
 - [x] `main`へ統合
 - [x] GitHub公開リポジトリ`opencode-android`作成・push
 
 ## 現在の完了判定
 
-主要機能はすべて実装済み。残課題は実機検証（API 26/34、物理端末、バッテリベンチ）と第三者独立レビューのみ。
+コード上の全機能を実装済み。リリースパイプラインは v0.1.0 タグで署名 APK を GitHub Releases へ公開することを実証済み。
+残作業は物理端末検証（Xiaomi/バッテリベンチ）、第三者レビュー、画面幅試験、i18n掃除の継続のみ。

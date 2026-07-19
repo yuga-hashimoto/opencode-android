@@ -82,6 +82,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
     private lateinit var speech: SpeechRecognizerManager
     private lateinit var tts: TTSManager
     private var backend: OpenCodeBackend? = null
+    private var executionProfile: AssistantExecutionProfile? = null
     private var preferredWorkspace: String? = null
     private var eventJob: Job? = null
     private var listeningJob: Job? = null
@@ -141,13 +142,38 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
             return
         }
 
-        backend = target
-        preferredWorkspace = settings.assistantWorkspacePath
-            ?.takeIf { it.isNotBlank() }
-            ?: "/workspace"
-        sessionId = settings.assistantSessionId.takeIf { settings.continuousConversation }
-        startEventCollection()
-        startListening()
+        assistantState.value = VoiceState.IDLE
+        errorText.value = null
+        scope.launch {
+            runCatching {
+                val profile = resolveAssistantExecutionProfile(
+                    runtimeId = target.id,
+                    assistantWorkspacePath = settings.assistantWorkspacePath,
+                    assistantProviderId = settings.assistantProviderId,
+                    assistantModelId = settings.assistantModelId,
+                    assistantAgentId = settings.assistantAgentId,
+                    fallbackProviderId = settings.selectedProviderId,
+                    fallbackModelId = settings.selectedModelId,
+                    fallbackAgentId = settings.selectedAgentId
+                )
+                target.connect().getOrThrow()
+                backend = target
+                executionProfile = profile
+                preferredWorkspace = profile.workspacePath
+                sessionId = reusableAssistantSessionId(
+                    continuousConversation = settings.continuousConversation,
+                    storedSessionId = settings.assistantSessionId,
+                    storedProfileKey = settings.assistantSessionProfileKey,
+                    activeProfile = profile
+                )
+                startEventCollection()
+                startListening()
+            }.onFailure { error ->
+                backend = null
+                executionProfile = null
+                showError(error.message ?: "ホームアシスト用OpenCodeへ接続できませんでした")
+            }
+        }
     }
 
     override fun onHide() {
@@ -251,6 +277,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
 
     private fun sendToOpenCode(text: String) {
         val activeBackend = backend ?: return
+        val profile = executionProfile ?: return
         assistantState.value = VoiceState.THINKING
         responseText.value = ""
         scope.launch {
@@ -260,14 +287,20 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                     directory = preferredWorkspace
                 ).id
                 sessionId = targetSessionId
-                if (settings.continuousConversation) settings.assistantSessionId = targetSessionId
+                if (settings.continuousConversation) {
+                    settings.assistantSessionId = targetSessionId
+                    settings.assistantSessionProfileKey = profile.sessionKey
+                } else {
+                    settings.assistantSessionId = null
+                    settings.assistantSessionProfileKey = null
+                }
                 activeBackend.sendMessage(
                     targetSessionId,
                     PromptRequest(
                         text = text,
-                        providerId = settings.selectedProviderId,
-                        modelId = settings.selectedModelId,
-                        agent = settings.selectedAgentId
+                        providerId = profile.providerId,
+                        modelId = profile.modelId,
+                        agent = profile.agentId
                     )
                 )
             }.onFailure { showError(it.message ?: "OpenCodeへ送信できませんでした") }

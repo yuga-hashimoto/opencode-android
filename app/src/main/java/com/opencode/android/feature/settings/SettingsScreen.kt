@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -41,6 +42,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
+import com.opencode.android.core.api.OpenCodeAgent
+import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.ui.components.LabelValueRow
 import com.opencode.android.ui.components.SectionCard
 
@@ -57,6 +60,9 @@ fun SettingsScreen(
     onClearApiKey: (String) -> Unit = {},
     onAssistantRuntime: (String?) -> Unit = {},
     onAssistantWorkspace: (String?) -> Unit = {},
+    onAssistantModel: (String, String) -> Unit = { _, _ -> },
+    onAssistantAgent: (String?) -> Unit = {},
+    onUseChatDefaultsForAssistant: () -> Unit = {},
     onImportWorkspace: () -> Unit = {},
     onRequestNotifications: () -> Unit = {},
     wakeWordPackSummary: String = "",
@@ -104,7 +110,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.set_default_assistant), fontWeight = FontWeight.Medium)
                         Text(
-                            text = stringResource(R.string.notifications_permission_rationale),
+                            text = stringResource(R.string.assistant_role_help),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -158,6 +164,51 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                Spacer(Modifier.height(8.dp))
+                AssistantModelSelector(
+                    providers = state.assistantProviders,
+                    providerId = state.assistantProviderId,
+                    modelId = state.assistantModelId,
+                    enabled = !state.isLoadingAssistantCatalog,
+                    onSelect = onAssistantModel
+                )
+                Spacer(Modifier.height(8.dp))
+                AssistantAgentSelector(
+                    agents = state.assistantAgents,
+                    agentId = state.assistantAgentId,
+                    enabled = !state.isLoadingAssistantCatalog,
+                    onSelect = onAssistantAgent
+                )
+                if (state.isLoadingAssistantCatalog) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                        Text(
+                            stringResource(R.string.assistant_catalog_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                state.assistantCatalogError?.let { error ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onUseChatDefaultsForAssistant,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.use_chat_defaults))
+                }
             }
         }
 
@@ -174,7 +225,7 @@ fun SettingsScreen(
                 SettingSwitchRow(
                     icon = Icons.Default.RecordVoiceOver,
                     title = stringResource(R.string.voice_response),
-                    description = stringResource(R.string.auto_start_mic),
+                    description = stringResource(R.string.voice_response_help),
                     checked = state.ttsEnabled,
                     onCheckedChange = onTtsChange
                 )
@@ -382,6 +433,134 @@ fun SettingsScreen(
         }
 
         item { Spacer(Modifier.height(72.dp)) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssistantModelSelector(
+    providers: List<OpenCodeProvider>,
+    providerId: String?,
+    modelId: String?,
+    enabled: Boolean,
+    onSelect: (String, String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedProvider = providers.firstOrNull { it.id == providerId }
+    val selectedModel = selectedProvider?.models?.get(modelId)
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = it }
+    ) {
+        OutlinedTextField(
+            value = selectedModel?.name ?: modelId.orEmpty(),
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(stringResource(R.string.assistant_model)) },
+            supportingText = providerId?.let { { Text(it) } },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            providers.forEach { provider ->
+                val models = provider.models.values
+                    .filter { it.status == null || it.status == "active" }
+                    .sortedBy { it.name.lowercase() }
+                if (models.isNotEmpty()) {
+                    Text(
+                        provider.name,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                models.forEach { model ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(model.name, maxLines = 1)
+                                Text(
+                                    model.id,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        },
+                        onClick = {
+                            onSelect(provider.id, model.id)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssistantAgentSelector(
+    agents: List<OpenCodeAgent>,
+    agentId: String?,
+    enabled: Boolean,
+    onSelect: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = it }
+    ) {
+        OutlinedTextField(
+            value = agentId.orEmpty(),
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(stringResource(R.string.assistant_agent)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.use_chat_defaults)) },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            agents.forEach { agent ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(agent.name)
+                            agent.description?.takeIf(String::isNotBlank)?.let { description ->
+                                Text(
+                                    description,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onSelect(agent.name)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }
 
