@@ -462,12 +462,13 @@ class ChatViewModel(
         }
     }
 
-    private fun formatToolState(state: Map<String, Any?>?): String? {
+    private fun formatToolState(state: Map<String, com.google.gson.JsonElement>?): String? {
         if (state.isNullOrEmpty()) return null
         val preferredKeys = listOf("status", "input", "output", "error", "title", "command", "stdout", "stderr")
         val lines = preferredKeys.mapNotNull { key ->
             state[key]?.let { value ->
-                val rendered = value.toString().trim()
+                val raw = if (value.isJsonPrimitive && value.asString != null) value.asString else value.toString()
+                val rendered = raw.trim()
                 if (rendered.isEmpty()) null else "$key: $rendered"
             }
         }

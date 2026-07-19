@@ -121,7 +121,7 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.Default.Folder, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("作業先")
+                    Text(stringResource(R.string.nav_workspaces))
                 }
             }
         }

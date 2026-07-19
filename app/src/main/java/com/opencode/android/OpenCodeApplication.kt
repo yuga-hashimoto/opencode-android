@@ -68,6 +68,9 @@ class OpenCodeApplication : Application() {
     lateinit var wakeWordPackManager: com.opencode.android.feature.assistant.WakeWordPackManager
         private set
 
+    lateinit var wakeWordListeningController: com.opencode.android.feature.assistant.WakeWordListeningController
+        private set
+
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
@@ -75,9 +78,19 @@ class OpenCodeApplication : Application() {
         notifications = RuntimeNotificationHelper(this)
         providerCredentials = LocalProviderCredentialStore(settings)
         nsdDiscovery = com.opencode.android.feature.connection.OpenCodeNsdDiscovery(this)
+        val wakeWordPublicKey = assets.open("wakeword-pack-public-key.pem")
+            .bufferedReader()
+            .use { reader ->
+                com.opencode.android.feature.assistant.WakeWordPackManager.parseRsaPublicKeyPem(
+                    reader.readText()
+                )
+            }
         wakeWordPackManager = com.opencode.android.feature.assistant.WakeWordPackManager(
-            rootDirectory = File(filesDir, "assistant").apply { mkdirs() }
+            rootDirectory = File(filesDir, "assistant").apply { mkdirs() },
+            trustedPublicKey = wakeWordPublicKey
         )
+        wakeWordListeningController =
+            com.opencode.android.feature.assistant.WakeWordListeningController(this)
         val runtimeDirectory = File(filesDir, "runtime")
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         val accessCoordinator = LocalRuntimeAccessCoordinator()

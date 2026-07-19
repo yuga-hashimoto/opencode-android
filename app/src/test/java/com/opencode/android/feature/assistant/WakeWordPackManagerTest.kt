@@ -1,9 +1,17 @@
 package com.opencode.android.feature.assistant
 
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.Signature
+import java.util.Base64
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -13,82 +21,202 @@ class WakeWordPackManagerTest {
     @get:Rule
     val temp = TemporaryFolder()
 
-    @Test
-    fun `rejects non https manifest url`() {
-        val manager = WakeWordPackManager(rootDirectory = temp.newFolder())
-        val manifest = WakeWordPackManifest(
-            id = "demo",
-            name = "Demo",
-            version = "1.0.0",
-            url = "http://example.com/pack.zip",
-            sha256 = "a".repeat(64)
-        )
-        val bytes = "hello".toByteArray()
-        val error = runCatching { manager.install(manifest, bytes) }.exceptionOrNull()
-        assertTrue(error?.message?.contains("HTTPS") == true)
-        assertFalse(manager.isInstalled())
-    }
+    private val keyPair: KeyPair = KeyPairGenerator.getInstance("RSA").apply {
+        initialize(2048)
+    }.generateKeyPair()
 
     @Test
-    fun `rejects invalid sha length`() {
-        val manager = WakeWordPackManager(rootDirectory = temp.newFolder())
-        val manifest = WakeWordPackManifest(
-            id = "demo",
-            name = "Demo",
-            version = "1.0.0",
-            url = "https://example.com/pack.zip",
-            sha256 = "short"
-        )
-        val error = runCatching { manager.install(manifest, "data".toByteArray()) }.exceptionOrNull()
-        assertTrue(error?.message?.contains("SHA-256") == true)
-    }
+    fun `installs signed pack atomically and deletes it`() {
+        val root = temp.newFolder("valid-pack")
+        val manager = manager(root)
+        val archive = validArchive(id = "open-code", version = "1.0.0")
+        val manifest = signedManifest(archive, id = "open-code", version = "1.0.0")
 
-    @Test
-    fun `rejects hash mismatch`() {
-        val manager = WakeWordPackManager(rootDirectory = temp.newFolder())
-        val bytes = "data".toByteArray()
-        val manifest = WakeWordPackManifest(
-            id = "demo",
-            name = "Demo",
-            version = "1.0.0",
-            url = "https://example.com/pack.zip",
-            sha256 = "0".repeat(64)
-        )
-        val error = runCatching { manager.install(manifest, bytes) }.exceptionOrNull()
-        assertTrue(error?.message?.contains("hash mismatch") == true)
-    }
+        val installed = manager.install(manifest, archive)
 
-    @Test
-    fun `deletes installed pack`() {
-        val root = temp.newFolder()
-        val manager = WakeWordPackManager(rootDirectory = root)
-        val zipBytes = zipWithEntry("hello.txt", "hi")
-        val sha = WakeWordPackManager.sha256Hex(zipBytes)
-        val manifest = WakeWordPackManifest(
-            id = "demo",
-            name = "Demo",
-            version = "1.0.0",
-            url = "https://example.com/pack.zip",
-            sha256 = sha
-        )
-        val installed = manager.install(manifest, zipBytes)
-        assertEquals("Demo", installed.name)
-        assertTrue(manager.isInstalled())
-        assertTrue(File(installed.directory, "hello.txt").isFile)
+        assertEquals("Open Code", installed.name)
+        assertEquals("ja-JP", installed.languageTag)
+        assertEquals(listOf("hey open code", "open code"), installed.phrases)
+        assertTrue(File(installed.directory, "pack.json").isFile)
+        assertEquals(installed, manager.installed())
 
         manager.delete()
         assertFalse(manager.isInstalled())
         assertNull(manager.installed())
     }
 
-    private fun zipWithEntry(name: String, content: String): ByteArray {
-        val out = java.io.ByteArrayOutputStream()
-        java.util.zip.ZipOutputStream(out).use { zip ->
-            val entry = java.util.zip.ZipEntry(name)
-            zip.putNextEntry(entry)
-            zip.write(content.toByteArray())
-            zip.closeEntry()
+    @Test
+    fun `rejects manifest signed by another key`() {
+        val archive = validArchive()
+        val otherKey = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+        val unsigned = baseManifest(archive)
+        val signature = Signature.getInstance("SHA256withRSA").run {
+            initSign(otherKey.private)
+            update(WakeWordPackManager.signingPayload(unsigned))
+            Base64.getEncoder().encodeToString(sign())
         }
-        return out.toByteArray()
+        val manager = manager(temp.newFolder("wrong-key"))
+
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            manager.install(unsigned.copy(signature = signature), archive)
+        }
+
+        assertTrue(error.message.orEmpty().contains("signature verification"))
+        assertFalse(manager.isInstalled())
+    }
+
+    @Test
+    fun `tampering signed fields invalidates signature`() {
+        val archive = validArchive()
+        val signed = signedManifest(archive)
+        val manager = manager(temp.newFolder("tampered"))
+
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(signed.copy(version = "2.0.0"), archive)
+        }
+    }
+
+    @Test
+    fun `rejects hash size and non https errors before activation`() {
+        val archive = validArchive()
+        val manager = manager(temp.newFolder("invalid-metadata"))
+
+        val badHash = signedManifest(archive, sha256 = "0".repeat(64))
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(badHash, archive)
+        }
+
+        val badSize = signedManifest(archive, sizeBytes = archive.size.toLong() + 1)
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(badSize, archive)
+        }
+
+        val insecure = signedManifest(archive).copy(url = "http://example.com/pack.zip")
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(insecure, archive)
+        }
+        assertFalse(manager.isInstalled())
+    }
+
+    @Test
+    fun `rejects ZIP traversal and leaves previous active pack intact`() {
+        val root = temp.newFolder("traversal")
+        val manager = manager(root)
+        val firstArchive = validArchive(id = "first", version = "1.0.0")
+        manager.install(signedManifest(firstArchive, id = "first", version = "1.0.0"), firstArchive)
+
+        val malicious = zip(
+            mapOf(
+                "pack.json" to descriptor("second", "2.0.0"),
+                "../escape.txt" to "escape"
+            )
+        )
+        val maliciousManifest = signedManifest(malicious, id = "second", version = "2.0.0")
+
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(maliciousManifest, malicious)
+        }
+
+        assertEquals("first", manager.installed()?.id)
+        assertFalse(File(root.parentFile, "escape.txt").exists())
+    }
+
+    @Test
+    fun `rejects missing required file and descriptor mismatch`() {
+        val manager = manager(temp.newFolder("required-files"))
+        val withoutDescriptor = zip(mapOf("readme.txt" to "hello"))
+        val manifest = signedManifest(
+            archive = withoutDescriptor,
+            requiredFiles = listOf("pack.json", "readme.txt")
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(manifest, withoutDescriptor)
+        }
+
+        val mismatched = zip(mapOf("pack.json" to descriptor("other", "1.0.0")))
+        assertThrows(IllegalArgumentException::class.java) {
+            manager.install(signedManifest(mismatched), mismatched)
+        }
+    }
+
+    @Test
+    fun `parses embedded RSA public key PEM`() {
+        val pem = buildString {
+            appendLine("-----BEGIN PUBLIC KEY-----")
+            appendLine(Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(keyPair.public.encoded))
+            appendLine("-----END PUBLIC KEY-----")
+        }
+
+        val parsed = WakeWordPackManager.parseRsaPublicKeyPem(pem)
+
+        assertTrue(parsed.encoded.contentEquals(keyPair.public.encoded))
+    }
+
+    private fun manager(root: File) = WakeWordPackManager(
+        rootDirectory = root,
+        trustedPublicKey = keyPair.public
+    )
+
+    private fun signedManifest(
+        archive: ByteArray,
+        id: String = "open-code",
+        version: String = "1.0.0",
+        url: String = "https://example.com/pack.zip",
+        sha256: String = WakeWordPackManager.sha256Hex(archive),
+        sizeBytes: Long = archive.size.toLong(),
+        requiredFiles: List<String> = listOf("pack.json")
+    ): WakeWordPackManifest {
+        val unsigned = WakeWordPackManifest(
+            id = id,
+            name = "Open Code",
+            version = version,
+            url = url,
+            sha256 = sha256,
+            sizeBytes = sizeBytes,
+            requiredFiles = requiredFiles,
+            signature = ""
+        )
+        val signer = Signature.getInstance("SHA256withRSA")
+        signer.initSign(keyPair.private)
+        signer.update(WakeWordPackManager.signingPayload(unsigned))
+        return unsigned.copy(signature = Base64.getEncoder().encodeToString(signer.sign()))
+    }
+
+    private fun baseManifest(archive: ByteArray) = WakeWordPackManifest(
+        id = "open-code",
+        name = "Open Code",
+        version = "1.0.0",
+        url = "https://example.com/pack.zip",
+        sha256 = WakeWordPackManager.sha256Hex(archive),
+        sizeBytes = archive.size.toLong(),
+        requiredFiles = listOf("pack.json"),
+        signature = ""
+    )
+
+    private fun validArchive(
+        id: String = "open-code",
+        version: String = "1.0.0"
+    ): ByteArray = zip(mapOf("pack.json" to descriptor(id, version)))
+
+    private fun descriptor(id: String, version: String): String =
+        """{
+          "schemaVersion": 1,
+          "id": "$id",
+          "version": "$version",
+          "languageTag": "ja-JP",
+          "phrases": ["Hey Open Code", "Open Code"]
+        }""".trimIndent()
+
+    private fun zip(entries: Map<String, String>): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            entries.forEach { (name, content) ->
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(content.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        return output.toByteArray()
     }
 }

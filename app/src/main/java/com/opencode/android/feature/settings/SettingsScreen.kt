@@ -67,7 +67,10 @@ fun SettingsScreen(
     onRequestNotifications: () -> Unit = {},
     wakeWordPackSummary: String = "",
     wakeWordInstalled: Boolean = false,
+    wakeWordListeningEnabled: Boolean = false,
+    wakeWordStatusMessage: String? = null,
     onInstallWakeWord: () -> Unit = {},
+    onWakeWordListeningChange: (Boolean) -> Unit = {},
     onDeleteWakeWord: () -> Unit = {}
 ) {
     LazyColumn(
@@ -412,7 +415,23 @@ fun SettingsScreen(
                     },
                     style = MaterialTheme.typography.bodyMedium
                 )
+                wakeWordStatusMessage?.takeIf(String::isNotBlank)?.let { message ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (wakeWordInstalled) {
+                    Spacer(Modifier.height(12.dp))
+                    SettingSwitchRow(
+                        icon = Icons.Default.Mic,
+                        title = stringResource(R.string.wake_word_listening),
+                        description = stringResource(R.string.wake_word_listening_help),
+                        checked = wakeWordListeningEnabled,
+                        onCheckedChange = onWakeWordListeningChange
+                    )
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = onDeleteWakeWord,
@@ -426,7 +445,7 @@ fun SettingsScreen(
                         onClick = onInstallWakeWord,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(stringResource(R.string.add_connection))
+                        Text(stringResource(R.string.install_wake_word_pack))
                     }
                 }
             }
