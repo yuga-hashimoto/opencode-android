@@ -58,7 +58,11 @@ fun SettingsScreen(
     onAssistantRuntime: (String?) -> Unit = {},
     onAssistantWorkspace: (String?) -> Unit = {},
     onImportWorkspace: () -> Unit = {},
-    onRequestNotifications: () -> Unit = {}
+    onRequestNotifications: () -> Unit = {},
+    wakeWordPackSummary: String = "",
+    wakeWordInstalled: Boolean = false,
+    onInstallWakeWord: () -> Unit = {},
+    onDeleteWakeWord: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -330,6 +334,48 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = stringResource(R.string.wake_word_pack),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        item {
+            SectionCard {
+                Text(
+                    text = stringResource(R.string.wake_word_pack_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = wakeWordPackSummary.ifBlank {
+                        stringResource(R.string.wake_word_not_installed)
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (wakeWordInstalled) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onDeleteWakeWord,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.delete_wake_word))
+                    }
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = onInstallWakeWord,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.add_connection))
                     }
                 }
             }

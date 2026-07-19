@@ -19,16 +19,20 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,8 +43,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeState
@@ -62,14 +68,17 @@ fun WorkspacesScreen(
     onStartLocal: () -> Unit,
     onStopLocal: () -> Unit,
     onReinstallLocal: () -> Unit,
-    onOpenLocalManagement: () -> Unit
+    onOpenLocalManagement: () -> Unit,
+    onApplyQrOrLink: (String) -> Unit = {},
+    onAddDiscovered: (com.opencode.android.feature.connection.DiscoveredOpenCodeService) -> Unit = {}
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
+    var qrInput by remember { mutableStateOf("") }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { editing = ConnectionFormState() }) {
-                Icon(Icons.Default.Add, contentDescription = "PC接続を追加")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection))
             }
         }
     ) { paddingValues ->
@@ -80,6 +89,83 @@ fun WorkspacesScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item {
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.QrCodeScanner,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.padding(horizontal = 6.dp))
+                        Text(
+                            stringResource(R.string.scan_qr_or_paste),
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = qrInput,
+                        onValueChange = { qrInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("opencode://connect?url=…") },
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                if (qrInput.isNotBlank()) {
+                                    onApplyQrOrLink(qrInput.trim())
+                                    qrInput = ""
+                                }
+                            },
+                            enabled = qrInput.isNotBlank()
+                        ) {
+                            Text(stringResource(R.string.save))
+                        }
+                    }
+                }
+            }
+
+            if (state.discovered.isNotEmpty()) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.WifiFind, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 6.dp))
+                        Text(
+                            stringResource(R.string.discover_lan),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            "${state.discovered.size}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                items(state.discovered, key = { it.baseUrl }) { service ->
+                    SectionCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Computer, contentDescription = null)
+                            Spacer(Modifier.padding(horizontal = 8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(service.name, fontWeight = FontWeight.Medium)
+                                Text(
+                                    service.baseUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { onAddDiscovered(service) }) {
+                                Text(stringResource(R.string.add_connection))
+                            }
+                        }
+                    }
+                }
+            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

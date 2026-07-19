@@ -86,4 +86,17 @@
     <string name="notifications_permission_rationale">Notifications are used for approvals and task completion while the app is in the background.</string>
     <string name="capability_version">OpenCode %1$s</string>
     <string name="request_notifications">Allow notifications</string>
+    <string name="attach_file">Attach file</string>
+    <string name="tool_card">Tool</string>
+    <string name="command_card">Command</string>
+    <string name="reasoning_card">Reasoning</string>
+    <string name="scan_qr_or_paste">Paste connection QR / link</string>
+    <string name="discover_lan">Discover on LAN</string>
+    <string name="no_lan_services">No OpenCode services found yet</string>
+    <string name="handoff_session">Hand off session</string>
+    <string name="wake_word_pack">Optional wake-word pack</string>
+    <string name="wake_word_pack_help">Not bundled. Install a verified HTTPS pack with SHA-256; delete anytime.</string>
+    <string name="wake_word_installed">Pack installed: %1$s %2$s</string>
+    <string name="wake_word_not_installed">No wake-word pack installed</string>
+    <string name="delete_wake_word">Remove pack</string>
 </resources>

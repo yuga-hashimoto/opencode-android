@@ -4,6 +4,7 @@ import android.system.Os
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.zip.ZipInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 
@@ -25,6 +26,27 @@ object RuntimeArchive {
         val actual = sha256(file)
         require(actual.equals(expected, ignoreCase = true)) {
             "SHA-256 mismatch for ${file.name}: expected $expected, got $actual"
+        }
+    }
+
+    fun extractZip(input: InputStream, destination: File) {
+        destination.mkdirs()
+        val canonicalRoot = destination.canonicalFile
+        ZipInputStream(input.buffered()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                val target = File(destination, entry.name).canonicalFile
+                require(target.path == canonicalRoot.path || target.path.startsWith(canonicalRoot.path + File.separator)) {
+                    "Archive entry escapes destination: ${entry.name}"
+                }
+                if (entry.isDirectory) {
+                    target.mkdirs()
+                } else {
+                    target.parentFile?.mkdirs()
+                    target.outputStream().buffered().use { output -> zip.copyTo(output) }
+                }
+                zip.closeEntry()
+            }
         }
     }
 

@@ -37,6 +37,22 @@ val prepareOpenCodeRuntimeNativeLibs = tasks.register<Exec>("prepareOpenCodeRunt
     )
 }
 
+val releaseStoreFile = providers.environmentVariable("OPENCODE_STORE_FILE")
+    .orElse(providers.gradleProperty("OPENCODE_STORE_FILE"))
+val releaseStorePassword = providers.environmentVariable("OPENCODE_STORE_PASSWORD")
+    .orElse(providers.gradleProperty("OPENCODE_STORE_PASSWORD"))
+val releaseKeyAlias = providers.environmentVariable("OPENCODE_KEY_ALIAS")
+    .orElse(providers.gradleProperty("OPENCODE_KEY_ALIAS"))
+val releaseKeyPassword = providers.environmentVariable("OPENCODE_KEY_PASSWORD")
+    .orElse(providers.gradleProperty("OPENCODE_KEY_PASSWORD"))
+val hasReleaseSigning = sequenceOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { it.orNull?.isNotBlank() == true } &&
+    releaseStoreFile.orNull?.let { file(it).isFile } == true
+
 android {
     namespace = "com.opencode.android"
     compileSdk = 34
@@ -54,6 +70,17 @@ android {
         }
     }
 
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStoreFile.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -61,6 +88,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

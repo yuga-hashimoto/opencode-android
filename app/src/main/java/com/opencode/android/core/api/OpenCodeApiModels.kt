@@ -175,12 +175,19 @@ data class OpenCodeVcsInfo(
     @SerializedName("default_branch") val defaultBranch: String? = null
 )
 
+data class PromptAttachment(
+    val fileName: String,
+    val mimeType: String,
+    val base64Data: String
+)
+
 data class PromptRequest(
     val text: String,
     val providerId: String? = null,
     val modelId: String? = null,
     val agent: String? = null,
-    val noReply: Boolean = false
+    val noReply: Boolean = false,
+    val attachments: List<PromptAttachment> = emptyList()
 )
 
 data class PermissionRequest(
