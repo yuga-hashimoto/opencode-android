@@ -62,7 +62,12 @@ fun ActivityScreen(
     onDeleteSession: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("実行中", "承認", "セッション", "ログ")
+    val tabs = listOf(
+        stringResource(R.string.tool_status_running),
+        stringResource(R.string.tab_approvals),
+        stringResource(R.string.nav_sessions),
+        stringResource(R.string.tab_logs)
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -72,11 +77,11 @@ fun ActivityScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("アクティビティ", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("OpenCodeの実行状況と履歴", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.activity_screen_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.activity_screen_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onRefresh, enabled = !state.isRefreshing) {
-                Icon(Icons.Default.Refresh, contentDescription = "更新")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
             }
         }
 
@@ -106,7 +111,7 @@ private fun RunningTab(
     onOpenSession: (String, String) -> Unit
 ) {
     val activeSessions = state.sessions.filter { it.id in state.activeSessionIds }
-    ActivityList(emptyText = "実行中のタスクはありません", isEmpty = activeSessions.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_running_tasks), isEmpty = activeSessions.isEmpty()) {
         items(activeSessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -115,14 +120,14 @@ private fun RunningTab(
                         Text(session.title.ifBlank { session.id }, fontWeight = FontWeight.SemiBold)
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    StatusChip("実行中", active = true)
+                    StatusChip(stringResource(R.string.tool_status_running), active = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { onOpenSession(session.id, session.title) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("チャットを開く")
+                    Text(stringResource(R.string.open_chat_button))
                 }
             }
         }
@@ -134,7 +139,7 @@ private fun ApprovalTab(
     state: ActivityUiState,
     onPermission: (String, PermissionResponse, Boolean) -> Unit
 ) {
-    ActivityList(emptyText = "承認待ちはありません", isEmpty = state.permissions.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_pending_approvals), isEmpty = state.permissions.isEmpty()) {
         items(state.permissions, key = { it.id }) { permission ->
             val busy = permission.id in state.permissionBusyIds
             SectionCard {
@@ -193,7 +198,7 @@ private fun SessionsTab(
     var deleting by remember { mutableStateOf<OpenCodeSession?>(null) }
     var menuExpandedFor by remember { mutableStateOf<String?>(null) }
 
-    ActivityList(emptyText = "セッションはまだありません", isEmpty = state.sessions.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_sessions), isEmpty = state.sessions.isEmpty()) {
         items(state.sessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -233,7 +238,7 @@ private fun SessionsTab(
                     onClick = { onOpenSession(session.id, session.title) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("チャットを続ける")
+                    Text(stringResource(R.string.continue_chat_button))
                 }
             }
         }
@@ -298,7 +303,7 @@ private fun SessionsTab(
 
 @Composable
 private fun LogsTab(state: ActivityUiState) {
-    ActivityList(emptyText = "イベントログはまだありません", isEmpty = state.logs.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_event_logs), isEmpty = state.logs.isEmpty()) {
         items(state.logs, key = { "${it.timestamp}-${it.title}-${it.sessionId}" }) { log ->
             SectionCard {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

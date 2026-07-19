@@ -161,24 +161,40 @@ class LocalRuntimeService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val (title, text, indeterminate, progress) = when (status) {
-            LocalRuntimeStatus.NotInstalled -> NotificationState("OpenCode Android", "ローカルランタイムは未導入です")
+            LocalRuntimeStatus.NotInstalled -> NotificationState(
+                getString(R.string.app_name),
+                getString(R.string.notification_runtime_not_installed)
+            )
             is LocalRuntimeStatus.Installing -> NotificationState(
-                "ローカルOpenCodeをセットアップ中",
+                getString(R.string.notification_runtime_setting_up),
                 status.step,
                 status.progress == null,
                 ((status.progress ?: 0f) * 100).toInt()
             )
-            is LocalRuntimeStatus.Starting -> NotificationState("ローカルOpenCodeを起動中", "OpenCode ${status.version}", true)
+            is LocalRuntimeStatus.Starting -> NotificationState(
+                getString(R.string.notification_runtime_starting),
+                getString(R.string.capability_version, status.version),
+                true
+            )
             is LocalRuntimeStatus.Updating -> NotificationState(
-                "ローカルOpenCodeを更新中",
+                getString(R.string.notification_runtime_updating),
                 status.step,
                 status.progress == null,
                 ((status.progress ?: 0f) * 100).toInt()
             )
-            is LocalRuntimeStatus.Stopped -> NotificationState("ローカルOpenCodeは停止中", "OpenCode ${status.version}")
-            is LocalRuntimeStatus.Ready -> NotificationState("ローカルOpenCodeが稼働中", "OpenCode ${status.version} · 127.0.0.1:${status.port}")
-            is LocalRuntimeStatus.Broken -> NotificationState("ローカルOpenCodeで問題が発生", status.reason)
-            is LocalRuntimeStatus.UnsupportedAbi -> NotificationState("この端末では利用できません", "未対応ABI: ${status.abi}")
+            is LocalRuntimeStatus.Stopped -> NotificationState(
+                getString(R.string.notification_runtime_stopped),
+                getString(R.string.capability_version, status.version)
+            )
+            is LocalRuntimeStatus.Ready -> NotificationState(
+                getString(R.string.notification_runtime_ready),
+                getString(R.string.notification_runtime_ready_detail, status.version, status.port)
+            )
+            is LocalRuntimeStatus.Broken -> NotificationState(getString(R.string.notification_runtime_broken), status.reason)
+            is LocalRuntimeStatus.UnsupportedAbi -> NotificationState(
+                getString(R.string.notification_runtime_unsupported_device),
+                getString(R.string.unsupported_abi, status.abi)
+            )
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -193,17 +209,17 @@ class LocalRuntimeService : Service() {
             )
             .setOnlyAlertOnce(true)
             .setProgress(if (indeterminate || progress > 0) 100 else 0, progress, indeterminate)
-            .addAction(0, "停止", stopIntent)
+            .addAction(0, getString(R.string.stop_run), stopIntent)
             .build()
     }
 
     private fun createChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "ローカルOpenCode",
+            getString(R.string.local_runtime_screen_title),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Android端末内で実行するOpenCodeの状態"
+            description = getString(R.string.notification_channel_local_runtime_description)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
