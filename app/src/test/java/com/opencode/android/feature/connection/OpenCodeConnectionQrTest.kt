@@ -22,7 +22,7 @@ class OpenCodeConnectionQrTest {
         val decoded = OpenCodeConnectionQr.decode(encoded).getOrThrow()
 
         assertEquals("Mac mini", decoded.name)
-        assertTrue(decoded.baseUrl.startsWith("http://192.168.1.10:4096"))
+        assertEquals("http://192.168.1.10:4096/", decoded.baseUrl)
         assertEquals("opencode", decoded.username)
         assertEquals("secret", decoded.password)
         assertTrue(decoded.allowInsecureLan)
@@ -30,43 +30,54 @@ class OpenCodeConnectionQrTest {
     }
 
     @Test
-    fun `decodes bare URL into insecure LAN form`() {
-        val decoded = OpenCodeConnectionQr.decode("http://192.168.1.5:4096").getOrThrow()
-        assertTrue(decoded.baseUrl.startsWith("http://192.168.1.5:4096"))
+    fun `decodes bare trusted LAN URL into insecure LAN form`() {
+        val decoded = OpenCodeConnectionQr.decode("192.168.1.5:4096").getOrThrow()
+
+        assertEquals("http://192.168.1.5:4096/", decoded.baseUrl)
         assertTrue(decoded.allowInsecureLan)
     }
 
     @Test
-    fun `decodes opencode scheme without credentials`() {
-        val raw = "opencode://connect?url=192.168.1.20:4096&name=Office"
+    fun `decodes opencode scheme with explicit LAN permission`() {
+        val raw = "opencode://connect?url=192.168.1.20%3A4096&name=Office&lan=1"
+
         val decoded = OpenCodeConnectionQr.decode(raw).getOrThrow()
+
         assertEquals("Office", decoded.name)
+        assertEquals("http://192.168.1.20:4096/", decoded.baseUrl)
         assertTrue(decoded.password.isEmpty())
+        assertTrue(decoded.allowInsecureLan)
     }
 
     @Test
-    fun `fails on empty payload`() {
+    fun `fails on empty unsupported or public cleartext payload`() {
         assertTrue(OpenCodeConnectionQr.decode("").isFailure)
+        assertTrue(OpenCodeConnectionQr.decode("ftp://example.com").isFailure)
+        assertTrue(OpenCodeConnectionQr.decode("http://example.com:4096").isFailure)
     }
 
     @Test
-    fun `fails on unsupported scheme`() {
-        val result = OpenCodeConnectionQr.decode("ftp://example.com")
-        // Bare host path accepts any string as a host; we expect a valid form
-        // rather than a useful error, since the URL lacks host/port. The key
-        // guarantee is that the form cannot save without explicit LAN flag.
-        val form = result.getOrNull()
-        if (form != null) {
-            // Without an http(s):// prefix, the form ends up with a nonsensical
-            // baseUrl. The decode succeeds but the user must explicitly allow
-            // insecure LAN to save.
-            assertTrue(form.allowInsecureLan)
-        }
+    fun `rejects URL embedded credentials`() {
+        assertTrue(OpenCodeConnectionQr.decode("https://user:pass@example.com").isFailure)
+    }
+
+    @Test
+    fun `opencode LAN HTTP requires explicit permission`() {
+        val raw = "opencode://connect?url=192.168.1.20%3A4096&name=Office"
+
+        assertTrue(OpenCodeConnectionQr.decode(raw).isFailure)
     }
 
     @Test
     fun `omits password from encoding when blank`() {
-        val encoded = OpenCodeConnectionQr.encode(ConnectionFormState(baseUrl = "192.168.1.1:4096"))
+        val encoded = OpenCodeConnectionQr.encode(
+            ConnectionFormState(
+                name = "LAN",
+                baseUrl = "192.168.1.1:4096",
+                allowInsecureLan = true
+            )
+        )
+
         assertFalse(encoded.contains("password"))
     }
 }

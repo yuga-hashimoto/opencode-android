@@ -1,90 +1,109 @@
 package com.opencode.android.feature.connection
 
+import com.opencode.android.core.security.OpenCodeUrl
 import com.opencode.android.feature.workspace.ConnectionFormState
+import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 /**
  * Connection payload format:
- * opencode://connect?url=http://host:4096&name=Mac&user=opencode&password=secret&lan=1
- *
- * Implemented over java.net.URI-style parsing so it works in both Android and JVM unit tests.
+ * opencode://connect?url=http%3A%2F%2Fhost%3A4096%2F&name=Mac&user=opencode&password=secret&lan=1
  */
 object OpenCodeConnectionQr {
     fun encode(form: ConnectionFormState): String {
-        val params = buildList {
-            add("url" to form.baseUrl.trim())
-            add("name" to form.name.trim().ifBlank { "OpenCode" })
-            add("user" to form.username.trim().ifBlank { "opencode" })
-            if (form.password.isNotBlank()) add("password" to form.password)
-            if (form.allowInsecureLan) add("lan" to "1")
+        val normalized = OpenCodeUrl.normalize(form.baseUrl).getOrThrow()
+        require(normalized.username.isEmpty() && normalized.password.isEmpty()) {
+            "Endpoint URL must not contain credentials"
         }
-        val query = params.joinToString("&") { (k, v) ->
-            "$k=${URLEncoder.encode(v, "UTF-8")}"
+        if (normalized.scheme == "http") {
+            require(form.allowInsecureLan) {
+                "LAN HTTP must be explicitly allowed"
+            }
         }
-        return "opencode://connect?$query"
+        val parameters = linkedMapOf(
+            "url" to normalized.toString(),
+            "name" to form.name.trim().ifBlank { normalized.host },
+            "user" to form.username.trim().ifBlank { "opencode" }
+        )
+        if (form.password.isNotBlank()) parameters["password"] = form.password
+        if (normalized.scheme == "http") parameters["lan"] = "1"
+        return "opencode://connect?" + parameters.entries.joinToString("&") { (key, value) ->
+            "${encodeComponent(key)}=${encodeComponent(value)}"
+        }
     }
 
     fun decode(raw: String): Result<ConnectionFormState> = runCatching {
         val trimmed = raw.trim()
         require(trimmed.isNotEmpty()) { "QR payload is empty" }
 
-        when {
-            trimmed.startsWith("opencode://", ignoreCase = true) -> {
-                val queryStart = trimmed.indexOf('?')
-                val query = if (queryStart >= 0) trimmed.substring(queryStart + 1) else ""
-                val params = parseQuery(query)
-                val url = params["url"] ?: params["baseUrl"]
-                    ?: error("QR payload is missing url")
-                ConnectionFormState(
-                    id = UUID.randomUUID().toString(),
-                    name = params["name"].orEmpty().ifBlank { "Discovered OpenCode" },
-                    baseUrl = url,
-                    username = params["user"] ?: params["username"] ?: "opencode",
-                    password = params["password"] ?: params["pass"] ?: "",
-                    allowInsecureLan = (params["lan"] == "1") ||
-                        (params["allowInsecureLan"] == "1")
-                )
-            }
-            trimmed.startsWith("http://", ignoreCase = true) ||
-                trimmed.startsWith("https://", ignoreCase = true) -> {
-                val scheme = trimmed.substringBefore("://", "http").lowercase()
-                ConnectionFormState(
-                    id = UUID.randomUUID().toString(),
-                    name = hostFromUrl(trimmed) ?: "OpenCode",
-                    baseUrl = trimmed,
-                    username = "opencode",
-                    allowInsecureLan = scheme == "http"
-                )
-            }
-            else -> {
-                // Treat anything else as a bare host.
-                ConnectionFormState(
-                    id = UUID.randomUUID().toString(),
-                    name = trimmed,
-                    baseUrl = trimmed,
-                    username = "opencode",
-                    allowInsecureLan = true
-                )
-            }
+        if (trimmed.startsWith("opencode://", ignoreCase = true)) {
+            decodeOpenCodeUri(trimmed)
+        } else {
+            decodeEndpoint(trimmed, explicitLanPermission = null)
         }
     }
 
-    private fun parseQuery(query: String): Map<String, String> {
-        if (query.isBlank()) return emptyMap()
-        return query.split('&').mapNotNull { pair ->
-            val idx = pair.indexOf('=')
-            if (idx < 0) null else {
-                URLDecoder.decode(pair.substring(0, idx), "UTF-8") to
-                    URLDecoder.decode(pair.substring(idx + 1), "UTF-8")
-            }
-        }.toMap()
+    private fun decodeOpenCodeUri(raw: String): ConnectionFormState {
+        val uri = URI(raw)
+        require(uri.scheme.equals("opencode", ignoreCase = true)) { "Unsupported QR payload" }
+        require(uri.host.equals("connect", ignoreCase = true) || uri.authority.equals("connect", ignoreCase = true)) {
+            "Unsupported OpenCode QR action"
+        }
+        val parameters = parseQuery(uri.rawQuery)
+        val endpoint = parameters["url"] ?: parameters["baseUrl"]
+            ?: error("QR payload is missing url")
+        val explicitLan = parameters["lan"] == "1" ||
+            parameters["allowInsecureLan"].equals("true", ignoreCase = true)
+        val base = decodeEndpoint(endpoint, explicitLanPermission = explicitLan)
+        return base.copy(
+            name = parameters["name"].orEmpty().trim().ifBlank { base.name },
+            username = (parameters["user"] ?: parameters["username"])
+                .orEmpty()
+                .trim()
+                .ifBlank { "opencode" },
+            password = (parameters["password"] ?: parameters["pass"]).orEmpty()
+        )
     }
 
-    private fun hostFromUrl(url: String): String? =
-        runCatching {
-            val afterScheme = url.substringAfter("://")
-            afterScheme.substringBefore('/').substringBefore(':')
-        }.getOrNull()
+    private fun decodeEndpoint(
+        rawEndpoint: String,
+        explicitLanPermission: Boolean?
+    ): ConnectionFormState {
+        val endpoint = OpenCodeUrl.normalize(rawEndpoint).getOrThrow()
+        require(endpoint.username.isEmpty() && endpoint.password.isEmpty()) {
+            "Endpoint URL must not contain credentials"
+        }
+        val isHttp = endpoint.scheme == "http"
+        if (isHttp && explicitLanPermission == false) {
+            error("LAN HTTP must be explicitly allowed by the QR payload")
+        }
+        return ConnectionFormState(
+            id = UUID.randomUUID().toString(),
+            name = endpoint.host.ifBlank { "OpenCode" },
+            baseUrl = endpoint.toString(),
+            username = "opencode",
+            allowInsecureLan = isHttp
+        )
+    }
+
+    private fun parseQuery(rawQuery: String?): Map<String, String> {
+        if (rawQuery.isNullOrBlank()) return emptyMap()
+        return rawQuery.split('&')
+            .filter(String::isNotBlank)
+            .associate { pair ->
+                val separator = pair.indexOf('=')
+                val key = if (separator >= 0) pair.substring(0, separator) else pair
+                val value = if (separator >= 0) pair.substring(separator + 1) else ""
+                decodeComponent(key) to decodeComponent(value)
+            }
+    }
+
+    private fun encodeComponent(value: String): String =
+        URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
+
+    private fun decodeComponent(value: String): String =
+        URLDecoder.decode(value, StandardCharsets.UTF_8.name())
 }

@@ -37,21 +37,32 @@ val prepareOpenCodeRuntimeNativeLibs = tasks.register<Exec>("prepareOpenCodeRunt
     )
 }
 
-val releaseStoreFile = providers.environmentVariable("OPENCODE_STORE_FILE")
-    .orElse(providers.gradleProperty("OPENCODE_STORE_FILE"))
-val releaseStorePassword = providers.environmentVariable("OPENCODE_STORE_PASSWORD")
-    .orElse(providers.gradleProperty("OPENCODE_STORE_PASSWORD"))
-val releaseKeyAlias = providers.environmentVariable("OPENCODE_KEY_ALIAS")
-    .orElse(providers.gradleProperty("OPENCODE_KEY_ALIAS"))
-val releaseKeyPassword = providers.environmentVariable("OPENCODE_KEY_PASSWORD")
-    .orElse(providers.gradleProperty("OPENCODE_KEY_PASSWORD"))
-val hasReleaseSigning = sequenceOf(
+val releaseStoreFile = (System.getenv("OPENCODE_STORE_FILE")
+    ?: findProperty("OPENCODE_STORE_FILE")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseStorePassword = (System.getenv("OPENCODE_STORE_PASSWORD")
+    ?: findProperty("OPENCODE_STORE_PASSWORD")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = (System.getenv("OPENCODE_KEY_ALIAS")
+    ?: findProperty("OPENCODE_KEY_ALIAS")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = (System.getenv("OPENCODE_KEY_PASSWORD")
+    ?: findProperty("OPENCODE_KEY_PASSWORD")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val hasReleaseSigning = listOf(
     releaseStoreFile,
     releaseStorePassword,
     releaseKeyAlias,
     releaseKeyPassword
-).all { it.orNull?.isNotBlank() == true } &&
-    releaseStoreFile.orNull?.let { file(it).isFile } == true
+).all { !it.isNullOrBlank() } &&
+    releaseStoreFile!!.let { path ->
+        val resolved = if (File(path).isAbsolute) {
+            File(path)
+        } else {
+            File(rootProject.projectDir, path)
+        }
+        resolved.isFile
+    }
 
 android {
     namespace = "com.opencode.android"
@@ -73,10 +84,15 @@ android {
     if (hasReleaseSigning) {
         signingConfigs {
             create("release") {
-                storeFile = file(releaseStoreFile.get())
-                storePassword = releaseStorePassword.get()
-                keyAlias = releaseKeyAlias.get()
-                keyPassword = releaseKeyPassword.get()
+                val storeFilePath = releaseStoreFile!!
+                storeFile = if (File(storeFilePath).isAbsolute) {
+                    File(storeFilePath)
+                } else {
+                    File(rootProject.projectDir, storeFilePath)
+                }
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }

@@ -147,29 +147,20 @@ class WorkspaceViewModel(
     }
 
     fun applyQrOrLink(raw: String) {
-        val parsed = com.opencode.android.feature.connection.OpenCodeConnectionQr.decode(raw)
-        parsed.fold(
+        resolveQrConnectionForm(raw, registry.remoteProfiles()).fold(
             onSuccess = { form ->
-                val existing = registry.remoteProfiles().firstOrNull { it.baseUrl == form.normalizedUrl }
-                val merged = if (existing != null) form.copy(id = existing.id) else form
-                emit(WorkspaceEvent.OpenEditor(merged, "Recognized ${merged.baseUrl}"))
+                emit(WorkspaceEvent.OpenEditor(form, "接続情報を読み取りました: ${form.baseUrl}"))
             },
             onFailure = { error ->
-                emit(WorkspaceEvent.Info(error.message ?: "Could not parse QR or link"))
+                emit(WorkspaceEvent.Info(error.message ?: "QRまたは接続リンクを読み取れませんでした"))
             }
         )
     }
 
     fun addDiscovered(service: DiscoveredOpenCodeService) {
-        val profile = ConnectionProfile(
-            id = java.util.UUID.randomUUID().toString(),
-            name = service.name,
-            baseUrl = service.baseUrl,
-            username = "opencode",
-            allowInsecureLan = true
-        )
+        val profile = profileFromDiscoveredService(service, registry.remoteProfiles())
         registry.upsertRemote(profile)
-        emit(WorkspaceEvent.Info("Added ${service.name}"))
+        emit(WorkspaceEvent.Info("${service.name}を追加しました"))
     }
 
     private fun emit(event: WorkspaceEvent) {
