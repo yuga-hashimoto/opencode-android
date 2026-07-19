@@ -336,6 +336,17 @@ fun OpenCodeApp(
         )
     }
 
+    LaunchedEffect(preferences.providerId, preferences.modelId, settingsState.providers) {
+        val model = settingsState.providers
+            .firstOrNull { it.id == preferences.providerId }
+            ?.models
+            ?.get(preferences.modelId)
+        chatViewModel.selectModelMetadata(
+            variants = model?.variants.orEmpty(),
+            contextLimit = model?.limit?.context
+        )
+    }
+
     LaunchedEffect(selectedRuntime?.id, workspaceState.workspaces, chatState.sessionId) {
         if (chatState.sessionId != null) return@LaunchedEffect
         val currentPath = chatState.selectedWorkspacePath
@@ -412,10 +423,14 @@ fun OpenCodeApp(
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
+                    availableVariants = chatState.availableVariants,
+                    selectedVariant = chatState.selectedVariant,
+                    contextUsagePercent = chatState.contextUsagePercent,
                     recentModels = settingsState.recentModels,
                     sessions = homeState.sessions,
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
+                    onSelectVariant = chatViewModel::selectVariant,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
@@ -426,7 +441,10 @@ fun OpenCodeApp(
                     onNewChat = chatViewModel::newSession,
                     onSelectSession = chatViewModel::openSession,
                     onRenameSession = chatViewModel::renameSession,
-                    onDeleteSession = chatViewModel::deleteSession
+                    onDeleteSession = chatViewModel::deleteSession,
+                    onOpenAdditionalSettings = {
+                        navController.navigate(Destination.SETTINGS.route)
+                    }
                 )
             }
 
