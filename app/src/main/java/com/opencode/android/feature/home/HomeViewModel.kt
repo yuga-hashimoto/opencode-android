@@ -30,7 +30,8 @@ data class HomeUiState(
     val pendingApprovalCount: Int = 0,
     val error: String? = null
 ) {
-    val connected: Boolean get() = version != null
+    val connected: Boolean
+        get() = runtimeState is RuntimeState.Connected || version != null
 }
 
 class HomeViewModel(
@@ -49,8 +50,9 @@ class HomeViewModel(
             runtimeId = runtime.runtime?.id,
             runtimeName = runtime.runtime?.displayName.orEmpty(),
             runtimeType = runtime.runtime?.type,
-            runtimeState = runtime.runtime?.state?.value ?: RuntimeState.Disconnected,
-            version = runtime.health?.version,
+            runtimeState = runtime.runtimeState,
+            version = runtime.health?.version
+                ?: (runtime.runtimeState as? RuntimeState.Connected)?.version,
             workspace = runtime.workspaces.firstOrNull(),
             sessions = runtime.sessions.sortedByDescending { it.time.updated ?: it.time.created },
             providerId = prefs.providerId,
