@@ -12,9 +12,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
@@ -79,7 +79,12 @@ class UiScreenshotInstrumentedTest {
             assertions = {
                 composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
                 composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
-                composeRule.onNodeWithText("OpenCodeにメッセージを送る…").assertDoesNotExist()
+                check(
+                    composeRule
+                        .onAllNodesWithText("OpenCodeにメッセージを送る…")
+                        .fetchSemanticsNodes()
+                        .isEmpty()
+                ) { "Composer must be hidden while the runtime is not ready" }
             }
         ) {
             ChatHomeScreen(
