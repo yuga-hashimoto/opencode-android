@@ -12,7 +12,7 @@
     <string name="chat_workspace_short_default">Default</string>
     <string name="chat_build_subtitle_compact">Ask OpenCode to implement, fix, or investigate.</string>
     <string name="settings_wake_word_row">Wake word</string>
-    <string name="settings_wake_word_value">OpenCode</string>
+    <string name="settings_wake_word_value">Not installed</string>
     <string name="setup_step_counter">Step %1$d of %2$d</string>
     <string name="setup_next_action">Next</string>
     <string name="setup_back_action">Back</string>
@@ -29,4 +29,8 @@
     <string name="remote_connection_failed">Connection failed.</string>
     <string name="provider_saved_credentials_title">Saved credentials</string>
     <string name="provider_add_credentials_title">Add or update an API key</string>
+    <string name="voice_settings_intro">Configure voice input and spoken responses.</string>
+    <string name="voice_conversation_section">Voice conversation</string>
+    <string name="voice_response_description">Read OpenCode responses aloud.</string>
+    <string name="wake_word_pack_required">The optional wake-word pack is not installed yet.</string>
 </resources>
