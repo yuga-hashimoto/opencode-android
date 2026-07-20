@@ -53,17 +53,17 @@ fun AppDrawerContent(
     Surface(
         modifier = modifier
             .fillMaxHeight()
-            .width(304.dp),
+            .width(288.dp),
         color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp)
+        shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp)
     ) {
         Column(modifier = Modifier.fillMaxHeight()) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(top = 8.dp)
+                    .padding(top = 6.dp)
             ) {
                 DrawerHeader()
                 NewChatRow(onClick = onNewChat)
@@ -73,14 +73,13 @@ fun AppDrawerContent(
                     recentSessions.forEach { session ->
                         DrawerChatRow(
                             title = session.title.ifBlank { session.id },
-                            relativeTime = session.relativeTime,
                             onClick = { onOpenSession(session.id, session.title) }
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f))
             DrawerDestinationRow(
                 icon = Icons.Default.Folder,
                 label = stringResource(R.string.settings_workspace_row),
@@ -91,7 +90,7 @@ fun AppDrawerContent(
                 label = stringResource(R.string.nav_settings),
                 onClick = { onNavigate("settings") }
             )
-            Spacer(Modifier.padding(bottom = 4.dp))
+            Spacer(Modifier.padding(bottom = 3.dp))
         }
     }
 }
@@ -101,19 +100,19 @@ private fun DrawerHeader() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         Icon(
             imageVector = Icons.Default.Terminal,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(22.dp)
         )
         Text(
             text = stringResource(R.string.app_name),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -126,26 +125,26 @@ private fun NewChatRow(onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 10.dp, vertical = 3.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.Chat,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
             Text(
                 text = stringResource(R.string.new_chat),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -157,45 +156,26 @@ private fun DrawerSectionHeader(text: String) {
         text = text,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp)
     )
 }
 
 @Composable
 private fun DrawerChatRow(
     title: String,
-    relativeTime: String,
     onClick: () -> Unit
 ) {
-    Row(
+    Text(
+        text = title,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.Chat,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(17.dp)
-        )
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = relativeTime,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-    }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -208,15 +188,15 @@ private fun DrawerDestinationRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 11.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(11.dp)
     ) {
         Icon(
             icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(19.dp)
         )
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
