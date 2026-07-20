@@ -9,12 +9,15 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.opencode.android.ui.OpenCodeApp
+import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            OpenCodeApp(onOpenAssistantSettings = ::openAssistantSettings)
+            OpenCodeAndroidTheme {
+                OpenCodeApp(onOpenAssistantSettings = ::openAssistantSettings)
+            }
         }
     }
 

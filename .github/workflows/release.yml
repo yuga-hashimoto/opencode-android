@@ -1,33 +1,89 @@
-name: Build and Release APK
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [feature/initial-mvp, main]
+    paths:
+      - '.release-version'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create and release (e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Build signed APK
-        run: ./gradlew assembleRelease
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache generated Android runtime
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/generated/runtime-assets
+            build/generated/runtime-jni
+          key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
+
+      - name: Build APKs
         env:
           OPENCODE_STORE_FILE: app/release.keystore
           OPENCODE_STORE_PASSWORD: opencode123
           OPENCODE_KEY_ALIAS: opencode-android
           OPENCODE_KEY_PASSWORD: opencode123
+        run: ./gradlew assembleDebug assembleRelease
 
-      - name: Upload APK to release
+      - name: Resolve tag
+        id: tag
         run: |
-          gh release upload "${{ github.ref_name }}" app/build/outputs/apk/release/app-release.apk --clobber
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="$(tr -d '[:space:]' < .release-version)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create release and upload APKs
         env:
           GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --target "${{ github.sha }}" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+          cp app/build/outputs/apk/debug/app-debug.apk "opencode-android-$TAG-debug.apk"
+          ASSETS=("opencode-android-$TAG-debug.apk")
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "opencode-android-$TAG-release.apk"
+            ASSETS+=("opencode-android-$TAG-release.apk")
+            gh release delete-asset "$TAG" "opencode-android-$TAG-release-unsigned.apk" -y || true
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "opencode-android-$TAG-release-unsigned.apk"
+            ASSETS+=("opencode-android-$TAG-release-unsigned.apk")
+          fi
+          gh release upload "$TAG" --clobber "${ASSETS[@]}"

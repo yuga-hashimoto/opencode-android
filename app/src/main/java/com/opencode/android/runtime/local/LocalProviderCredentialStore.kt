@@ -26,7 +26,11 @@ class LocalProviderCredentialStore(
         load = { settings.providerApiKeys() },
         save = { settings.providerApiKeys = it },
         loadManagedProviderIds = {
-            settings.managedProviderApiKeyIds.ifEmpty { settings.providerApiKeys().keys }
+            if (settings.hasManagedProviderApiKeyIds) {
+                settings.managedProviderApiKeyIds
+            } else {
+                settings.providerApiKeys().keys
+            }
         },
         saveManagedProviderIds = { settings.managedProviderApiKeyIds = it },
         gson = gson

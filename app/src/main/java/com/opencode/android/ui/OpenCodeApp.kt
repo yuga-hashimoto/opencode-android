@@ -5,25 +5,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,13 +18,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -53,16 +35,20 @@ import com.opencode.android.feature.activity.SessionDetailScreen
 import com.opencode.android.feature.activity.SessionDetailViewModel
 import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
+import com.opencode.android.feature.chat.ChatHomeScreen
 import com.opencode.android.feature.chat.ChatViewModel
-import com.opencode.android.feature.chat.OpenCodeChatScreen
-import com.opencode.android.feature.home.HomeScreen
-import com.opencode.android.feature.home.HomeViewModel
-import com.opencode.android.feature.settings.SettingsScreen
+import com.opencode.android.feature.chat.buildHandoffPrompt
+import com.opencode.android.feature.onboarding.AndroidSetupScreen
+import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
+import com.opencode.android.feature.schedule.ScheduleScreen
+import com.opencode.android.feature.schedule.ScheduleViewModel
+import com.opencode.android.feature.settings.ProviderSettingsScreen
+import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
-import com.opencode.android.feature.workspace.ConnectionDialog
-import com.opencode.android.feature.workspace.ConnectionFormState
+import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementViewModel
+import com.opencode.android.feature.workspace.RemoteConnectionScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
@@ -73,21 +59,22 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Destination(
-    val route: String,
-    val labelRes: Int,
-    val icon: ImageVector
-) {
-    HOME("home", R.string.nav_home, Icons.Default.Dashboard),
-    CHAT("chat", R.string.nav_chat, Icons.AutoMirrored.Filled.Chat),
-    ACTIVITY("activity", R.string.nav_activity, Icons.Default.History),
-    SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
-}
-
-private const val WORKSPACES_ROUTE = "workspaces"
+private const val ROUTE_ONBOARDING = "onboarding"
+private const val ROUTE_ANDROID_SETUP = "android-setup"
+private const val ROUTE_REMOTE_CONNECTION = "remote-connection"
+private const val ROUTE_CHAT = "chat"
+private const val ROUTE_SCHEDULE = "schedule"
+private const val ROUTE_SETTINGS = "settings"
+private const val ROUTE_SETTINGS_VOICE = "settings-voice"
+private const val ROUTE_SETTINGS_PROVIDERS = "settings-providers"
+private const val ROUTE_WORKSPACES = "workspaces"
+private const val ROUTE_ACTIVITY = "activity"
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
+
+/** Routes whose top bar exposes the hamburger menu / drawer swipe gesture. */
+private val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULE)
 
 private fun speechLocaleTag(context: android.content.Context): String {
     val locale = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
@@ -99,6 +86,20 @@ private fun speechLocaleTag(context: android.content.Context): String {
     return locale?.toLanguageTag()?.takeIf { it.isNotBlank() } ?: "en-US"
 }
 
+/** Relative-time label ("3時間前" / "3 hours ago") for the drawer's recent-chats list. */
+private fun relativeTimeLabel(context: android.content.Context, epochMillis: Long): String {
+    val diffMillis = (System.currentTimeMillis() - epochMillis).coerceAtLeast(0L)
+    val minutes = diffMillis / 60_000L
+    val hours = minutes / 60L
+    val days = hours / 24L
+    return when {
+        minutes < 1L -> context.getString(R.string.drawer_time_just_now)
+        hours < 1L -> context.getString(R.string.drawer_time_minutes_ago, minutes)
+        days < 1L -> context.getString(R.string.drawer_time_hours_ago, hours)
+        else -> context.getString(R.string.drawer_time_days_ago, days)
+    }
+}
+
 @Composable
 fun OpenCodeApp(
     onOpenAssistantSettings: () -> Unit
@@ -108,16 +109,14 @@ fun OpenCodeApp(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     var pendingSession by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var pendingHandoffPrompt by remember { mutableStateOf<Pair<String, String>?>(null) }
     var selectedWorkspace by remember { mutableStateOf<WorkspaceRef?>(null) }
     var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var notificationsEnabled by remember { mutableStateOf(true) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
+    val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
     val preferences by app.preferences.state.collectAsState()
-    val homeViewModel: HomeViewModel = viewModel(
-        key = "home",
-        factory = ViewModelFactory { HomeViewModel(app.catalogRepository, app.preferences, app.activityRepository) }
-    )
-    val homeState by homeViewModel.state.collectAsState()
 
     val workspaceViewModel: WorkspaceViewModel = viewModel(
         key = "workspaces",
@@ -126,8 +125,7 @@ fun OpenCodeApp(
                 app.runtimeRegistry,
                 app.catalogRepository,
                 app.localRuntimeManager,
-                app.localRuntimeController,
-                nsdDiscovery = app.nsdDiscovery
+                app.localRuntimeController
             )
         }
     )
@@ -166,9 +164,7 @@ fun OpenCodeApp(
             ChatViewModel(
                 backend = selectedRuntime,
                 eventFlow = app.activityRepository.events,
-                onPermissionResolved = app.activityRepository::resolvePermission,
-                onSessionsChanged = app.catalogRepository::refresh,
-                onActiveSessionChanged = app.activityRepository::setForegroundSessionId
+                onPermissionResolved = app.activityRepository::resolvePermission
             )
         }
     )
@@ -178,9 +174,6 @@ fun OpenCodeApp(
     val voiceScope = rememberCoroutineScope()
     var voiceJob by remember { mutableStateOf<Job?>(null) }
     var startVoiceAfterPermission by remember { mutableStateOf(false) }
-    var startWakeAfterPermission by remember { mutableStateOf(false) }
-    var wakeWordListening by remember { mutableStateOf(app.settings.wakeWordListeningEnabled) }
-    var wakeWordStatusMessage by remember { mutableStateOf<String?>(null) }
 
     fun hasMicrophonePermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -218,33 +211,12 @@ fun OpenCodeApp(
     val microphonePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        when {
-            granted && startWakeAfterPermission -> {
-                startWakeAfterPermission = false
-                runCatching { app.wakeWordListeningController.start() }
-                    .onSuccess {
-                        wakeWordListening = true
-                        wakeWordStatusMessage = null
-                    }
-                    .onFailure { error ->
-                        wakeWordListening = false
-                        wakeWordStatusMessage = error.message
-                    }
-            }
-            granted && startVoiceAfterPermission -> {
-                startVoiceAfterPermission = false
-                startOrStopVoiceInput()
-            }
-            !granted -> {
-                val requestedVoice = startVoiceAfterPermission
-                startVoiceAfterPermission = false
-                startWakeAfterPermission = false
-                wakeWordListening = false
-                wakeWordStatusMessage = context.getString(R.string.mic_permission_required)
-                if (requestedVoice) {
-                    chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
-                }
-            }
+        if (granted && startVoiceAfterPermission) {
+            startVoiceAfterPermission = false
+            startOrStopVoiceInput()
+        } else if (!granted) {
+            startVoiceAfterPermission = false
+            chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
         }
     }
 
@@ -273,29 +245,6 @@ fun OpenCodeApp(
                 }
                 settingsViewModel.setAssistantWorkspacePath(imported.absolutePath)
                 workspaceViewModel.refresh()
-            }
-        }
-    }
-
-    val chatAttachmentLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        voiceScope.launch {
-            uris.forEach { uri ->
-                runCatching {
-                    withContext(Dispatchers.IO) {
-                        val resolver = context.contentResolver
-                        val mimeType = resolver.getType(uri) ?: "application/octet-stream"
-                        val name = uri.lastPathSegment?.substringAfterLast('/')
-                            ?: "attachment-${System.currentTimeMillis()}"
-                        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                            ?: error("Unable to read attachment")
-                        chatViewModel.addAttachment(name, mimeType, bytes)
-                    }
-                }.onFailure { error ->
-                    chatViewModel.reportSpeechError(error.message ?: "Attachment failed")
-                }
             }
         }
     }
@@ -336,17 +285,6 @@ fun OpenCodeApp(
         )
     }
 
-    LaunchedEffect(preferences.providerId, preferences.modelId, settingsState.providers) {
-        val model = settingsState.providers
-            .firstOrNull { it.id == preferences.providerId }
-            ?.models
-            ?.get(preferences.modelId)
-        chatViewModel.selectModelMetadata(
-            variants = model?.variants.orEmpty(),
-            contextLimit = model?.limit?.context
-        )
-    }
-
     LaunchedEffect(selectedRuntime?.id, workspaceState.workspaces, chatState.sessionId) {
         if (chatState.sessionId != null) return@LaunchedEffect
         val currentPath = chatState.selectedWorkspacePath
@@ -356,66 +294,119 @@ fun OpenCodeApp(
         }
     }
 
-    val topLevelRoutes = remember { Destination.entries.mapTo(linkedSetOf()) { it.route } }
-    val selectedTopLevelRoute = topLevelRouteFor(
-        backStackEntry?.destination?.route,
-        topLevelRoutes
-    )
-    val showBottomBar = backStackEntry?.destination?.route != null
+    val onHandoff: (String) -> Unit = { targetRuntimeId ->
+        val prompt = buildHandoffPrompt(chatState.messages)
+        pendingHandoffPrompt = targetRuntimeId to prompt
+        app.runtimeRegistry.select(targetRuntimeId)
+    }
 
-    com.opencode.android.ui.theme.OpenCodeAndroidTheme(
-        themeMode = preferences.themeMode,
-        dynamicColor = preferences.dynamicColorEnabled
-    ) {
-    if (!preferences.onboardingCompleted) {
-        com.opencode.android.feature.onboarding.OnboardingScreen(onFinish = app.preferences::completeOnboarding)
-    } else {
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) NavigationBar {
-                Destination.entries.forEach { destination ->
-                    val selected = selectedTopLevelRoute == destination.route
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { navController.navigateTopLevel(destination.route, Destination.HOME.route) },
-                        icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
-                        label = { Text(stringResource(destination.labelRes)) }
-                    )
-                }
-            }
+    // First-run gate: onboarding is the start destination until completed or skipped.
+    val startDestination = remember { if (app.settings.onboardingCompleted) ROUTE_CHAT else ROUTE_ONBOARDING }
+    val completeOnboardingAndGoToChat: () -> Unit = {
+        app.settings.onboardingCompleted = true
+        navController.navigate(ROUTE_CHAT) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+            launchSingleTop = true
         }
-    ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = Destination.HOME.route,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            composable(Destination.HOME.route) {
-                HomeScreen(
-                    state = homeState,
+    }
+
+    val appVersion = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
+
+    val recentSessions = remember(activityState.sessions) {
+        activityState.sessions.take(8).map { session ->
+            DrawerRecentSession(
+                id = session.id,
+                title = session.title.ifBlank { session.slug ?: session.id },
+                relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created)
+            )
+        }
+    }
+
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    val currentRoute = backStackEntry?.destination?.route
+
+    fun closeDrawer() {
+        drawerScope.launch { drawerState.close() }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = currentRoute in DRAWER_ROOT_ROUTES,
+        drawerContent = {
+            ModalDrawerSheet {
+                AppDrawerContent(
+                    recentSessions = recentSessions,
                     onNewChat = {
+                        closeDrawer()
                         pendingSession = null
                         chatViewModel.newSession()
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
-                    onOpenWorkspaces = { navController.navigate(WORKSPACES_ROUTE) },
-                    onOpenActivity = { navController.navigate(Destination.ACTIVITY.route) },
                     onOpenSession = { id, title ->
+                        closeDrawer()
                         pendingSession = id to title
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
-                    onRefresh = homeViewModel::refresh
+                    onNavigate = { route ->
+                        closeDrawer()
+                        navController.navigate(route) { launchSingleTop = true }
+                    }
+                )
+            }
+        }
+    ) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination
+        ) {
+            composable(ROUTE_ONBOARDING) {
+                OnboardingChoiceScreen(
+                    onSelectAndroid = { navController.navigate(ROUTE_ANDROID_SETUP) },
+                    onSelectRemote = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+                    onAddRemoteLater = { navController.navigate(ROUTE_REMOTE_CONNECTION) }
                 )
             }
 
-            composable(Destination.CHAT.route) {
+            composable(ROUTE_ANDROID_SETUP) {
+                val localRuntimeStatus by app.localRuntimeManager.state.collectAsState()
+                AndroidSetupScreen(
+                    runtimeStatus = localRuntimeStatus,
+                    onStartRuntimeSetup = workspaceViewModel::setupLocalRuntime,
+                    onSaveApiKey = settingsViewModel::saveLocalBootstrapApiKey,
+                    onBack = { navController.popBackStack() },
+                    onFinish = completeOnboardingAndGoToChat
+                )
+            }
+
+            composable(ROUTE_REMOTE_CONNECTION) {
+                RemoteConnectionScreen(
+                    onTestConnection = workspaceViewModel::testConnection,
+                    onSaveConnection = workspaceViewModel::saveConnection,
+                    onBack = { navController.popBackStack() },
+                    onConnected = completeOnboardingAndGoToChat
+                )
+            }
+
+            composable(ROUTE_CHAT) {
                 LaunchedEffect(pendingSession) {
                     pendingSession?.let { (id, title) ->
                         chatViewModel.openSession(id, title)
                         pendingSession = null
                     }
                 }
-                OpenCodeChatScreen(
+                LaunchedEffect(pendingHandoffPrompt, selectedRuntime?.id) {
+                    val pending = pendingHandoffPrompt
+                    if (pending != null && selectedRuntime?.id == pending.first) {
+                        chatViewModel.sendMessage(pending.second)
+                        pendingHandoffPrompt = null
+                    }
+                }
+                ChatHomeScreen(
                     state = chatState,
                     providers = settingsState.providers,
                     agents = settingsState.agents,
@@ -423,43 +414,110 @@ fun OpenCodeApp(
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
-                    availableVariants = chatState.availableVariants,
-                    selectedVariant = chatState.selectedVariant,
-                    contextUsagePercent = chatState.contextUsagePercent,
-                    recentModels = settingsState.recentModels,
-                    sessions = homeState.sessions,
+                    runtimeTargets = runtimeTargets,
+                    selectedRuntimeId = selectedRuntime?.id,
+                    onSelectRuntime = { id ->
+                        if (id != selectedRuntime?.id) {
+                            if (chatState.messages.isNotEmpty()) {
+                                onHandoff(id)
+                            } else {
+                                app.runtimeRegistry.select(id)
+                            }
+                        }
+                    },
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
-                    onSelectVariant = chatViewModel::selectVariant,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
                     onMic = requestVoiceInput,
-                    onAttach = { chatAttachmentLauncher.launch("*/*") },
-                    onRemoveAttachment = chatViewModel::removeAttachment,
-                    onNewChat = chatViewModel::newSession,
-                    onSelectSession = chatViewModel::openSession,
-                    onRenameSession = chatViewModel::renameSession,
-                    onDeleteSession = chatViewModel::deleteSession,
-                    onOpenAdditionalSettings = {
-                        navController.navigate(Destination.SETTINGS.route)
-                    }
+                    onNewChat = {
+                        pendingSession = null
+                        chatViewModel.newSession()
+                    },
+                    onOpenHistory = {
+                        navController.navigate(ROUTE_ACTIVITY) { launchSingleTop = true }
+                    },
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } }
                 )
             }
 
-            composable(WORKSPACES_ROUTE) {
-                var quickEditor by remember { mutableStateOf<ConnectionFormState?>(null) }
-                LaunchedEffect(workspaceViewModel) {
-                    workspaceViewModel.events.collect { event ->
-                        when (event) {
-                            is com.opencode.android.feature.workspace.WorkspaceEvent.OpenEditor -> {
-                                quickEditor = event.form
-                            }
-                            is com.opencode.android.feature.workspace.WorkspaceEvent.Info -> Unit
+            composable(ROUTE_SCHEDULE) {
+                val scheduleViewModel: ScheduleViewModel = viewModel(
+                    key = "schedule",
+                    factory = ViewModelFactory { ScheduleViewModel() }
+                )
+                val scheduleItems by scheduleViewModel.state.collectAsState()
+                ScheduleScreen(
+                    items = scheduleItems,
+                    onToggle = scheduleViewModel::toggle,
+                    onAdd = scheduleViewModel::add,
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } }
+                )
+            }
+
+            composable(ROUTE_SETTINGS) {
+                SettingsScreenV2(
+                    assistantConfigured = settingsState.assistantRuntimeId != null,
+                    notificationsEnabled = notificationsEnabled,
+                    onToggleNotifications = { enabled ->
+                        // Local UI toggle only — Android has no API to programmatically revoke
+                        // notification access, so turning this off is visual until the user
+                        // also disables notifications from system settings. TODO: reflect the
+                        // real system permission state instead of local-only UI state.
+                        notificationsEnabled = enabled
+                        if (enabled && android.os.Build.VERSION.SDK_INT >= 33) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         }
-                    }
-                }
+                    },
+                    appVersion = appVersion,
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } },
+                    onOpenAssistantSettings = onOpenAssistantSettings,
+                    onOpenVoiceSettings = { navController.navigate(ROUTE_SETTINGS_VOICE) },
+                    onOpenProviderSettings = { navController.navigate(ROUTE_SETTINGS_PROVIDERS) },
+                    onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
+                    onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+                    onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
+                    onOpenDiagnostics = { navController.navigate(ROUTE_ACTIVITY) }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_VOICE) {
+                VoiceSettingsScreen(
+                    ttsEnabled = settingsState.ttsEnabled,
+                    continuousConversation = settingsState.continuousConversation,
+                    onTtsChange = settingsViewModel::setTtsEnabled,
+                    onContinuousChange = settingsViewModel::setContinuousConversation,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_PROVIDERS) {
+                ProviderSettingsScreen(
+                    state = settingsState,
+                    onOpenProviderAuth = settingsViewModel::openProviderAuth,
+                    onSelectProviderAuthMethod = settingsViewModel::selectProviderAuthMethod,
+                    onProviderAuthInput = settingsViewModel::updateProviderAuthInput,
+                    onProviderApiKey = settingsViewModel::updateProviderApiKey,
+                    onSubmitProviderAuth = settingsViewModel::submitProviderAuth,
+                    onCompleteProviderOAuth = settingsViewModel::completeProviderOAuth,
+                    onDisconnectProvider = settingsViewModel::disconnectProvider,
+                    onLaunchOAuthBrowser = { url ->
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            )
+                        }.onFailure { error ->
+                            settingsViewModel.reportOAuthError(error.message.orEmpty())
+                        }
+                    },
+                    onDismissProviderAuth = settingsViewModel::dismissProviderAuth,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_WORKSPACES) {
                 WorkspacesScreen(
                     state = workspaceState,
                     onSelectRuntime = workspaceViewModel::selectRuntime,
@@ -477,22 +535,8 @@ fun OpenCodeApp(
                     onReinstallLocal = workspaceViewModel::reinstallLocalRuntime,
                     onOpenLocalManagement = {
                         navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE)
-                    },
-                    onApplyQrOrLink = workspaceViewModel::applyQrOrLink,
-                    onAddDiscovered = workspaceViewModel::addDiscovered
+                    }
                 )
-                quickEditor?.let { form ->
-                    ConnectionDialog(
-                        initial = form,
-                        onDismiss = { quickEditor = null },
-                        onSave = {
-                            workspaceViewModel.saveConnection(it)
-                            quickEditor = null
-                        },
-                        onDelete = null,
-                        onTest = workspaceViewModel::testConnection
-                    )
-                }
             }
 
             composable(LOCAL_RUNTIME_MANAGEMENT_ROUTE) {
@@ -568,7 +612,7 @@ fun OpenCodeApp(
                 }
             }
 
-            composable(Destination.ACTIVITY.route) {
+            composable(ROUTE_ACTIVITY) {
                 ActivityScreen(
                     state = activityState,
                     onRefresh = activityViewModel::refresh,
@@ -578,9 +622,11 @@ fun OpenCodeApp(
                     },
                     onOpenSession = { id, title ->
                         pendingSession = id to title
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
-                    onPermission = activityViewModel::respondToPermission
+                    onPermission = activityViewModel::respondToPermission,
+                    onRenameSession = activityViewModel::renameSession,
+                    onDeleteSession = activityViewModel::deleteSession
                 )
             }
 
@@ -597,232 +643,17 @@ fun OpenCodeApp(
                         }
                     )
                     val detailState by detailViewModel.state.collectAsState()
-                    val handoffMessage = remember { mutableStateOf<String?>(null) }
-                    val handoffScope = rememberCoroutineScope()
-                    val runtimeOptions = remember {
-                        app.runtimeRegistry.targets.value
-                            .filter { it.id != runtime.id }
-                            .map { it.id to it.displayName }
-                    }
                     SessionDetailScreen(
                         state = detailState,
                         onBack = { navController.popBackStack() },
                         onRefresh = detailViewModel::refresh,
                         onContinueChat = {
                             pendingSession = session.id to session.title
-                            navController.navigate(Destination.CHAT.route)
-                        },
-                        runtimeOptions = runtimeOptions,
-                        handoffMessage = handoffMessage.value,
-                        onHandoff = { targetRuntimeId ->
-                            handoffScope.launch {
-                                val packResult = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        com.opencode.android.feature.chat.SessionHandoff.buildPackage(
-                                            sourceRuntimeId = runtime.id,
-                                            sourceRuntimeName = runtime.displayName,
-                                            sessionId = session.id,
-                                            sessionTitle = session.title,
-                                            directory = session.directory,
-                                            messages = runtime.listMessages(session.id)
-                                        )
-                                    }
-                                }
-                                val pack = packResult.getOrElse {
-                                    handoffMessage.value = it.message ?: "Handoff failed"
-                                    return@launch
-                                }
-                                com.opencode.android.feature.chat.SessionHandoff.handoff(
-                                    app.runtimeRegistry,
-                                    pack,
-                                    targetRuntimeId
-                                ).fold(
-                                    onSuccess = { newSessionId ->
-                                        handoffMessage.value = "Handed off to ${pack.sessionTitle.take(20)} ($newSessionId)"
-                                        pendingSession = newSessionId to pack.sessionTitle
-                                        navController.navigate(Destination.CHAT.route)
-                                    },
-                                    onFailure = { error ->
-                                        handoffMessage.value = error.message ?: "Handoff failed"
-                                    }
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-
-            composable(Destination.SETTINGS.route) {
-                val wakeWordInstalled = remember { mutableStateOf(app.wakeWordPackManager.isInstalled()) }
-                var showWakeWordInstallDialog by remember { mutableStateOf(false) }
-                var wakeWordManifestUrl by remember { mutableStateOf("") }
-                var wakeWordInstallBusy by remember { mutableStateOf(false) }
-                val wakeWordSummary = remember(wakeWordInstalled.value) {
-                    app.wakeWordPackManager.installed()?.let {
-                        "${it.name} ${it.version}"
-                    }.orEmpty()
-                }
-                LaunchedEffect(Unit) {
-                    wakeWordListening = app.settings.wakeWordListeningEnabled
-                }
-                SettingsScreen(
-                    state = settingsState,
-                    onOpenAssistantSettings = onOpenAssistantSettings,
-                    onTtsChange = settingsViewModel::setTtsEnabled,
-                    onContinuousChange = settingsViewModel::setContinuousConversation,
-                    onAutoAllowReadOnlyChange = settingsViewModel::setAutoAllowReadOnlyTools,
-                    onThemeModeChange = settingsViewModel::setThemeMode,
-                    onDynamicColorChange = settingsViewModel::setDynamicColorEnabled,
-                    onReplayOnboarding = settingsViewModel::replayOnboarding,
-                    onOpenProviderAuth = settingsViewModel::openProviderAuth,
-                    onSelectProviderAuthMethod = settingsViewModel::selectProviderAuthMethod,
-                    onProviderAuthInput = settingsViewModel::updateProviderAuthInput,
-                    onProviderApiKey = settingsViewModel::updateProviderApiKey,
-                    onSubmitProviderAuth = settingsViewModel::submitProviderAuth,
-                    onCompleteProviderOAuth = settingsViewModel::completeProviderOAuth,
-                    onDisconnectProvider = settingsViewModel::disconnectProvider,
-                    onAssistantRuntime = settingsViewModel::setAssistantRuntimeId,
-                    onAssistantWorkspace = settingsViewModel::setAssistantWorkspacePath,
-                    onAssistantModel = settingsViewModel::setAssistantModel,
-                    onAssistantAgent = settingsViewModel::setAssistantAgent,
-                    onUseChatDefaultsForAssistant = settingsViewModel::useChatDefaultsForAssistant,
-                    onImportWorkspace = { workspaceImportLauncher.launch(null) },
-                    onRequestNotifications = {
-                        if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    },
-                    wakeWordPackSummary = wakeWordSummary,
-                    wakeWordInstalled = wakeWordInstalled.value,
-                    wakeWordListeningEnabled = wakeWordListening,
-                    wakeWordStatusMessage = wakeWordStatusMessage,
-                    onInstallWakeWord = {
-                        wakeWordStatusMessage = null
-                        showWakeWordInstallDialog = true
-                    },
-                    onWakeWordListeningChange = { enabled ->
-                        if (enabled) {
-                            if (!wakeWordInstalled.value) {
-                                wakeWordStatusMessage = context.getString(R.string.wake_word_not_installed)
-                            } else if (hasMicrophonePermission()) {
-                                runCatching { app.wakeWordListeningController.start() }
-                                    .onSuccess {
-                                        wakeWordListening = true
-                                        wakeWordStatusMessage = null
-                                    }
-                                    .onFailure { error ->
-                                        wakeWordListening = false
-                                        wakeWordStatusMessage = error.message
-                                    }
-                            } else {
-                                startWakeAfterPermission = true
-                                microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        } else {
-                            app.wakeWordListeningController.stop()
-                            wakeWordListening = false
-                            wakeWordStatusMessage = null
-                        }
-                    },
-                     onDeleteWakeWord = {
-                        app.wakeWordListeningController.stop()
-                        wakeWordListening = false
-                        app.wakeWordPackManager.delete()
-                         wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
-                         wakeWordStatusMessage = null
-                     },
-                     onLaunchOAuthBrowser = { url ->
-                         runCatching {
-                             context.startActivity(
-                                 Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                             )
-                         }.onFailure { error ->
-                             settingsViewModel.reportOAuthError(error.message.orEmpty())
-                         }
-                     },
-                     onDismissProviderAuth = settingsViewModel::dismissProviderAuth
-                 )
-
-                if (showWakeWordInstallDialog) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            if (!wakeWordInstallBusy) showWakeWordInstallDialog = false
-                        },
-                        title = { Text(stringResource(R.string.install_wake_word_pack)) },
-                        text = {
-                            Column {
-                                Text(
-                                    stringResource(R.string.wake_word_manifest_help),
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                OutlinedTextField(
-                                    value = wakeWordManifestUrl,
-                                    onValueChange = {
-                                        wakeWordManifestUrl = it
-                                        wakeWordStatusMessage = null
-                                    },
-                                    enabled = !wakeWordInstallBusy,
-                                    label = { Text(stringResource(R.string.wake_word_manifest_url)) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                if (wakeWordInstallBusy) {
-                                    Spacer(Modifier.height(10.dp))
-                                    Text(stringResource(R.string.installing_wake_word_pack))
-                                }
-                                wakeWordStatusMessage?.takeIf(String::isNotBlank)?.let { message ->
-                                    Spacer(Modifier.height(10.dp))
-                                    Text(
-                                        message,
-                                        color = androidx.compose.material3.MaterialTheme.colorScheme.error,
-                                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(
-                                enabled = !wakeWordInstallBusy && wakeWordManifestUrl.isNotBlank(),
-                                onClick = {
-                                    wakeWordInstallBusy = true
-                                    wakeWordStatusMessage = null
-                                    voiceScope.launch {
-                                        runCatching {
-                                            withContext(Dispatchers.IO) {
-                                                app.wakeWordPackManager.downloadManifestAndInstall(
-                                                    wakeWordManifestUrl.trim()
-                                                )
-                                            }
-                                        }.onSuccess { installed ->
-                                            wakeWordInstalled.value = true
-                                            wakeWordStatusMessage = "${installed.name} ${installed.version}"
-                                            showWakeWordInstallDialog = false
-                                        }.onFailure { error ->
-                                            wakeWordStatusMessage = error.message
-                                                ?: context.getString(R.string.wake_word_not_installed)
-                                        }
-                                        wakeWordInstallBusy = false
-                                    }
-                                }
-                            ) {
-                                Text(stringResource(R.string.save))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(
-                                enabled = !wakeWordInstallBusy,
-                                onClick = { showWakeWordInstallDialog = false }
-                            ) {
-                                Text(stringResource(R.string.cancel))
-                            }
+                            navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                         }
                     )
                 }
             }
         }
-    }
-    }
     }
 }

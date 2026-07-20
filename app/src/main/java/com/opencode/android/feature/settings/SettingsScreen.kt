@@ -9,16 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -29,7 +28,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,10 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
-import com.opencode.android.core.api.OpenCodeAgent
-import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.ui.components.LabelValueRow
 import com.opencode.android.ui.components.SectionCard
 
@@ -53,33 +51,14 @@ fun SettingsScreen(
     onOpenAssistantSettings: () -> Unit,
     onTtsChange: (Boolean) -> Unit,
     onContinuousChange: (Boolean) -> Unit,
-    onAutoAllowReadOnlyChange: (Boolean) -> Unit = {},
-    onThemeModeChange: (String?) -> Unit = {},
-    onDynamicColorChange: (Boolean) -> Unit = {},
-    onReplayOnboarding: () -> Unit = {},
-    onOpenProviderAuth: (String) -> Unit = {},
-    onSelectProviderAuthMethod: (Int) -> Unit = {},
-    onProviderAuthInput: (String, String) -> Unit = { _, _ -> },
-    onProviderApiKey: (String) -> Unit = {},
-    onSubmitProviderAuth: () -> Unit = {},
-    onCompleteProviderOAuth: (String) -> Unit = {},
-    onDisconnectProvider: (String) -> Unit = {},
+    onDraftProviderId: (String) -> Unit = {},
+    onDraftApiKey: (String) -> Unit = {},
+    onSaveApiKey: () -> Unit = {},
+    onClearApiKey: (String) -> Unit = {},
     onAssistantRuntime: (String?) -> Unit = {},
     onAssistantWorkspace: (String?) -> Unit = {},
-    onAssistantModel: (String, String) -> Unit = { _, _ -> },
-    onAssistantAgent: (String?) -> Unit = {},
-    onUseChatDefaultsForAssistant: () -> Unit = {},
     onImportWorkspace: () -> Unit = {},
-    onRequestNotifications: () -> Unit = {},
-    wakeWordPackSummary: String = "",
-    wakeWordInstalled: Boolean = false,
-    wakeWordListeningEnabled: Boolean = false,
-    wakeWordStatusMessage: String? = null,
-    onInstallWakeWord: () -> Unit = {},
-    onWakeWordListeningChange: (Boolean) -> Unit = {},
-    onDeleteWakeWord: () -> Unit = {},
-    onLaunchOAuthBrowser: (String) -> Unit = {},
-    onDismissProviderAuth: () -> Unit = {}
+    onRequestNotifications: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -104,55 +83,6 @@ fun SettingsScreen(
 
         item {
             Text(
-                text = stringResource(R.string.appearance),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        item {
-            SectionCard {
-                Text(
-                    text = stringResource(R.string.theme),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeModeOption(
-                        label = stringResource(R.string.theme_system),
-                        selected = state.themeMode == null,
-                        onClick = { onThemeModeChange(null) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ThemeModeOption(
-                        label = stringResource(R.string.theme_light),
-                        selected = state.themeMode == "light",
-                        onClick = { onThemeModeChange("light") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ThemeModeOption(
-                        label = stringResource(R.string.theme_dark),
-                        selected = state.themeMode == "dark",
-                        onClick = { onThemeModeChange("dark") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    Spacer(Modifier.height(16.dp))
-                    SettingSwitchRow(
-                        icon = Icons.Default.Info,
-                        title = stringResource(R.string.dynamic_color),
-                        description = stringResource(R.string.dynamic_color_help),
-                        checked = state.dynamicColorEnabled,
-                        onCheckedChange = onDynamicColorChange
-                    )
-                }
-            }
-        }
-
-        item {
-            Text(
                 text = stringResource(R.string.home_assistant),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
@@ -170,7 +100,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.set_default_assistant), fontWeight = FontWeight.Medium)
                         Text(
-                            text = stringResource(R.string.assistant_role_help),
+                            text = stringResource(R.string.notifications_permission_rationale),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -224,51 +154,6 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-                Spacer(Modifier.height(8.dp))
-                AssistantModelSelector(
-                    providers = state.assistantProviders,
-                    providerId = state.assistantProviderId,
-                    modelId = state.assistantModelId,
-                    enabled = !state.isLoadingAssistantCatalog,
-                    onSelect = onAssistantModel
-                )
-                Spacer(Modifier.height(8.dp))
-                AssistantAgentSelector(
-                    agents = state.assistantAgents,
-                    agentId = state.assistantAgentId,
-                    enabled = !state.isLoadingAssistantCatalog,
-                    onSelect = onAssistantAgent
-                )
-                if (state.isLoadingAssistantCatalog) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(strokeWidth = 2.dp)
-                        Text(
-                            stringResource(R.string.assistant_catalog_loading),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                state.assistantCatalogError?.let { error ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        error,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onUseChatDefaultsForAssistant,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(stringResource(R.string.use_chat_defaults))
-                }
             }
         }
 
@@ -285,7 +170,7 @@ fun SettingsScreen(
                 SettingSwitchRow(
                     icon = Icons.Default.RecordVoiceOver,
                     title = stringResource(R.string.voice_response),
-                    description = stringResource(R.string.voice_response_help),
+                    description = stringResource(R.string.auto_start_mic),
                     checked = state.ttsEnabled,
                     onCheckedChange = onTtsChange
                 )
@@ -296,26 +181,6 @@ fun SettingsScreen(
                     description = stringResource(R.string.auto_start_mic),
                     checked = state.continuousConversation,
                     onCheckedChange = onContinuousChange
-                )
-            }
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.approvals),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        item {
-            SectionCard {
-                SettingSwitchRow(
-                    icon = Icons.Default.Security,
-                    title = stringResource(R.string.auto_allow_read_only),
-                    description = stringResource(R.string.auto_allow_read_only_help),
-                    checked = state.autoAllowReadOnlyTools,
-                    onCheckedChange = onAutoAllowReadOnlyChange
                 )
             }
         }
@@ -336,73 +201,51 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
-                if (state.providerAuthMethods.isEmpty()) {
-                    Text(
-                        stringResource(R.string.provider_auth_unavailable),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                state.providerAuthMethods.toSortedMap().forEach { (providerId, methods) ->
-                    val providerName = state.availableProviders
-                        .firstOrNull { it.id == providerId }
-                        ?.name
-                        ?: providerId
-                    val connected = providerId in state.connectedProviderIds
+                state.credentialStatuses.forEach { (providerId, saved) ->
                     LabelValueRow(
-                        label = providerName,
-                        value = if (connected) {
-                            stringResource(R.string.provider_connected)
+                        label = providerId,
+                        value = if (saved) {
+                            stringResource(R.string.key_saved)
                         } else {
-                            stringResource(R.string.provider_not_connected)
+                            stringResource(R.string.key_missing)
                         }
                     )
-                    Text(
-                        text = methods.joinToString(" · ") { it.label },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = { onOpenProviderAuth(providerId) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (connected) {
-                                stringResource(R.string.provider_change_connection)
-                            } else {
-                                stringResource(R.string.provider_connect)
-                            }
-                        )
-                    }
-                    if (connected) {
-                        TextButton(
-                            onClick = { onDisconnectProvider(providerId) },
+                    if (saved) {
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = { onClearApiKey(providerId) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(stringResource(R.string.provider_disconnect))
+                            Text(stringResource(R.string.clear_api_key))
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
-                state.providerAuthNotice?.let { notice ->
-                    Text(
-                        text = stringResource(
-                            when (notice) {
-                                ProviderAuthNotice.CONNECTED -> R.string.provider_connected_success
-                                ProviderAuthNotice.DISCONNECTED -> R.string.provider_disconnected_success
-                            }
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                OutlinedTextField(
+                    value = state.draftProviderId,
+                    onValueChange = onDraftProviderId,
+                    label = { Text(stringResource(R.string.provider_id_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) }
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = state.draftApiKey,
+                    onValueChange = onDraftApiKey,
+                    label = { Text(stringResource(R.string.api_key_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onSaveApiKey, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.save_api_key))
                 }
-                state.oauthMessage?.let { message ->
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                state.credentialMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -489,230 +332,11 @@ fun SettingsScreen(
                         )
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = onReplayOnboarding, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.replay_onboarding))
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = stringResource(R.string.wake_word_pack),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-
-        item {
-            SectionCard {
-                Text(
-                    text = stringResource(R.string.wake_word_pack_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = wakeWordPackSummary.ifBlank {
-                        stringResource(R.string.wake_word_not_installed)
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                wakeWordStatusMessage?.takeIf(String::isNotBlank)?.let { message ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (wakeWordInstalled) {
-                    Spacer(Modifier.height(12.dp))
-                    SettingSwitchRow(
-                        icon = Icons.Default.Mic,
-                        title = stringResource(R.string.wake_word_listening),
-                        description = stringResource(R.string.wake_word_listening_help),
-                        checked = wakeWordListeningEnabled,
-                        onCheckedChange = onWakeWordListeningChange
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onDeleteWakeWord,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.delete_wake_word))
-                    }
-                } else {
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = onInstallWakeWord,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(stringResource(R.string.install_wake_word_pack))
-                    }
-                }
             }
         }
 
         item { Spacer(Modifier.height(72.dp)) }
     }
-
-    state.providerAuthDialog?.let { dialog ->
-        ProviderAuthDialog(
-            state = dialog,
-            onSelectMethod = onSelectProviderAuthMethod,
-            onInputChange = onProviderAuthInput,
-            onApiKeyChange = onProviderApiKey,
-            onSubmit = onSubmitProviderAuth,
-            onCompleteCode = onCompleteProviderOAuth,
-            onLaunchBrowser = onLaunchOAuthBrowser,
-            onDismiss = onDismissProviderAuth
-        )
-    }
-
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AssistantModelSelector(
-    providers: List<OpenCodeProvider>,
-    providerId: String?,
-    modelId: String?,
-    enabled: Boolean,
-    onSelect: (String, String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedProvider = providers.firstOrNull { it.id == providerId }
-    val selectedModel = selectedProvider?.models?.get(modelId)
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = it }
-    ) {
-        OutlinedTextField(
-            value = selectedModel?.name ?: modelId.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text(stringResource(R.string.assistant_model)) },
-            supportingText = providerId?.let { { Text(it) } },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            providers.forEach { provider ->
-                val models = provider.models.values
-                    .filter { it.status == null || it.status == "active" }
-                    .sortedBy { it.name.lowercase() }
-                if (models.isNotEmpty()) {
-                    Text(
-                        provider.name,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                models.forEach { model ->
-                    DropdownMenuItem(
-                        text = {
-                            Column {
-                                Text(model.name, maxLines = 1)
-                                Text(
-                                    model.id,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
-                        },
-                        onClick = {
-                            onSelect(provider.id, model.id)
-                            expanded = false
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AssistantAgentSelector(
-    agents: List<OpenCodeAgent>,
-    agentId: String?,
-    enabled: Boolean,
-    onSelect: (String?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = it }
-    ) {
-        OutlinedTextField(
-            value = agentId.orEmpty(),
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text(stringResource(R.string.assistant_agent)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth()
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.use_chat_defaults)) },
-                onClick = {
-                    onSelect(null)
-                    expanded = false
-                }
-            )
-            agents.forEach { agent ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(agent.name)
-                            agent.description?.takeIf(String::isNotBlank)?.let { description ->
-                                Text(
-                                    description,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        onSelect(agent.name)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemeModeOption(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    androidx.compose.material3.FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label, maxLines = 1) },
-        modifier = modifier
-    )
 }
 
 @Composable

@@ -111,6 +111,34 @@ class LocalProviderCredentialStoreTest {
     }
 
     @Test
+    fun `initialized empty managed set does not fall back to legacy keys`() {
+        val credentials = mutableMapOf("openai" to "api-key")
+        val managedIds = mutableSetOf<String>()
+        var initialized = false
+        val store = LocalProviderCredentialStore(
+            load = { credentials.toMap() },
+            save = {
+                credentials.clear()
+                credentials.putAll(it)
+            },
+            loadManagedProviderIds = {
+                if (initialized) managedIds.toSet() else credentials.keys
+            },
+            saveManagedProviderIds = {
+                initialized = true
+                managedIds.clear()
+                managedIds.addAll(it)
+            }
+        )
+
+        store.unmanageProvider("openai")
+
+        assertTrue(initialized)
+        assertTrue(store.managedProviderIds().isEmpty())
+        assertEquals("api-key", store.credentials()["openai"])
+    }
+
+    @Test
     fun `malformed existing auth file is preserved and sync fails`() {
         val rootfs = temp.newFolder("malformed-rootfs")
         val authFile = File(rootfs, "root/.local/share/opencode/auth.json").apply {

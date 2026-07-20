@@ -91,6 +91,9 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
             preferences.getString(KEY_PROVIDER_API_KEYS, null)
         )
 
+    val hasManagedProviderApiKeyIds: Boolean
+        get() = preferences.contains(KEY_MANAGED_PROVIDER_API_KEY_IDS)
+
     var managedProviderApiKeyIds: Set<String>
         get() = preferences.getStringSet(KEY_MANAGED_PROVIDER_API_KEY_IDS, emptySet())
             .orEmpty()
@@ -114,26 +117,6 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getString(KEY_ASSISTANT_WORKSPACE_PATH, null)
         set(value) = preferences.edit().putString(KEY_ASSISTANT_WORKSPACE_PATH, value).apply()
 
-    var assistantProviderId: String?
-        get() = preferences.getString(KEY_ASSISTANT_PROVIDER_ID, null)
-        set(value) = preferences.edit().putString(KEY_ASSISTANT_PROVIDER_ID, value).apply()
-
-    var assistantModelId: String?
-        get() = preferences.getString(KEY_ASSISTANT_MODEL_ID, null)
-        set(value) = preferences.edit().putString(KEY_ASSISTANT_MODEL_ID, value).apply()
-
-    var assistantAgentId: String?
-        get() = preferences.getString(KEY_ASSISTANT_AGENT_ID, null)
-        set(value) = preferences.edit().putString(KEY_ASSISTANT_AGENT_ID, value).apply()
-
-    var assistantSessionProfileKey: String?
-        get() = preferences.getString(KEY_ASSISTANT_SESSION_PROFILE_KEY, null)
-        set(value) = preferences.edit().putString(KEY_ASSISTANT_SESSION_PROFILE_KEY, value).apply()
-
-    var wakeWordListeningEnabled: Boolean
-        get() = preferences.getBoolean(KEY_WAKE_WORD_LISTENING_ENABLED, false)
-        set(value) = preferences.edit().putBoolean(KEY_WAKE_WORD_LISTENING_ENABLED, value).apply()
-
     var safWorkspaceUris: List<String>
         get() = preferences.getString(KEY_SAF_WORKSPACE_URIS, null)
             ?.split('\n')
@@ -146,30 +129,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
                 .apply()
         }
 
-    var recentModels: List<String>
-        get() = preferences.getString(KEY_RECENT_MODELS, null)
-            ?.split('\n')
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            .orEmpty()
-        set(value) {
-            preferences.edit()
-                .putString(KEY_RECENT_MODELS, value.joinToString("\n"))
-                .apply()
-        }
-
-    var themeMode: String?
-        get() = preferences.getString(KEY_THEME_MODE, null)
-        set(value) = preferences.edit().putString(KEY_THEME_MODE, value).apply()
-
-    var dynamicColorEnabled: Boolean
-        get() = preferences.getBoolean(KEY_DYNAMIC_COLOR_ENABLED, false)
-        set(value) = preferences.edit().putBoolean(KEY_DYNAMIC_COLOR_ENABLED, value).apply()
-
-    var autoAllowReadOnlyTools: Boolean
-        get() = preferences.getBoolean(KEY_AUTO_ALLOW_READ_ONLY, false)
-        set(value) = preferences.edit().putBoolean(KEY_AUTO_ALLOW_READ_ONLY, value).apply()
-
+    /** True once the user has completed (or explicitly skipped) first-run onboarding. */
     var onboardingCompleted: Boolean
         get() = preferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
@@ -188,16 +148,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_MANAGED_PROVIDER_API_KEY_IDS = "managed_provider_api_key_ids"
         private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"
         private const val KEY_ASSISTANT_WORKSPACE_PATH = "assistant_workspace_path"
-        private const val KEY_ASSISTANT_PROVIDER_ID = "assistant_provider_id"
-        private const val KEY_ASSISTANT_MODEL_ID = "assistant_model_id"
-        private const val KEY_ASSISTANT_AGENT_ID = "assistant_agent_id"
-        private const val KEY_ASSISTANT_SESSION_PROFILE_KEY = "assistant_session_profile_key"
-        private const val KEY_WAKE_WORD_LISTENING_ENABLED = "wake_word_listening_enabled"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
-        private const val KEY_RECENT_MODELS = "recent_models"
-        private const val KEY_THEME_MODE = "theme_mode"
-        private const val KEY_DYNAMIC_COLOR_ENABLED = "dynamic_color_enabled"
-        private const val KEY_AUTO_ALLOW_READ_ONLY = "auto_allow_read_only_tools"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
 }

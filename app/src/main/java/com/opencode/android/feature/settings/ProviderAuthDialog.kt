@@ -67,7 +67,7 @@ fun ProviderAuthDialog(
                             OutlinedTextField(
                                 value = code,
                                 onValueChange = { code = it },
-                                label = { Text(stringResource(R.string.oauth_code_hint)) },
+                                label = { Text(stringResource(R.string.provider_confirmation_code)) },
                                 singleLine = true,
                                 enabled = !state.isSubmitting,
                                 modifier = Modifier.fillMaxWidth()
@@ -162,7 +162,7 @@ fun ProviderAuthDialog(
                     enabled = code.isNotBlank() && !state.isSubmitting,
                     onClick = { onCompleteCode(code) }
                 ) {
-                    Text(stringResource(R.string.oauth_complete))
+                    Text(stringResource(R.string.continue_label))
                 }
                 authorization != null -> Unit
                 state.methodIndex != null -> Button(

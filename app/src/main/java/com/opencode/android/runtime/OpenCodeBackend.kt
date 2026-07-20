@@ -1,7 +1,6 @@
 package com.opencode.android.runtime
 
 import com.opencode.android.core.api.OpenCodeAgent
-import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileContent
@@ -15,9 +14,9 @@ import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
-import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.core.api.ProviderAuthAuthorization
 import com.opencode.android.core.api.ProviderAuthMethod
+import com.opencode.android.core.api.ProviderCatalog
 import kotlinx.coroutines.flow.Flow
 
 enum class BackendKind {
@@ -43,10 +42,6 @@ interface OpenCodeBackend {
         directory: String? = null
     ): OpenCodeSession
     suspend fun listMessages(sessionId: String): List<OpenCodeMessage>
-    suspend fun deleteSession(sessionId: String): Boolean = unsupported("session delete")
-    suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
-        unsupported("session rename")
-    suspend fun listCommands(): List<OpenCodeCommand> = unsupported("command list")
     suspend fun listProviders(): ProviderCatalog
     suspend fun listAgents(): List<OpenCodeAgent>
     suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
@@ -99,6 +94,9 @@ interface OpenCodeBackend {
     ): List<OpenCodeTodo> = unsupported("session todo")
     suspend fun sendMessage(sessionId: String, request: PromptRequest)
     suspend fun abortSession(sessionId: String): Boolean
+    suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        unsupported("session rename")
+    suspend fun deleteSession(sessionId: String): Boolean = unsupported("session delete")
     suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

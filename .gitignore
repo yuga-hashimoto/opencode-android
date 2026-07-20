@@ -4,9 +4,3 @@ build/
 *.iml
 .idea/
 __pycache__/
-
-# Release signing material — never commit
-.secrets/
-*.jks
-*.keystore
-secrets.env

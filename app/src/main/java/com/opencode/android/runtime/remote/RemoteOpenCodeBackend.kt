@@ -15,9 +15,9 @@ import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
-import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.core.api.ProviderAuthAuthorization
 import com.opencode.android.core.api.ProviderAuthMethod
+import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.OpenCodeBackend
@@ -38,13 +38,10 @@ class RemoteOpenCodeBackend(
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         client.createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = client.messages(sessionId)
-    override suspend fun deleteSession(sessionId: String): Boolean = client.deleteSession(sessionId)
-    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
-        client.renameSession(sessionId, title)
-    override suspend fun listCommands(): List<com.opencode.android.core.api.OpenCodeCommand> = client.commands()
     override suspend fun listProviders(): ProviderCatalog = client.providers()
     override suspend fun listAgents(): List<OpenCodeAgent> = client.agents()
-    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> = client.providerAuthMethods()
+    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        client.providerAuthMethods()
     override suspend fun authorizeProvider(
         providerId: String,
         methodIndex: Int,
@@ -57,8 +54,11 @@ class RemoteOpenCodeBackend(
     ): Boolean = client.setProviderApiKey(providerId, apiKey, metadata)
     override suspend fun removeProviderAuth(providerId: String): Boolean =
         client.removeProviderAuth(providerId)
-    override suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
-        client.completeProviderOAuth(providerId, methodIndex, code)
+    override suspend fun completeProviderOAuth(
+        providerId: String,
+        methodIndex: Int,
+        code: String?
+    ): Boolean = client.completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> = client.projects(directory)
     override suspend fun currentProject(directory: String?): OpenCodeProject = client.currentProject(directory)
     override suspend fun pathInfo(directory: String?): OpenCodePathInfo = client.pathInfo(directory)
@@ -90,6 +90,9 @@ class RemoteOpenCodeBackend(
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) =
         client.promptAsync(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = client.abortSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        client.renameSession(sessionId, title)
+    override suspend fun deleteSession(sessionId: String): Boolean = client.deleteSession(sessionId)
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

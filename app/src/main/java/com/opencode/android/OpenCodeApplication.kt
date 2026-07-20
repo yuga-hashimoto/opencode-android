@@ -62,42 +62,12 @@ class OpenCodeApplication : Application() {
     lateinit var providerCredentials: LocalProviderCredentialStore
         private set
 
-    lateinit var nsdDiscovery: com.opencode.android.feature.connection.OpenCodeNsdDiscovery
-        private set
-
-    lateinit var wakeWordPackManager: com.opencode.android.feature.assistant.WakeWordPackManager
-        private set
-
-    lateinit var wakeWordListeningController: com.opencode.android.feature.assistant.WakeWordListeningController
-        private set
-
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
-        // Anyone with a runtime/connection already configured set that up before onboarding
-        // existed — treat them as onboarded instead of showing the first-run wizard on update.
-        if (!settings.onboardingCompleted &&
-            (settings.selectedRuntimeId != null || settings.connections().isNotEmpty())
-        ) {
-            settings.onboardingCompleted = true
-        }
         preferences = AppPreferencesRepository(settings)
         notifications = RuntimeNotificationHelper(this)
         providerCredentials = LocalProviderCredentialStore(settings)
-        nsdDiscovery = com.opencode.android.feature.connection.OpenCodeNsdDiscovery(this)
-        val wakeWordPublicKey = assets.open("wakeword-pack-public-key.pem")
-            .bufferedReader()
-            .use { reader ->
-                com.opencode.android.feature.assistant.WakeWordPackManager.parseRsaPublicKeyPem(
-                    reader.readText()
-                )
-            }
-        wakeWordPackManager = com.opencode.android.feature.assistant.WakeWordPackManager(
-            rootDirectory = File(filesDir, "assistant").apply { mkdirs() },
-            trustedPublicKey = wakeWordPublicKey
-        )
-        wakeWordListeningController =
-            com.opencode.android.feature.assistant.WakeWordListeningController(this)
         val runtimeDirectory = File(filesDir, "runtime")
         val abi = Build.SUPPORTED_ABIS.firstOrNull().orEmpty()
         val accessCoordinator = LocalRuntimeAccessCoordinator()
@@ -111,7 +81,7 @@ class OpenCodeApplication : Application() {
             runtimeDirectory = runtimeDirectory,
             portProbe = LocalRuntimeManager::defaultPortProbe,
             beforeStart = { installed ->
-                providerCredentials.syncToRuntime(installed.rootfs)
+                runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
             }
         )
         val commandRunner = LocalRuntimeCommandRunner(
@@ -175,8 +145,7 @@ class OpenCodeApplication : Application() {
             scope = applicationScope,
             onPermissionAsked = notifications::notifyPermission,
             onSessionIdle = notifications::notifySessionComplete,
-            onSessionError = notifications::notifySessionError,
-            autoAllowReadOnlyTools = { settings.autoAllowReadOnlyTools }
+            onSessionError = notifications::notifySessionError
         )
         applicationScope.launch {
             catalogRepository.state.collectLatest { catalog ->

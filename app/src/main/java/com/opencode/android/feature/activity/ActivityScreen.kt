@@ -2,6 +2,7 @@ package com.opencode.android.feature.activity
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,21 +15,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,10 +57,17 @@ fun ActivityScreen(
     onRefresh: () -> Unit,
     onInspectSession: (OpenCodeSession) -> Unit,
     onOpenSession: (String, String) -> Unit,
-    onPermission: (String, PermissionResponse, Boolean) -> Unit = { _, _, _ -> }
+    onPermission: (String, PermissionResponse, Boolean) -> Unit = { _, _, _ -> },
+    onRenameSession: (String, String) -> Unit = { _, _ -> },
+    onDeleteSession: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("実行中", "承認", "セッション", "ログ")
+    val tabs = listOf(
+        stringResource(R.string.tool_status_running),
+        stringResource(R.string.tab_approvals),
+        stringResource(R.string.nav_sessions),
+        stringResource(R.string.tab_logs)
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -62,11 +77,11 @@ fun ActivityScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("アクティビティ", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text("OpenCodeの実行状況と履歴", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.activity_screen_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.activity_screen_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onRefresh, enabled = !state.isRefreshing) {
-                Icon(Icons.Default.Refresh, contentDescription = "更新")
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
             }
         }
 
@@ -83,7 +98,7 @@ fun ActivityScreen(
         when (selectedTab) {
             0 -> RunningTab(state, onInspectSession, onOpenSession)
             1 -> ApprovalTab(state, onPermission)
-            2 -> SessionsTab(state, onInspectSession, onOpenSession)
+            2 -> SessionsTab(state, onInspectSession, onOpenSession, onRenameSession, onDeleteSession)
             else -> LogsTab(state)
         }
     }
@@ -96,7 +111,7 @@ private fun RunningTab(
     onOpenSession: (String, String) -> Unit
 ) {
     val activeSessions = state.sessions.filter { it.id in state.activeSessionIds }
-    ActivityList(emptyText = "実行中のタスクはありません", isEmpty = activeSessions.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_running_tasks), isEmpty = activeSessions.isEmpty()) {
         items(activeSessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -105,14 +120,14 @@ private fun RunningTab(
                         Text(session.title.ifBlank { session.id }, fontWeight = FontWeight.SemiBold)
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    StatusChip("実行中", active = true)
+                    StatusChip(stringResource(R.string.tool_status_running), active = true)
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { onOpenSession(session.id, session.title) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("チャットを開く")
+                    Text(stringResource(R.string.open_chat_button))
                 }
             }
         }
@@ -124,7 +139,7 @@ private fun ApprovalTab(
     state: ActivityUiState,
     onPermission: (String, PermissionResponse, Boolean) -> Unit
 ) {
-    ActivityList(emptyText = "承認待ちはありません", isEmpty = state.permissions.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_pending_approvals), isEmpty = state.permissions.isEmpty()) {
         items(state.permissions, key = { it.id }) { permission ->
             val busy = permission.id in state.permissionBusyIds
             SectionCard {
@@ -175,9 +190,15 @@ private fun ApprovalTab(
 private fun SessionsTab(
     state: ActivityUiState,
     onInspectSession: (OpenCodeSession) -> Unit,
-    onOpenSession: (String, String) -> Unit
+    onOpenSession: (String, String) -> Unit,
+    onRenameSession: (String, String) -> Unit,
+    onDeleteSession: (String) -> Unit
 ) {
-    ActivityList(emptyText = "セッションはまだありません", isEmpty = state.sessions.isEmpty()) {
+    var renaming by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var deleting by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var menuExpandedFor by remember { mutableStateOf<String?>(null) }
+
+    ActivityList(emptyText = stringResource(R.string.no_sessions), isEmpty = state.sessions.isEmpty()) {
         items(state.sessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -187,22 +208,102 @@ private fun SessionsTab(
                         Spacer(Modifier.height(4.dp))
                         Text(session.directory.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                     }
+                    Box {
+                        IconButton(onClick = { menuExpandedFor = session.id }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.session_options))
+                        }
+                        DropdownMenu(
+                            expanded = menuExpandedFor == session.id,
+                            onDismissRequest = { menuExpandedFor = null }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.rename_session)) },
+                                onClick = {
+                                    menuExpandedFor = null
+                                    renaming = session
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.delete_session)) },
+                                onClick = {
+                                    menuExpandedFor = null
+                                    deleting = session
+                                }
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { onOpenSession(session.id, session.title) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("チャットを続ける")
+                    Text(stringResource(R.string.continue_chat_button))
                 }
             }
         }
+    }
+
+    renaming?.let { session ->
+        var title by remember(session.id) { mutableStateOf(session.title) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text(stringResource(R.string.rename_session_title)) },
+            text = {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text(stringResource(R.string.session_title_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRenameSession(session.id, title)
+                        renaming = null
+                    },
+                    enabled = title.isNotBlank()
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    deleting?.let { session ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.delete_session_title)) },
+            text = { Text(stringResource(R.string.delete_session_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteSession(session.id)
+                        deleting = null
+                    }
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 
 @Composable
 private fun LogsTab(state: ActivityUiState) {
-    ActivityList(emptyText = "イベントログはまだありません", isEmpty = state.logs.isEmpty()) {
+    ActivityList(emptyText = stringResource(R.string.no_event_logs), isEmpty = state.logs.isEmpty()) {
         items(state.logs, key = { "${it.timestamp}-${it.title}-${it.sessionId}" }) { log ->
             SectionCard {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

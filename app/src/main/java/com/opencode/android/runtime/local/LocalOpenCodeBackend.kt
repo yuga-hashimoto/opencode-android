@@ -14,9 +14,9 @@ import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
-import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.core.api.ProviderAuthAuthorization
 import com.opencode.android.core.api.ProviderAuthMethod
+import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.OpenCodeBackend
@@ -69,14 +69,10 @@ class LocalOpenCodeBackend(
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         delegate().createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = delegate().listMessages(sessionId)
-    override suspend fun deleteSession(sessionId: String): Boolean = delegate().deleteSession(sessionId)
-    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
-        delegate().renameSession(sessionId, title)
-    override suspend fun listCommands(): List<com.opencode.android.core.api.OpenCodeCommand> =
-        delegate().listCommands()
     override suspend fun listProviders(): ProviderCatalog = delegate().listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = delegate().listAgents()
-    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> = delegate().providerAuthMethods()
+    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        delegate().providerAuthMethods()
     override suspend fun authorizeProvider(
         providerId: String,
         methodIndex: Int,
@@ -89,8 +85,11 @@ class LocalOpenCodeBackend(
     ): Boolean = delegate().setProviderApiKey(providerId, apiKey, metadata)
     override suspend fun removeProviderAuth(providerId: String): Boolean =
         delegate().removeProviderAuth(providerId)
-    override suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
-        delegate().completeProviderOAuth(providerId, methodIndex, code)
+    override suspend fun completeProviderOAuth(
+        providerId: String,
+        methodIndex: Int,
+        code: String?
+    ): Boolean = delegate().completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =
         delegate().listProjects(directory)
     override suspend fun currentProject(directory: String?): OpenCodeProject =
@@ -125,6 +124,9 @@ class LocalOpenCodeBackend(
         delegate().sessionTodo(sessionId, directory)
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) = delegate().sendMessage(sessionId, request)
     override suspend fun abortSession(sessionId: String): Boolean = delegate().abortSession(sessionId)
+    override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
+        delegate().renameSession(sessionId, title)
+    override suspend fun deleteSession(sessionId: String): Boolean = delegate().deleteSession(sessionId)
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

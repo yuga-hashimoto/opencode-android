@@ -1,18 +1,12 @@
 package com.opencode.android.feature.chat
 
 import android.speech.tts.TextToSpeech
-import java.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
-import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeMessage
-import com.opencode.android.core.api.OpenCodeModelVariant
 import com.opencode.android.core.api.OpenCodePart
-import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.PermissionRequest
-import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
@@ -26,39 +20,101 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-enum class ChatItemKind {
-    TEXT,
-    TOOL,
-    COMMAND,
-    REASONING,
-    DIFF_SUMMARY
-}
+enum class ToolStatus { PENDING, RUNNING, COMPLETED, ERROR, UNKNOWN }
 
-data class PendingAttachment(
-    val id: String = UUID.randomUUID().toString(),
-    val fileName: String,
-    val mimeType: String,
-    val bytes: ByteArray
-) {
-    override fun equals(other: Any?): Boolean =
-        other is PendingAttachment && id == other.id
+sealed interface ChatPart {
+    val id: String
 
-    override fun hashCode(): Int = id.hashCode()
+    data class Text(override val id: String, val text: String) : ChatPart
+    data class Reasoning(override val id: String, val text: String) : ChatPart
+    data class Tool(
+        override val id: String,
+        val name: String,
+        val status: ToolStatus,
+        val title: String? = null,
+        val input: String? = null,
+        val output: String? = null,
+        val outputTruncated: Boolean = false,
+        val error: String? = null
+    ) : ChatPart
+    data class Patch(override val id: String, val files: List<String>) : ChatPart
 }
 
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
-    val text: String,
     val isUser: Boolean,
+    val parts: List<ChatPart> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
-    val isStreaming: Boolean = false,
-    val kind: ChatItemKind = ChatItemKind.TEXT,
-    val toolName: String? = null,
-    val detail: String? = null,
-    val expandedByDefault: Boolean = false,
-    val diffChanges: List<OpenCodeFileChange>? = null,
-    val attachments: List<PendingAttachment> = emptyList()
-)
+    val isStreaming: Boolean = false
+) {
+    val text: String
+        get() = parts.filterIsInstance<ChatPart.Text>().joinToString("") { it.text }
+}
+
+private const val MAX_TOOL_OUTPUT_CHARS = 4000
+
+private fun OpenCodePart.toChatPart(): ChatPart? {
+    val partId = id ?: return null
+    val stateMap = state.orEmpty()
+    return when (type) {
+        "text" -> ChatPart.Text(partId, text.orEmpty())
+        "reasoning" -> ChatPart.Reasoning(partId, text.orEmpty())
+        "tool" -> {
+            val inputText = formatToolInput(stateMap["input"] as? Map<*, *>)
+            val rawOutput = stateMap["output"] as? String
+            val truncated = rawOutput != null && rawOutput.length > MAX_TOOL_OUTPUT_CHARS
+            ChatPart.Tool(
+                id = partId,
+                name = tool ?: "tool",
+                status = parseToolStatus(stateMap["status"]),
+                title = (stateMap["title"] as? String)?.takeIf { it.isNotBlank() }
+                    ?: inputText?.lineSequence()?.firstOrNull(),
+                input = inputText,
+                output = if (truncated) rawOutput?.takeLast(MAX_TOOL_OUTPUT_CHARS) else rawOutput,
+                outputTruncated = truncated,
+                error = stateMap["error"] as? String
+            )
+        }
+        "patch" -> ChatPart.Patch(partId, extractPatchFiles(stateMap))
+        else -> null
+    }
+}
+
+private fun parseToolStatus(value: Any?): ToolStatus = when (value as? String) {
+    "pending" -> ToolStatus.PENDING
+    "running" -> ToolStatus.RUNNING
+    "completed" -> ToolStatus.COMPLETED
+    "error" -> ToolStatus.ERROR
+    else -> ToolStatus.UNKNOWN
+}
+
+private fun formatToolInput(input: Map<*, *>?): String? {
+    if (input.isNullOrEmpty()) return null
+    (input["command"] as? String)?.let { return it }
+    (input["filePath"] as? String)?.let { path ->
+        val extra = input.entries.filterNot { it.key == "filePath" }
+        return if (extra.isEmpty()) {
+            path
+        } else {
+            path + "\n" + extra.joinToString("\n") { (key, value) -> "$key: $value" }
+        }
+    }
+    return input.entries.joinToString("\n") { (key, value) -> "$key: $value" }
+}
+
+private fun extractPatchFiles(state: Map<String, Any?>): List<String> {
+    return when (val files = state["files"]) {
+        is List<*> -> files.mapNotNull { entry ->
+            when (entry) {
+                is String -> entry
+                is Map<*, *> -> (entry["path"] ?: entry["file"] ?: entry["filename"])?.toString()
+                else -> null
+            }
+        }
+        is Map<*, *> -> files.keys.mapNotNull { it?.toString() }
+        else -> emptyList()
+    }
+}
 
 data class ChatUiState(
     val backendName: String = "",
@@ -66,7 +122,6 @@ data class ChatUiState(
     val sessionTitle: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val permissions: List<PermissionRequest> = emptyList(),
-    val pendingAttachments: List<PendingAttachment> = emptyList(),
     val isConnected: Boolean = false,
     val isRunning: Boolean = false,
     val isLoadingHistory: Boolean = false,
@@ -78,22 +133,13 @@ data class ChatUiState(
     val selectedModelId: String? = null,
     val selectedAgentId: String? = null,
     val selectedWorkspacePath: String? = null,
-    val todos: List<OpenCodeTodo> = emptyList(),
-    val commands: List<OpenCodeCommand> = emptyList(),
-    val totalCost: Double = 0.0,
-    val totalTokens: Int = 0,
-    val availableVariants: List<String> = emptyList(),
-    val selectedVariant: String? = null,
-    val contextUsagePercent: Int? = null,
     val error: String? = null
 )
 
 class ChatViewModel(
     private val backend: OpenCodeBackend? = null,
     private val eventFlow: Flow<OpenCodeEvent>? = null,
-    private val onPermissionResolved: (String) -> Unit = {},
-    private val onSessionsChanged: () -> Unit = {},
-    private val onActiveSessionChanged: (String?) -> Unit = {}
+    private val onPermissionResolved: (String) -> Unit = {}
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         ChatUiState(backendName = backend?.displayName.orEmpty())
@@ -102,12 +148,7 @@ class ChatViewModel(
 
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
-    private val streamedParts = mutableMapOf<String, LinkedHashMap<String, String>>()
-    private val textPartIds = mutableSetOf<String>()
-    private val toolPartIds = mutableSetOf<String>()
-    private val userMessageIds = mutableSetOf<String>()
-    private var modelContextLimit: Long? = null
-    private var latestInputTokens: Long? = null
+    private val streamedParts = mutableMapOf<String, LinkedHashMap<String, ChatPart>>()
 
     init {
         if (backend != null) {
@@ -132,10 +173,6 @@ class ChatViewModel(
                         _uiState.update { it.copy(error = error.safeMessage()) }
                     }
             }
-            viewModelScope.launch {
-                runCatching { backend.listCommands() }
-                    .onSuccess { commands -> _uiState.update { it.copy(commands = commands) } }
-            }
         }
     }
 
@@ -154,31 +191,9 @@ class ChatViewModel(
         }
     }
 
-    fun selectModelMetadata(variants: Map<String, OpenCodeModelVariant>, contextLimit: Long?) {
-        val names = variants.keys.sorted()
-        modelContextLimit = contextLimit
-        _uiState.update { state ->
-            state.copy(
-                availableVariants = names,
-                selectedVariant = state.selectedVariant?.takeIf { it in names },
-                contextUsagePercent = contextUsagePercent(latestInputTokens, contextLimit)
-            )
-        }
-    }
-
-    fun selectVariant(variant: String?) {
-        _uiState.update { state ->
-            state.copy(selectedVariant = variant?.takeIf { it in state.availableVariants })
-        }
-    }
-
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
         streamedParts.clear()
-        textPartIds.clear()
-        toolPartIds.clear()
-        userMessageIds.clear()
-        onActiveSessionChanged(sessionId)
         _uiState.update {
             it.copy(
                 sessionId = sessionId,
@@ -186,23 +201,16 @@ class ChatViewModel(
                 isLoadingHistory = true,
                 messages = emptyList(),
                 permissions = emptyList(),
-                pendingAttachments = emptyList(),
                 error = null
             )
         }
         viewModelScope.launch {
-                    runCatching { currentBackend.listMessages(sessionId) }
+            runCatching { currentBackend.listMessages(sessionId) }
                 .onSuccess { messages ->
-                    val (cost, tokens) = summarizeUsage(messages)
-                    latestInputTokens = messages.lastOrNull { it.info.tokens?.input != null }
-                        ?.info?.tokens?.input?.toLong()
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
-                            messages = messages.flatMap(::toUiMessages),
-                            totalCost = cost,
-                            totalTokens = tokens,
-                            contextUsagePercent = contextUsagePercent(latestInputTokens, modelContextLimit)
+                            messages = messages.mapNotNull(::toUiMessage)
                         )
                     }
                 }
@@ -212,104 +220,54 @@ class ChatViewModel(
                     }
                 }
         }
-        fetchTodos(sessionId)
     }
 
     fun newSession() {
         streamedParts.clear()
-        textPartIds.clear()
-        toolPartIds.clear()
-        userMessageIds.clear()
-        latestInputTokens = null
-        onActiveSessionChanged(null)
         _uiState.update {
             it.copy(
                 sessionId = null,
                 sessionTitle = "",
                 messages = emptyList(),
                 permissions = emptyList(),
-                pendingAttachments = emptyList(),
                 isRunning = false,
                 isThinking = false,
                 isListening = false,
                 partialText = "",
-                todos = emptyList(),
-                totalCost = 0.0,
-                totalTokens = 0,
-                contextUsagePercent = null,
                 error = null
             )
-        }
-    }
-
-    fun addAttachment(fileName: String, mimeType: String, bytes: ByteArray) {
-        if (bytes.isEmpty()) return
-        if (bytes.size > MAX_ATTACHMENT_BYTES) {
-            _uiState.update { it.copy(error = "Attachment exceeds ${MAX_ATTACHMENT_BYTES / 1024}KB limit") }
-            return
-        }
-        if (_uiState.value.pendingAttachments.size >= MAX_ATTACHMENTS) {
-            _uiState.update { it.copy(error = "At most $MAX_ATTACHMENTS attachments allowed") }
-            return
-        }
-        _uiState.update {
-            it.copy(
-                pendingAttachments = it.pendingAttachments + PendingAttachment(
-                    fileName = fileName,
-                    mimeType = mimeType.ifBlank { "application/octet-stream" },
-                    bytes = bytes
-                ),
-                error = null
-            )
-        }
-    }
-
-    fun removeAttachment(id: String) {
-        _uiState.update {
-            it.copy(pendingAttachments = it.pendingAttachments.filterNot { item -> item.id == id })
         }
     }
 
     fun sendMessage(text: String) {
         val normalized = text.trim()
-        val attachments = _uiState.value.pendingAttachments
-        if (normalized.isEmpty() && attachments.isEmpty()) return
+        if (normalized.isEmpty()) return
         val currentBackend = backend
         if (currentBackend == null) {
             _uiState.update { it.copy(error = "OpenCode connection is not configured") }
             return
         }
 
-        val displayText = buildString {
-            if (normalized.isNotEmpty()) append(normalized)
-            if (attachments.isNotEmpty()) {
-                if (isNotEmpty()) append("\n")
-                append(attachments.joinToString("\n") { "📎 ${it.fileName}" })
-            }
-        }
         val userMessage = ChatMessage(
-            text = displayText,
             isUser = true,
-            attachments = attachments
+            parts = listOf(ChatPart.Text(id = UUID.randomUUID().toString(), text = normalized))
         )
         _uiState.update {
             it.copy(
                 messages = it.messages + userMessage,
-                pendingAttachments = emptyList(),
                 isRunning = true,
                 isThinking = true,
                 partialText = "",
                 error = null
             )
         }
-        userMessageIds += userMessage.id
 
         viewModelScope.launch {
             runCatching {
                 val existingSessionId = _uiState.value.sessionId
                 val session = if (existingSessionId == null) {
                     currentBackend.createSession(
-                        title = (normalized.ifBlank { attachments.firstOrNull()?.fileName.orEmpty() }).take(60),
+                        title = normalized.take(60),
                         directory = _uiState.value.selectedWorkspacePath
                     )
                 } else {
@@ -317,7 +275,6 @@ class ChatViewModel(
                 }
                 val targetSessionId = existingSessionId ?: requireNotNull(session).id
                 if (session != null) {
-                    onActiveSessionChanged(session.id)
                     _uiState.update {
                         it.copy(sessionId = session.id, sessionTitle = session.title)
                     }
@@ -325,18 +282,10 @@ class ChatViewModel(
                 currentBackend.sendMessage(
                     targetSessionId,
                     PromptRequest(
-                        text = normalized.ifBlank { "Please review the attached file(s)." },
+                        text = normalized,
                         providerId = _uiState.value.selectedProviderId,
                         modelId = _uiState.value.selectedModelId,
-                        agent = _uiState.value.selectedAgentId,
-                        variant = _uiState.value.selectedVariant,
-                        attachments = attachments.map {
-                            PromptAttachment(
-                                fileName = it.fileName,
-                                mimeType = it.mimeType,
-                                base64Data = Base64.getEncoder().encodeToString(it.bytes)
-                            )
-                        }
+                        agent = _uiState.value.selectedAgentId
                     )
                 )
             }.onFailure { error ->
@@ -379,37 +328,6 @@ class ChatViewModel(
         }
     }
 
-    fun renameSession(sessionId: String, title: String) {
-        val currentBackend = backend ?: return
-        if (title.isBlank()) return
-        viewModelScope.launch {
-            runCatching { currentBackend.renameSession(sessionId, title) }
-                .onSuccess { session ->
-                    if (_uiState.value.sessionId == sessionId) {
-                        _uiState.update { it.copy(sessionTitle = session.title) }
-                    }
-                    onSessionsChanged()
-                }
-                .onFailure { error -> _uiState.update { it.copy(error = error.safeMessage()) } }
-        }
-    }
-
-    fun deleteSession(sessionId: String) {
-        val currentBackend = backend ?: return
-        viewModelScope.launch {
-            runCatching { currentBackend.deleteSession(sessionId) }
-                .onSuccess { deleted ->
-                    if (deleted) {
-                        onSessionsChanged()
-                        if (_uiState.value.sessionId == sessionId) newSession()
-                    } else {
-                        _uiState.update { it.copy(error = "Failed to delete session") }
-                    }
-                }
-                .onFailure { error -> _uiState.update { it.copy(error = error.safeMessage()) } }
-        }
-    }
-
     fun abort() {
         val currentBackend = backend ?: return
         val sessionId = _uiState.value.sessionId ?: return
@@ -435,34 +353,24 @@ class ChatViewModel(
             is OpenCodeEvent.MessagePartUpdated -> {
                 val part = event.part
                 if (part.sessionId != activeSession) return
-                when {
-                    part.type == "text" -> {
-                        val messageId = part.messageId ?: part.id ?: return
-                        if (messageId in userMessageIds) return
-                        val partId = part.id ?: messageId
-                        textPartIds += partId
-                        val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
-                        messageParts[partId] = part.text.orEmpty()
-                        updateStreamingMessage(messageId, messageParts.values.joinToString(""))
-                    }
-                    part.type == "tool" || part.type == "tool-invocation" || part.type == "tool-result" -> {
-                        upsertToolCard(part)
-                    }
-                    part.type == "reasoning" -> {
-                        upsertReasoningCard(part)
-                    }
-                }
+                val messageId = part.messageId ?: part.id ?: return
+                val partId = part.id ?: messageId
+                val chatPart = part.toChatPart() ?: return
+                val messageParts = streamedParts.getOrPut(messageId) { linkedMapOf() }
+                messageParts[partId] = chatPart
+                updateStreamingMessage(messageId, messageParts.values.toList())
             }
             is OpenCodeEvent.MessagePartDelta -> {
-                if (
-                    event.sessionId != activeSession ||
-                    event.field != "text" ||
-                    event.partId !in textPartIds
-                ) return
-                if (event.messageId in userMessageIds) return
-                val messageParts = streamedParts.getOrPut(event.messageId) { linkedMapOf() }
-                messageParts[event.partId] = messageParts[event.partId].orEmpty() + event.delta
-                updateStreamingMessage(event.messageId, messageParts.values.joinToString(""))
+                if (event.sessionId != activeSession || event.field != "text") return
+                val messageParts = streamedParts[event.messageId] ?: return
+                val existing = messageParts[event.partId] ?: return
+                val updatedPart = when (existing) {
+                    is ChatPart.Text -> existing.copy(text = existing.text + event.delta)
+                    is ChatPart.Reasoning -> existing.copy(text = existing.text + event.delta)
+                    else -> return
+                }
+                messageParts[event.partId] = updatedPart
+                updateStreamingMessage(event.messageId, messageParts.values.toList())
             }
             is OpenCodeEvent.PermissionAsked -> {
                 if (event.request.sessionId != activeSession) return
@@ -477,17 +385,14 @@ class ChatViewModel(
                 if (event.sessionId != activeSession) return
                 streamedParts.clear()
                 _uiState.update { state ->
-                state.copy(
-                    messages = state.messages.map { message ->
+                    state.copy(
+                        messages = state.messages.map { message ->
                             if (message.isStreaming) message.copy(isStreaming = false) else message
                         },
                         isRunning = false,
                         isThinking = false
                     )
                 }
-                fetchDiffSummary(event.sessionId)
-                fetchTodos(event.sessionId)
-                fetchUsageSummary(event.sessionId)
             }
             is OpenCodeEvent.SessionError -> {
                 if (event.sessionId != null && event.sessionId != activeSession) return
@@ -503,154 +408,19 @@ class ChatViewModel(
         }
     }
 
-    private fun fetchDiffSummary(sessionId: String) {
-        val currentBackend = backend ?: return
-        viewModelScope.launch {
-            val changes = runCatching {
-                currentBackend.sessionDiff(sessionId, _uiState.value.selectedWorkspacePath)
-            }.getOrNull()?.filter { it.additions > 0 || it.deletions > 0 || !it.patch.isNullOrBlank() }
-            if (changes.isNullOrEmpty()) return@launch
-            if (_uiState.value.sessionId != sessionId) return@launch
-            _uiState.update { state ->
-                state.copy(
-                    messages = state.messages + ChatMessage(
-                        id = "diff-summary-$sessionId-${System.currentTimeMillis()}",
-                        text = "",
-                        isUser = false,
-                        kind = ChatItemKind.DIFF_SUMMARY,
-                        diffChanges = changes
-                    )
-                )
-            }
-        }
-    }
-
-    private fun fetchUsageSummary(sessionId: String) {
-        val currentBackend = backend ?: return
-        viewModelScope.launch {
-            val messages = runCatching { currentBackend.listMessages(sessionId) }.getOrNull() ?: return@launch
-            if (_uiState.value.sessionId != sessionId) return@launch
-            val (cost, tokens) = summarizeUsage(messages)
-            latestInputTokens = messages.lastOrNull { it.info.tokens?.input != null }
-                ?.info?.tokens?.input?.toLong()
-            _uiState.update {
-                it.copy(
-                    totalCost = cost,
-                    totalTokens = tokens,
-                    contextUsagePercent = contextUsagePercent(latestInputTokens, modelContextLimit)
-                )
-            }
-        }
-    }
-
-    private fun summarizeUsage(messages: List<OpenCodeMessage>): Pair<Double, Int> {
-        val totalCost = messages.sumOf { it.info.cost ?: 0.0 }
-        val totalTokens = messages.sumOf { it.info.tokens?.total ?: 0 }
-        return totalCost to totalTokens
-    }
-
-    private fun fetchTodos(sessionId: String) {
-        val currentBackend = backend ?: return
-        viewModelScope.launch {
-            val todos = runCatching {
-                currentBackend.sessionTodo(sessionId, _uiState.value.selectedWorkspacePath)
-            }.getOrNull() ?: return@launch
-            if (_uiState.value.sessionId != sessionId) return@launch
-            _uiState.update { it.copy(todos = todos) }
-        }
-    }
-
-    private fun upsertToolCard(part: OpenCodePart) {
-        val id = part.id ?: part.callID ?: return
-        toolPartIds += id
-        val title = part.tool ?: part.type
-        val detail = formatToolState(part.state)
-        val kind = if (
-            title.contains("bash", ignoreCase = true) ||
-            title.contains("shell", ignoreCase = true) ||
-            title.contains("command", ignoreCase = true)
-        ) {
-            ChatItemKind.COMMAND
-        } else {
-            ChatItemKind.TOOL
-        }
-        if (title.contains("todo", ignoreCase = true)) {
-            (part.sessionId ?: _uiState.value.sessionId)?.let(::fetchTodos)
-        }
-        _uiState.update { state ->
-            val existing = state.messages.indexOfFirst { it.id == id }
-            val card = ChatMessage(
-                id = id,
-                text = title,
-                isUser = false,
-                kind = kind,
-                toolName = title,
-                detail = detail,
-                isStreaming = true,
-                expandedByDefault = false
-            )
-            val messages = if (existing >= 0) {
-                state.messages.toMutableList().apply { this[existing] = card }
-            } else {
-                state.messages + card
-            }
-            state.copy(messages = messages, isRunning = true, isThinking = false)
-        }
-    }
-
-    private fun upsertReasoningCard(part: OpenCodePart) {
-        val id = part.id ?: part.messageId ?: return
-        val text = part.text.orEmpty()
-        if (text.isBlank()) return
-        _uiState.update { state ->
-            val existing = state.messages.indexOfFirst { it.id == id }
-            val card = ChatMessage(
-                id = id,
-                text = "Reasoning",
-                isUser = false,
-                kind = ChatItemKind.REASONING,
-                detail = text,
-                isStreaming = true,
-                expandedByDefault = false
-            )
-            val messages = if (existing >= 0) {
-                state.messages.toMutableList().apply { this[existing] = card }
-            } else {
-                state.messages + card
-            }
-            state.copy(messages = messages, isRunning = true, isThinking = false)
-        }
-    }
-
-    private fun formatToolState(state: Map<String, com.google.gson.JsonElement>?): String? {
-        if (state.isNullOrEmpty()) return null
-        val preferredKeys = listOf("status", "input", "output", "error", "title", "command", "stdout", "stderr")
-        val lines = preferredKeys.mapNotNull { key ->
-            state[key]?.let { value ->
-                val raw = if (value.isJsonPrimitive && value.asString != null) value.asString else value.toString()
-                val rendered = raw.trim()
-                if (rendered.isEmpty()) null else "$key: $rendered"
-            }
-        }
-        return (lines.ifEmpty {
-            state.entries.map { "${it.key}: ${it.value}" }
-        }).joinToString("\n").take(4_000)
-    }
-
-    private fun updateStreamingMessage(messageId: String, text: String) {
+    private fun updateStreamingMessage(messageId: String, parts: List<ChatPart>) {
         _uiState.update { state ->
             val index = state.messages.indexOfFirst { it.id == messageId }
             val updated = if (index >= 0) {
                 state.messages.toMutableList().apply {
-                    this[index] = this[index].copy(text = text, isStreaming = true, kind = ChatItemKind.TEXT)
+                    this[index] = this[index].copy(parts = parts, isStreaming = true)
                 }
             } else {
                 state.messages + ChatMessage(
                     id = messageId,
-                    text = text,
                     isUser = false,
-                    isStreaming = true,
-                    kind = ChatItemKind.TEXT
+                    parts = parts,
+                    isStreaming = true
                 )
             }
             state.copy(
@@ -661,48 +431,16 @@ class ChatViewModel(
         }
     }
 
-    private fun toUiMessages(message: OpenCodeMessage): List<ChatMessage> {
-        val items = mutableListOf<ChatMessage>()
-        val text = message.text
-        if (text.isNotBlank()) {
-            if (message.info.role == "user") userMessageIds += message.info.id
-            items += ChatMessage(
-                id = message.info.id,
-                text = text,
-                isUser = message.info.role == "user",
-                timestamp = message.info.time.created,
-                kind = ChatItemKind.TEXT
-            )
-        }
-        message.parts.forEach { part ->
-            when (part.type) {
-                "tool", "tool-invocation", "tool-result" -> {
-                    val id = part.id ?: "${message.info.id}-tool-${part.tool}"
-                    items += ChatMessage(
-                        id = id,
-                        text = part.tool ?: part.type,
-                        isUser = false,
-                        timestamp = message.info.time.created,
-                        kind = ChatItemKind.TOOL,
-                        toolName = part.tool,
-                        detail = formatToolState(part.state)
-                    )
-                }
-                "reasoning" -> {
-                    if (!part.text.isNullOrBlank()) {
-                        items += ChatMessage(
-                            id = part.id ?: "${message.info.id}-reasoning",
-                            text = "Reasoning",
-                            isUser = false,
-                            timestamp = message.info.time.created,
-                            kind = ChatItemKind.REASONING,
-                            detail = part.text
-                        )
-                    }
-                }
-            }
-        }
-        return items
+    private fun toUiMessage(message: OpenCodeMessage): ChatMessage? {
+        val parts = message.parts.mapNotNull { it.toChatPart() }
+        if (parts.isEmpty()) return null
+        return ChatMessage(
+            id = message.info.id,
+            isUser = message.info.role == "user",
+            parts = parts,
+            timestamp = message.info.time.created,
+            isStreaming = false
+        )
     }
 
     fun setTTS(textToSpeech: TextToSpeech) {
@@ -734,15 +472,9 @@ class ChatViewModel(
         eventJob?.cancel()
         tts?.stop()
         tts = null
-        onActiveSessionChanged(null)
         super.onCleared()
     }
 
     private fun Throwable.safeMessage(): String =
         message?.takeIf { it.isNotBlank() } ?: "OpenCode operation failed"
-
-    companion object {
-        private const val MAX_ATTACHMENTS = 5
-        private const val MAX_ATTACHMENT_BYTES = 512 * 1024
-    }
 }

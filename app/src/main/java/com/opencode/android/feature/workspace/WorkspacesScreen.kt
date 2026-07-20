@@ -1,5 +1,8 @@
 package com.opencode.android.feature.workspace
 
+import android.content.Context
+import android.net.nsd.NsdManager
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,15 +27,14 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WifiFind
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,20 +42,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeHealth
+import com.opencode.android.core.security.ConnectionQrPayload
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeState
 import com.opencode.android.runtime.RuntimeType
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun WorkspacesScreen(
@@ -68,17 +77,49 @@ fun WorkspacesScreen(
     onStartLocal: () -> Unit,
     onStopLocal: () -> Unit,
     onReinstallLocal: () -> Unit,
-    onOpenLocalManagement: () -> Unit,
-    onApplyQrOrLink: (String) -> Unit = {},
-    onAddDiscovered: (com.opencode.android.feature.connection.DiscoveredOpenCodeService) -> Unit = {}
+    onOpenLocalManagement: () -> Unit
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
-    var qrInput by remember { mutableStateOf("") }
+    var discoveryDialogOpen by remember { mutableStateOf(false) }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discoveredServers by remember { mutableStateOf<List<DiscoveredServer>>(emptyList()) }
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val qrScanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val text = result.contents ?: return@rememberLauncherForActivityResult
+        ConnectionQrPayload.parse(text)?.let { payload ->
+            editing = ConnectionFormState(
+                name = payload.name.orEmpty(),
+                baseUrl = payload.url.orEmpty(),
+                username = payload.username?.takeIf { it.isNotBlank() } ?: "opencode",
+                password = payload.password.orEmpty(),
+                allowInsecureLan = payload.insecure
+            )
+        }
+    }
+
+    fun startLanDiscovery() {
+        discoveryDialogOpen = true
+        discoveredServers = emptyList()
+        isDiscovering = true
+        coroutineScope.launch {
+            val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+            withTimeoutOrNull(10_000) {
+                LanDiscovery(nsdManager).discover().collect { server ->
+                    discoveredServers = (discoveredServers + server)
+                        .distinctBy { it.host to it.port }
+                }
+            }
+            isDiscovering = false
+        }
+    }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { editing = ConnectionFormState() }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_connection))
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_pc_connection_description))
             }
         }
     ) { paddingValues ->
@@ -90,106 +131,59 @@ fun WorkspacesScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
-                SectionCard {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.QrCodeScanner,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.padding(horizontal = 6.dp))
-                        Text(
-                            stringResource(R.string.scan_qr_or_paste),
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = qrInput,
-                        onValueChange = { qrInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("opencode://connect?url=…") },
-                        singleLine = true
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                if (qrInput.isNotBlank()) {
-                                    onApplyQrOrLink(qrInput.trim())
-                                    qrInput = ""
-                                }
-                            },
-                            enabled = qrInput.isNotBlank()
-                        ) {
-                            Text(stringResource(R.string.save))
-                        }
-                    }
-                }
-            }
-
-            if (state.discovered.isNotEmpty()) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.WifiFind, contentDescription = null)
-                        Spacer(Modifier.padding(horizontal = 6.dp))
-                        Text(
-                            stringResource(R.string.discover_lan),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            "${state.discovered.size}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                items(state.discovered, key = { it.baseUrl }) { service ->
-                    SectionCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Computer, contentDescription = null)
-                            Spacer(Modifier.padding(horizontal = 8.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(service.name, fontWeight = FontWeight.Medium)
-                                Text(
-                                    service.baseUrl,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            TextButton(onClick = { onAddDiscovered(service) }) {
-                                Text(stringResource(R.string.add_connection))
-                            }
-                        }
-                    }
-                }
-            }
-            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ワークスペース",
+                            text = stringResource(R.string.workspaces_title),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "OpenCodeを動かす端末と作業フォルダを選びます。",
+                            text = stringResource(R.string.workspaces_subtitle),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = onRefresh, enabled = !state.isRefreshing) {
-                        Icon(Icons.Default.Refresh, contentDescription = "更新")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                     }
                 }
             }
 
             item {
-                Text("実行先", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            qrScanLauncher.launch(
+                                ScanOptions()
+                                    .setBeepEnabled(false)
+                                    .setOrientationLocked(false)
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text(stringResource(R.string.add_via_qr))
+                    }
+                    OutlinedButton(
+                        onClick = { startLanDiscovery() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.WifiFind, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text(stringResource(R.string.discover_on_lan))
+                    }
+                }
+            }
+
+            item {
+                Text(stringResource(R.string.runtime_targets_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
 
             items(state.targets, key = { it.id }) { target ->
@@ -218,13 +212,13 @@ fun WorkspacesScreen(
                             )
                         }
                         if (target.selected) {
-                            StatusChip("使用中", active = true)
+                            StatusChip(stringResource(R.string.in_use_label), active = true)
                         } else if (target.type == RuntimeType.REMOTE) {
-                            TextButton(onClick = { onSelectRuntime(target.id) }) { Text("選択") }
+                            TextButton(onClick = { onSelectRuntime(target.id) }) { Text(stringResource(R.string.select)) }
                         }
                         if (remoteProfile != null) {
                             IconButton(onClick = { editing = ConnectionFormState.from(remoteProfile) }) {
-                                Icon(Icons.Default.Edit, contentDescription = "編集")
+                                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit_description))
                             }
                         }
                     }
@@ -235,7 +229,7 @@ fun WorkspacesScreen(
                                 Button(onClick = onSetupLocal, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.Build, contentDescription = null)
                                     Spacer(Modifier.padding(horizontal = 4.dp))
-                                    Text("この端末へセットアップ")
+                                    Text(stringResource(R.string.setup_this_device_button))
                                 }
                             }
                             is LocalRuntimeStatus.Installing -> {
@@ -251,7 +245,7 @@ fun WorkspacesScreen(
                                 }
                             }
                             is LocalRuntimeStatus.Starting -> {
-                                Text("OpenCode ${local.version}を起動しています")
+                                Text(stringResource(R.string.starting_opencode_version, local.version))
                                 Spacer(Modifier.height(8.dp))
                                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             }
@@ -271,21 +265,21 @@ fun WorkspacesScreen(
                                 Button(onClick = onStartLocal, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                                     Spacer(Modifier.padding(horizontal = 4.dp))
-                                    Text("OpenCodeを起動")
+                                    Text(stringResource(R.string.start_opencode_button))
                                 }
                             }
                             is LocalRuntimeStatus.Ready -> {
                                 OutlinedButton(onClick = onStopLocal, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.Stop, contentDescription = null)
                                     Spacer(Modifier.padding(horizontal = 4.dp))
-                                    Text("ローカル実行を停止")
+                                    Text(stringResource(R.string.stop_local_runtime_button))
                                 }
                             }
                             is LocalRuntimeStatus.Broken -> {
                                 Button(onClick = onReinstallLocal, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.Build, contentDescription = null)
                                     Spacer(Modifier.padding(horizontal = 4.dp))
-                                    Text("修復して再セットアップ")
+                                    Text(stringResource(R.string.repair_and_resetup_button))
                                 }
                             }
                             is LocalRuntimeStatus.UnsupportedAbi -> Unit
@@ -301,7 +295,7 @@ fun WorkspacesScreen(
                             ) {
                                 Icon(Icons.Default.Settings, contentDescription = null)
                                 Spacer(Modifier.padding(horizontal = 4.dp))
-                                Text("診断と管理")
+                                Text(stringResource(R.string.diagnostics_and_management_button))
                             }
                         }
                     }
@@ -314,12 +308,12 @@ fun WorkspacesScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "作業フォルダ",
+                        text = stringResource(R.string.workspace_folders_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
                     )
-                    Text("${state.workspaces.size}件", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.item_count, state.workspaces.size), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -328,9 +322,9 @@ fun WorkspacesScreen(
                     SectionCard {
                         Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(10.dp))
-                        Text("作業フォルダはまだありません", fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.no_workspaces_title), fontWeight = FontWeight.Medium)
                         Text(
-                            "セッションを開始すると、OpenCodeが利用したフォルダがここに表示されます。",
+                            stringResource(R.string.no_workspaces_body),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -361,7 +355,7 @@ fun WorkspacesScreen(
             state.error?.let { error ->
                 item {
                     SectionCard {
-                        Text("状態の取得に失敗しました", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.status_fetch_failed), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                         Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -386,33 +380,97 @@ fun WorkspacesScreen(
             onTest = onTestConnection
         )
     }
+
+    if (discoveryDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { discoveryDialogOpen = false },
+            title = { Text(stringResource(R.string.discovered_servers_title)) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isDiscovering) {
+                        Text(
+                            stringResource(R.string.discovering_servers),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    if (discoveredServers.isEmpty()) {
+                        if (!isDiscovering) {
+                            Text(
+                                stringResource(R.string.no_servers_found),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        discoveredServers.forEach { server ->
+                            SectionCard(
+                                modifier = Modifier.clickable {
+                                    editing = ConnectionFormState(
+                                        name = server.name,
+                                        baseUrl = server.baseUrl,
+                                        allowInsecureLan = true
+                                    )
+                                    discoveryDialogOpen = false
+                                }
+                            ) {
+                                Text(server.name, fontWeight = FontWeight.Medium)
+                                Text(
+                                    server.baseUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { discoveryDialogOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
+@Composable
 private fun targetSubtitle(
     target: RuntimeSummary,
     localStatus: LocalRuntimeStatus,
     remoteUrl: String?
 ): String = when (target.type) {
     RuntimeType.REMOTE -> when (val runtimeState = target.state) {
-        is RuntimeState.Connected -> "OpenCode ${runtimeState.version} · ${remoteUrl.orEmpty()}"
-        RuntimeState.Connecting -> "接続中 · ${remoteUrl.orEmpty()}"
+        is RuntimeState.Connected -> stringResource(R.string.connected_at_url, runtimeState.version, remoteUrl.orEmpty())
+        RuntimeState.Connecting -> stringResource(R.string.connecting_at, remoteUrl.orEmpty())
         is RuntimeState.Failed -> compactRuntimeError(runtimeState.message)
         is RuntimeState.Unavailable -> runtimeState.reason
         RuntimeState.Disconnected -> remoteUrl.orEmpty()
     }
     RuntimeType.LOCAL -> when (localStatus) {
-        LocalRuntimeStatus.NotInstalled -> "未インストール"
-        is LocalRuntimeStatus.Installing -> "セットアップ中 · ${localStatus.step}"
-        is LocalRuntimeStatus.Starting -> "OpenCode ${localStatus.version}を起動中"
+        LocalRuntimeStatus.NotInstalled -> stringResource(R.string.runtime_status_not_installed)
+        is LocalRuntimeStatus.Installing -> stringResource(R.string.setting_up_with_step, localStatus.step)
+        is LocalRuntimeStatus.Starting -> stringResource(R.string.starting_opencode_version, localStatus.version)
         is LocalRuntimeStatus.Updating ->
-            "OpenCode ${localStatus.currentVersion} → ${localStatus.targetVersion} · ${localStatus.step}"
-        is LocalRuntimeStatus.Stopped -> "導入済み · OpenCode ${localStatus.version} · 停止中"
-        is LocalRuntimeStatus.Ready -> "OpenCode ${localStatus.version} · 稼働中"
+            stringResource(
+                R.string.updating_with_step,
+                localStatus.currentVersion,
+                localStatus.targetVersion,
+                localStatus.step
+            )
+        is LocalRuntimeStatus.Stopped -> stringResource(R.string.installed_stopped, localStatus.version)
+        is LocalRuntimeStatus.Ready -> stringResource(R.string.ready_running, localStatus.version)
         is LocalRuntimeStatus.Broken -> compactRuntimeError(localStatus.reason)
-        is LocalRuntimeStatus.UnsupportedAbi -> "未対応ABI: ${localStatus.abi}"
+        is LocalRuntimeStatus.UnsupportedAbi -> stringResource(R.string.unsupported_abi, localStatus.abi)
     }
 }
 
+@Composable
 private fun compactRuntimeError(message: String): String {
     val firstUsefulLine = message.lineSequence()
         .map(String::trim)
@@ -420,7 +478,7 @@ private fun compactRuntimeError(message: String): String {
         .orEmpty()
     val compact = firstUsefulLine.take(160)
     return when {
-        compact.isBlank() -> "ローカルランタイムで問題が発生しました"
+        compact.isBlank() -> stringResource(R.string.generic_runtime_problem)
         compact.length < firstUsefulLine.length -> "$compact…"
         else -> compact
     }

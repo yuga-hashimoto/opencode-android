@@ -72,8 +72,8 @@ android {
         applicationId = "com.opencode.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 3
+        versionName = "0.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -166,6 +166,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.apache.commons:commons-compress:1.27.1")
+
+    // QR code scanning for connection setup
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     
     // Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")

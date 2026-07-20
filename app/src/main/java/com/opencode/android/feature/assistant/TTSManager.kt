@@ -4,6 +4,7 @@ import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import com.opencode.android.R
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -19,6 +20,7 @@ private const val TAG = "TTSManager"
  */
 class TTSManager(context: Context) {
 
+    private val appContext = context.applicationContext
     private var tts: TextToSpeech? = null
     private var isInitialized = false
     private var pendingSpeak: (() -> Unit)? = null
@@ -142,12 +144,12 @@ class TTSManager(context: Context) {
 
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) {
-                trySend(TTSState.Error("読み上げエラー"))
+                trySend(TTSState.Error(appContext.getString(R.string.tts_error)))
                 close()
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                trySend(TTSState.Error("読み上げエラー: $errorCode"))
+                trySend(TTSState.Error(appContext.getString(R.string.tts_error_code, errorCode)))
                 close()
             }
         }

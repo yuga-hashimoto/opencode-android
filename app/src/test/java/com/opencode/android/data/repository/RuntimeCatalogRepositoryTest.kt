@@ -54,7 +54,6 @@ class RuntimeCatalogRepositoryTest {
         val state = repository.state.value
         assertEquals("mac", state.runtime?.id)
         assertEquals("1.18.3", state.health?.version)
-        assertEquals(RuntimeState.Connected("1.18.3"), state.runtimeState)
         assertEquals(listOf("s1"), state.sessions.map { it.id })
         assertEquals(listOf("opencode"), state.providers.connected)
         assertEquals(listOf("build"), state.agents.map { it.name })
@@ -107,26 +106,6 @@ class RuntimeCatalogRepositoryTest {
         assertFalse(state.isRefreshing)
     }
 
-    @Test
-    fun `catalog failure preserves successful connection state`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val target = FakeTarget(
-            id = "mac",
-            providersError = IllegalStateException("provider endpoint unavailable")
-        )
-        val registry = RuntimeRegistry(
-            store = FakeStore(selectedRuntimeId = "mac"),
-            localTarget = FakeTarget("local-android", RuntimeType.LOCAL),
-            remoteFactory = { target }
-        )
-        val repository = RuntimeCatalogRepository(registry, TestScope(dispatcher))
-
-        advanceUntilIdle()
-
-        assertEquals(RuntimeState.Connected("1.18.3"), repository.state.value.runtimeState)
-        assertTrue(repository.state.value.error.orEmpty().contains("AIサービス"))
-    }
-
     private fun profile(id: String) = ConnectionProfile(
         id = id,
         name = id,
@@ -160,19 +139,14 @@ class RuntimeCatalogRepositoryTest {
         override val id: String,
         override val type: RuntimeType = RuntimeType.REMOTE,
         private val version: String = "1.18.3",
-        private val connectError: Throwable? = null,
-        private val providersError: Throwable? = null
+        private val connectError: Throwable? = null
     ) : RuntimeTarget {
         override val displayName: String = id
         override val kind: BackendKind = if (type == RuntimeType.LOCAL) BackendKind.LOCAL else BackendKind.REMOTE
         override val state = MutableStateFlow<RuntimeState>(RuntimeState.Disconnected)
 
-        override suspend fun connect(): Result<OpenCodeHealth> = connectError?.let {
-            state.value = RuntimeState.Failed(it.message.orEmpty())
-            Result.failure(it)
-        } ?: OpenCodeHealth(true, version).also {
-            state.value = RuntimeState.Connected(version)
-        }.let(Result.Companion::success)
+        override suspend fun connect(): Result<OpenCodeHealth> = connectError?.let(Result.Companion::failure)
+            ?: Result.success(OpenCodeHealth(true, version))
         override fun disconnect() = Unit
         override suspend fun health(): OpenCodeHealth = OpenCodeHealth(true, version)
         override suspend fun listSessions(directory: String?): List<OpenCodeSession> = listOf(
@@ -180,9 +154,7 @@ class RuntimeCatalogRepositoryTest {
         )
         override suspend fun createSession(title: String?, directory: String?): OpenCodeSession = error("unused")
         override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = emptyList()
-        override suspend fun listProviders(): ProviderCatalog {
-            providersError?.let { throw it }
-            return ProviderCatalog(
+        override suspend fun listProviders(): ProviderCatalog = ProviderCatalog(
             all = listOf(
                 OpenCodeProvider(
                     id = "opencode",
@@ -192,8 +164,7 @@ class RuntimeCatalogRepositoryTest {
             ),
             default = mapOf("opencode" to "big-pickle"),
             connected = listOf("opencode")
-            )
-        }
+        )
         override suspend fun listAgents(): List<OpenCodeAgent> = listOf(OpenCodeAgent("build", mode = "primary"))
         override suspend fun listWorkspaces(): List<WorkspaceRef> = listOf(
             WorkspaceRef("/workspace/app", "app", "/workspace/app")

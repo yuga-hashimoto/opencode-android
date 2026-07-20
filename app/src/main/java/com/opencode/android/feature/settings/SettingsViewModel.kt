@@ -7,9 +7,12 @@ import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.data.connection.SecureSettingsRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
+import com.opencode.android.data.repository.RuntimeCatalogState
+import com.opencode.android.data.settings.AppPreferences
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.local.LocalProviderCredentialStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,26 +28,19 @@ data class SettingsUiState(
     val availableProviders: List<OpenCodeProvider> = emptyList(),
     val connectedProviderIds: Set<String> = emptySet(),
     val agents: List<OpenCodeAgent> = emptyList(),
-    val assistantProviders: List<OpenCodeProvider> = emptyList(),
-    val assistantAgents: List<OpenCodeAgent> = emptyList(),
     val providerId: String? = null,
     val modelId: String? = null,
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
     val continuousConversation: Boolean = false,
+    val credentialStatuses: Map<String, Boolean> = emptyMap(),
+    val draftProviderId: String = "",
+    val draftApiKey: String = "",
+    val credentialMessage: String? = null,
     val runtimeOptions: List<Pair<String, String>> = emptyList(),
     val assistantRuntimeId: String? = null,
     val assistantWorkspacePath: String? = null,
-    val assistantProviderId: String? = null,
-    val assistantModelId: String? = null,
-    val assistantAgentId: String? = null,
-    val isLoadingAssistantCatalog: Boolean = false,
-    val assistantCatalogError: String? = null,
     val openCodeVersion: String? = null,
-    val recentModels: List<Pair<String, String>> = emptyList(),
-    val autoAllowReadOnlyTools: Boolean = false,
-    val themeMode: String? = null,
-    val dynamicColorEnabled: Boolean = false,
     val providerAuthMethods: Map<String, List<ProviderAuthMethod>> = emptyMap(),
     val oauthMessage: String? = null,
     val providerAuthDialog: ProviderAuthDialogState? = null,
@@ -58,22 +54,15 @@ class SettingsViewModel(
     private val settings: SecureSettingsRepository,
     private val registry: RuntimeRegistry
 ) : ViewModel() {
-    private val credentialTick = MutableStateFlow(0)
-    private val assistantCatalog = MutableStateFlow(AssistantCatalogState())
+    private val settingsTick = MutableStateFlow(0)
     private val oauthState = MutableStateFlow(OAuthState())
     private var providerAuthJob: Job? = null
 
-    private data class AssistantCatalogState(
-        val runtimeId: String? = null,
-        val providers: List<OpenCodeProvider> = emptyList(),
-        val agents: List<OpenCodeAgent> = emptyList(),
-        val isLoading: Boolean = false,
-        val error: String? = null
-    )
-
-    private data class DraftState(
-        val tick: Int,
-        val assistantCatalog: AssistantCatalogState
+    private data class CoreState(
+        val runtime: RuntimeCatalogState,
+        val preferences: AppPreferences,
+        val targets: List<RuntimeTarget>,
+        val selected: RuntimeTarget?
     )
 
     private data class OAuthState(
@@ -85,12 +74,8 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch {
-            registry.targets.collect {
-                refreshAssistantCatalog()
-            }
-        }
-        viewModelScope.launch {
             registry.selected.collect {
+                dismissProviderAuth()
                 refreshProviderAuth()
             }
         }
@@ -98,45 +83,26 @@ class SettingsViewModel(
 
     val state: StateFlow<SettingsUiState> = combine(
         combine(catalog.state, preferences.state, registry.targets, registry.selected) { runtime, prefs, targets, selected ->
-            listOf(runtime, prefs, targets, selected)
+            CoreState(runtime, prefs, targets, selected)
         },
-        combine(credentialTick, assistantCatalog) { tick, assistant ->
-            DraftState(tick, assistant)
-        },
+        settingsTick,
         oauthState
-    ) { core, draft, oauth ->
-        val runtime = core[0] as com.opencode.android.data.repository.RuntimeCatalogState
-        val prefs = core[1] as com.opencode.android.data.settings.AppPreferences
-        @Suppress("UNCHECKED_CAST")
-        val targets = core[2] as List<com.opencode.android.runtime.RuntimeTarget>
-        val selected = core[3] as com.opencode.android.runtime.RuntimeTarget?
-        val connected = runtime.providers.connected.toSet()
-        val providerList = runtime.providers.all.filter { it.id in connected }
+    ) { core, _, oauth ->
+        val connected = core.runtime.providers.connected.toSet()
         SettingsUiState(
-            providers = providerList,
-            availableProviders = runtime.providers.all,
+            providers = core.runtime.providers.all.filter { it.id in connected },
+            availableProviders = core.runtime.providers.all,
             connectedProviderIds = connected,
-            agents = runtime.agents.filter { it.mode == null || it.mode == "primary" },
-            assistantProviders = draft.assistantCatalog.providers,
-            assistantAgents = draft.assistantCatalog.agents,
-            providerId = prefs.providerId,
-            modelId = prefs.modelId,
-            agentId = prefs.agentId,
-            ttsEnabled = prefs.ttsEnabled,
-            continuousConversation = prefs.continuousConversation,
-            runtimeOptions = targets.map { it.id to it.displayName },
-            assistantRuntimeId = settings.assistantRuntimeId ?: selected?.id,
+            agents = core.runtime.agents.filter { it.mode == null || it.mode == "primary" },
+            providerId = core.preferences.providerId,
+            modelId = core.preferences.modelId,
+            agentId = core.preferences.agentId,
+            ttsEnabled = core.preferences.ttsEnabled,
+            continuousConversation = core.preferences.continuousConversation,
+            runtimeOptions = core.targets.map { it.id to it.displayName },
+            assistantRuntimeId = settings.assistantRuntimeId ?: core.selected?.id,
             assistantWorkspacePath = settings.assistantWorkspacePath,
-            assistantProviderId = settings.assistantProviderId ?: prefs.providerId,
-            assistantModelId = settings.assistantModelId ?: prefs.modelId,
-            assistantAgentId = settings.assistantAgentId ?: prefs.agentId,
-            isLoadingAssistantCatalog = draft.assistantCatalog.isLoading,
-            assistantCatalogError = draft.assistantCatalog.error,
-            openCodeVersion = runtime.health?.version,
-            recentModels = prefs.recentModels,
-            autoAllowReadOnlyTools = settings.autoAllowReadOnlyTools,
-            themeMode = prefs.themeMode,
-            dynamicColorEnabled = prefs.dynamicColorEnabled,
+            openCodeVersion = core.runtime.health?.version,
             providerAuthMethods = oauth.methods,
             oauthMessage = oauth.message,
             providerAuthDialog = oauth.dialog,
@@ -151,14 +117,10 @@ class SettingsViewModel(
     fun setTtsEnabled(enabled: Boolean) = preferences.setTtsEnabled(enabled)
     fun setContinuousConversation(enabled: Boolean) = preferences.setContinuousConversation(enabled)
 
-    fun setAutoAllowReadOnlyTools(enabled: Boolean) {
-        settings.autoAllowReadOnlyTools = enabled
-        credentialTick.update { it + 1 }
+    fun saveLocalBootstrapApiKey(providerId: String, apiKey: String) {
+        credentials.setCredential(providerId, apiKey)
+        settingsTick.update { it + 1 }
     }
-
-    fun setThemeMode(mode: String?) = preferences.setThemeMode(mode)
-    fun setDynamicColorEnabled(enabled: Boolean) = preferences.setDynamicColorEnabled(enabled)
-    fun replayOnboarding() = preferences.resetOnboarding()
 
     fun openProviderAuth(providerId: String) {
         val methods = oauthState.value.methods[providerId].orEmpty()
@@ -188,6 +150,7 @@ class SettingsViewModel(
             inputs = emptyMap(),
             apiKey = "",
             authorization = null,
+            isSubmitting = false,
             failed = false,
             error = null
         )
@@ -237,7 +200,9 @@ class SettingsViewModel(
             runCatching { target.setProviderApiKey(dialog.providerId, apiKey, dialog.inputs) }
                 .onSuccess { completed ->
                     if (completed) {
-                        credentials.unmanageProvider(dialog.providerId)
+                        if (target.kind == BackendKind.LOCAL) {
+                            credentials.unmanageProvider(dialog.providerId)
+                        }
                         finishProviderAuth(ProviderAuthNotice.CONNECTED)
                     } else {
                         updateProviderAuthError(null)
@@ -255,7 +220,9 @@ class SettingsViewModel(
             }
             runCatching { target.authorizeProvider(dialog.providerId, methodIndex, dialog.inputs) }
                 .onSuccess { authorization ->
-                    credentials.unmanageProvider(dialog.providerId)
+                    if (target.kind == BackendKind.LOCAL) {
+                        credentials.unmanageProvider(dialog.providerId)
+                    }
                     val authorized = dialog.copy(
                         authorization = authorization,
                         isSubmitting = authorization.method == "auto",
@@ -302,12 +269,18 @@ class SettingsViewModel(
             runCatching { target.removeProviderAuth(providerId) }
                 .onSuccess { removed ->
                     if (removed) {
-                        if (target.kind == BackendKind.LOCAL) credentials.clearCredential(providerId)
+                        if (target.kind == BackendKind.LOCAL) {
+                            credentials.clearCredential(providerId)
+                        }
                         finishProviderAuth(ProviderAuthNotice.DISCONNECTED)
+                    } else {
+                        oauthState.update { it.copy(message = "Provider disconnect was not accepted") }
                     }
                 }
                 .onFailure { error ->
-                    oauthState.update { it.copy(message = error.message?.takeIf(String::isNotBlank)) }
+                    oauthState.update {
+                        it.copy(message = error.message?.takeIf(String::isNotBlank))
+                    }
                 }
         }
     }
@@ -330,7 +303,7 @@ class SettingsViewModel(
     private fun finishProviderAuth(notice: ProviderAuthNotice) {
         providerAuthJob = null
         oauthState.update { it.copy(dialog = null, notice = notice, message = null) }
-        credentialTick.update { it + 1 }
+        settingsTick.update { it + 1 }
         catalog.refresh()
         refreshProviderAuth()
     }
@@ -375,90 +348,12 @@ class SettingsViewModel(
     }
 
     fun setAssistantRuntimeId(runtimeId: String?) {
-        settings.assistantRuntimeId = runtimeId?.trim()?.ifBlank { null }
-        invalidateAssistantSession()
-        credentialTick.update { it + 1 }
-        refreshAssistantCatalog()
+        settings.assistantRuntimeId = runtimeId
+        settingsTick.update { it + 1 }
     }
 
     fun setAssistantWorkspacePath(path: String?) {
         settings.assistantWorkspacePath = path?.trim()?.ifBlank { null }
-        invalidateAssistantSession()
-        credentialTick.update { it + 1 }
-    }
-
-    fun setAssistantModel(providerId: String, modelId: String) {
-        val provider = providerId.trim()
-        val model = modelId.trim()
-        require(provider.isNotEmpty() && model.isNotEmpty()) {
-            "Assistant provider and model are required"
-        }
-        settings.assistantProviderId = provider
-        settings.assistantModelId = model
-        invalidateAssistantSession()
-        credentialTick.update { it + 1 }
-    }
-
-    fun setAssistantAgent(agentId: String?) {
-        settings.assistantAgentId = agentId?.trim()?.ifBlank { null }
-        invalidateAssistantSession()
-        credentialTick.update { it + 1 }
-    }
-
-    fun useChatDefaultsForAssistant() {
-        settings.assistantProviderId = null
-        settings.assistantModelId = null
-        settings.assistantAgentId = null
-        invalidateAssistantSession()
-        credentialTick.update { it + 1 }
-    }
-
-    private fun refreshAssistantCatalog() {
-        val runtimeId = settings.assistantRuntimeId ?: registry.selected.value?.id
-        val target = registry.targets.value.firstOrNull { it.id == runtimeId }
-        if (target == null) {
-            assistantCatalog.value = AssistantCatalogState(
-                runtimeId = runtimeId,
-                error = if (runtimeId == null) null else "ホームアシストの実行先が見つかりません"
-            )
-            return
-        }
-        assistantCatalog.value = AssistantCatalogState(runtimeId = target.id, isLoading = true)
-        viewModelScope.launch {
-            val result = runCatching {
-                target.connect().getOrThrow()
-                val providers = target.listProviders()
-                val connected = providers.connected.toSet()
-                val providerList = providers.all
-                    .filter { connected.isEmpty() || it.id in connected }
-                val agents = target.listAgents()
-                    .filter { it.mode == null || it.mode == "primary" }
-                providerList to agents
-            }
-            if (assistantCatalog.value.runtimeId != target.id) return@launch
-            assistantCatalog.value = result.fold(
-                onSuccess = { (providers, agents) ->
-                    AssistantCatalogState(
-                        runtimeId = target.id,
-                        providers = providers,
-                        agents = agents,
-                        isLoading = false
-                    )
-                },
-                onFailure = { error ->
-                    AssistantCatalogState(
-                        runtimeId = target.id,
-                        isLoading = false,
-                        error = error.message?.takeIf(String::isNotBlank)
-                            ?: "ホームアシスト用モデルを取得できませんでした"
-                    )
-                }
-            )
-        }
-    }
-
-    private fun invalidateAssistantSession() {
-        settings.assistantSessionId = null
-        settings.assistantSessionProfileKey = null
+        settingsTick.update { it + 1 }
     }
 }
