@@ -24,4 +24,7 @@
     <string name="setup_api_key_description">選択したプロバイダのAPIキーを入力します。キーは端末内へ安全に保存されます。</string>
     <string name="setup_test_description">ランタイムと認証設定の準備状態を確認します。</string>
     <string name="setup_test_caption">成功するとチャットを開始できます。</string>
+    <string name="remote_connection_intro">OpenCodeを実行しているPC・Macの接続情報を入力します。</string>
+    <string name="remote_connection_unhealthy">OpenCodeサーバーが正常に応答しませんでした。</string>
+    <string name="remote_connection_failed">接続に失敗しました。</string>
 </resources>
