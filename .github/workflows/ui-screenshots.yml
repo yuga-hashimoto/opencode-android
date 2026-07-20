@@ -77,6 +77,7 @@ jobs:
           AVD_NAME='opencode-ui-api34'
           SYSTEM_IMAGE='system-images;android-34;google_apis;x86_64'
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
           EMULATOR_PID=''
 
           cleanup() {
@@ -97,10 +98,16 @@ jobs:
             "$SYSTEM_IMAGE"
 
           echo 'Creating AVD...'
-          echo no | avdmanager create avd \
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | avdmanager create avd \
             --force \
             --name "$AVD_NAME" \
-            --package "$SYSTEM_IMAGE"
+            --package "$SYSTEM_IMAGE" \
+            --device 'pixel_6'
+
+          echo 'Available AVDs:'
+          "$SDK_ROOT/emulator/emulator" -list-avds
+          "$SDK_ROOT/emulator/emulator" -list-avds | grep -Fxq "$AVD_NAME"
 
           echo 'Starting emulator...'
           "$SDK_ROOT/emulator/emulator" \
