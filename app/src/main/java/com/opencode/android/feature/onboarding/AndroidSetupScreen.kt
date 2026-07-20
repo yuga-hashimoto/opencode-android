@@ -190,11 +190,13 @@ fun AndroidSetupScreen(
             )
         },
         bottomBar = {
-            SetupBottomBar(
-                currentStep = currentStep,
-                primaryAction = primaryAction,
-                onBackStep = { currentStep -= 1 }
-            )
+            if (primaryAction != null) {
+                SetupBottomBar(
+                    currentStep = currentStep,
+                    primaryAction = primaryAction,
+                    onBackStep = { currentStep -= 1 }
+                )
+            }
         }
     ) { paddingValues ->
         Column(
