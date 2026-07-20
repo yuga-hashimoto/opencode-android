@@ -20,9 +20,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencode.android.MainActivity
+import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.feature.chat.ChatHomeScreen
 import com.opencode.android.feature.chat.ChatUiState
 import com.opencode.android.feature.settings.SettingsScreenV2
+import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import java.io.File
 import java.io.FileOutputStream
@@ -37,6 +39,15 @@ class UiScreenshotInstrumentedTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
+    private val previewAgents = listOf(OpenCodeAgent(name = "build"))
+    private val previewWorkspaces = listOf(
+        WorkspaceRef(
+            id = "/workspace/project",
+            name = "project",
+            path = "/workspace/project"
+        )
+    )
+
     @Test
     fun captureReviewedScreens() {
         useJapaneseResources()
@@ -46,32 +57,11 @@ class UiScreenshotInstrumentedTest {
             assertions = {
                 composeRule.onNodeWithText("チャット").assertIsDisplayed()
                 composeRule.onNodeWithText("OpenCodeで開発を進める").assertIsDisplayed()
+                composeRule.onNodeWithText("GLM-5").assertIsDisplayed()
+                composeRule.onNodeWithText("project").assertIsDisplayed()
             }
         ) {
-            ChatHomeScreen(
-                state = ChatUiState(isConnected = true),
-                providers = emptyList(),
-                agents = emptyList(),
-                workspaces = emptyList(),
-                selectedProviderId = null,
-                selectedModelId = null,
-                selectedAgentId = null,
-                runtimeTargets = emptyList(),
-                selectedRuntimeId = null,
-                onSelectRuntime = {},
-                onSelectModel = { _, _ -> },
-                onSelectAgent = {},
-                onSelectWorkspace = {},
-                onSendMessage = {},
-                onPermission = { _, _, _ -> },
-                onAbort = {},
-                onMic = {},
-                onNewChat = {},
-                onOpenHistory = {},
-                onOpenLocalSetup = {},
-                onOpenRemoteSetup = {},
-                onOpenDrawer = {}
-            )
+            PreviewChatHome()
         }
 
         capture(
@@ -87,29 +77,8 @@ class UiScreenshotInstrumentedTest {
                 ) { "Composer must be hidden while the runtime is not ready" }
             }
         ) {
-            ChatHomeScreen(
-                state = ChatUiState(error = "Android local OpenCode runtime is not installed"),
-                providers = emptyList(),
-                agents = emptyList(),
-                workspaces = emptyList(),
-                selectedProviderId = null,
-                selectedModelId = null,
-                selectedAgentId = null,
-                runtimeTargets = emptyList(),
-                selectedRuntimeId = null,
-                onSelectRuntime = {},
-                onSelectModel = { _, _ -> },
-                onSelectAgent = {},
-                onSelectWorkspace = {},
-                onSendMessage = {},
-                onPermission = { _, _, _ -> },
-                onAbort = {},
-                onMic = {},
-                onNewChat = {},
-                onOpenHistory = {},
-                onOpenLocalSetup = {},
-                onOpenRemoteSetup = {},
-                onOpenDrawer = {}
+            PreviewChatHome(
+                state = ChatUiState(error = "Android local OpenCode runtime is not installed")
             )
         }
 
@@ -141,30 +110,7 @@ class UiScreenshotInstrumentedTest {
                     }
                 }
             ) {
-                ChatHomeScreen(
-                    state = ChatUiState(isConnected = true),
-                    providers = emptyList(),
-                    agents = emptyList(),
-                    workspaces = emptyList(),
-                    selectedProviderId = null,
-                    selectedModelId = null,
-                    selectedAgentId = null,
-                    runtimeTargets = emptyList(),
-                    selectedRuntimeId = null,
-                    onSelectRuntime = {},
-                    onSelectModel = { _, _ -> },
-                    onSelectAgent = {},
-                    onSelectWorkspace = {},
-                    onSendMessage = {},
-                    onPermission = { _, _, _ -> },
-                    onAbort = {},
-                    onMic = {},
-                    onNewChat = {},
-                    onOpenHistory = {},
-                    onOpenLocalSetup = {},
-                    onOpenRemoteSetup = {},
-                    onOpenDrawer = {}
-                )
+                PreviewChatHome()
             }
         }
 
@@ -190,6 +136,39 @@ class UiScreenshotInstrumentedTest {
                 onOpenDiagnostics = {}
             )
         }
+    }
+
+    @Composable
+    private fun PreviewChatHome(
+        state: ChatUiState = ChatUiState(
+            isConnected = true,
+            selectedWorkspacePath = "/workspace/project"
+        )
+    ) {
+        ChatHomeScreen(
+            state = state,
+            providers = emptyList(),
+            agents = previewAgents,
+            workspaces = previewWorkspaces,
+            selectedProviderId = "zai",
+            selectedModelId = "GLM-5",
+            selectedAgentId = "build",
+            runtimeTargets = emptyList(),
+            selectedRuntimeId = null,
+            onSelectRuntime = {},
+            onSelectModel = { _, _ -> },
+            onSelectAgent = {},
+            onSelectWorkspace = {},
+            onSendMessage = {},
+            onPermission = { _, _, _ -> },
+            onAbort = {},
+            onMic = {},
+            onNewChat = {},
+            onOpenHistory = {},
+            onOpenLocalSetup = {},
+            onOpenRemoteSetup = {},
+            onOpenDrawer = {}
+        )
     }
 
     @Suppress("DEPRECATION")
