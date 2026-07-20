@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   capture:
@@ -52,7 +53,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Capture API 34 emulator screenshots
+        id: emulator
         if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -62,8 +65,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            set -o pipefail
             ./gradlew connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest
+              -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest \
+              > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
             mkdir -p docs/ui-screenshots/pr-4
             for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
               adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
@@ -71,8 +76,31 @@ jobs:
               test -s "docs/ui-screenshots/pr-4/$image"
             done
 
+      - name: Report screenshot failure
+        if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          {
+            echo '## API 34 emulator screenshot failure'
+            echo
+            echo '```text'
+            if test -f ui-screenshot-test.log; then
+              tail -n 180 ui-screenshot-test.log
+            else
+              echo 'The emulator runner failed before the Gradle screenshot command produced a log.'
+            fi
+            echo '```'
+          } > /tmp/ui-screenshot-failure.md
+          if test -n "$PR_NUMBER"; then
+            gh pr comment "$PR_NUMBER" --body-file /tmp/ui-screenshot-failure.md
+          fi
+          exit 1
+
       - name: Upload emulator screenshots
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: emulator-ui-screenshots
@@ -80,7 +108,7 @@ jobs:
           if-no-files-found: error
 
       - name: Commit screenshots to PR branch
-        if: steps.guard.outputs.skip != 'true' && github.event_name == 'pull_request'
+        if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'success' && github.event_name == 'pull_request'
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
