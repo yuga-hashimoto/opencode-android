@@ -2,5 +2,15 @@
 <resources>
     <string name="runtime_setup_required_title">OpenCode is not ready</string>
     <string name="runtime_setup_required_body">Open the menu, then Settings, to install the Android runtime or add a connection to your PC or Mac.</string>
+    <string name="runtime_setup_required_body_compact">Set up OpenCode on this Android device, or connect to a PC or Mac that is already running OpenCode.</string>
     <string name="open_settings_action">Open menu</string>
+    <string name="setup_this_android_action">Set up this Android</string>
+    <string name="connect_pc_mac_action">Connect to PC or Mac</string>
+    <string name="setup_short_action">Set up</string>
+    <string name="connect_short_action">Connect</string>
+    <string name="chat_model_short_default">Model</string>
+    <string name="chat_workspace_short_default">Default</string>
+    <string name="chat_build_subtitle_compact">Ask OpenCode to implement, fix, or investigate.</string>
+    <string name="settings_wake_word_row">Wake word</string>
+    <string name="settings_wake_word_value">OpenCode</string>
 </resources>
