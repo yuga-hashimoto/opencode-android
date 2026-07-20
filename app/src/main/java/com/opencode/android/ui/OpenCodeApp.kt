@@ -1,6 +1,7 @@
 package com.opencode.android.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -376,11 +377,7 @@ fun OpenCodeApp(
                 AndroidSetupScreen(
                     runtimeStatus = localRuntimeStatus,
                     onStartRuntimeSetup = workspaceViewModel::setupLocalRuntime,
-                    onSaveApiKey = { providerId, apiKey ->
-                        settingsViewModel.updateDraftProviderId(providerId)
-                        settingsViewModel.updateDraftApiKey(apiKey)
-                        settingsViewModel.saveApiKey()
-                    },
+                    onSaveApiKey = settingsViewModel::saveLocalBootstrapApiKey,
                     onBack = { navController.popBackStack() },
                     onFinish = completeOnboardingAndGoToChat
                 )
@@ -504,14 +501,24 @@ fun OpenCodeApp(
 
             composable(ROUTE_SETTINGS_PROVIDERS) {
                 ProviderSettingsScreen(
-                    credentialStatuses = settingsState.credentialStatuses,
-                    draftProviderId = settingsState.draftProviderId,
-                    draftApiKey = settingsState.draftApiKey,
-                    credentialMessage = settingsState.credentialMessage,
-                    onDraftProviderId = settingsViewModel::updateDraftProviderId,
-                    onDraftApiKey = settingsViewModel::updateDraftApiKey,
-                    onSaveApiKey = settingsViewModel::saveApiKey,
-                    onClearApiKey = settingsViewModel::clearApiKey,
+                    state = settingsState,
+                    onOpenProviderAuth = settingsViewModel::openProviderAuth,
+                    onSelectProviderAuthMethod = settingsViewModel::selectProviderAuthMethod,
+                    onProviderAuthInput = settingsViewModel::updateProviderAuthInput,
+                    onProviderApiKey = settingsViewModel::updateProviderApiKey,
+                    onSubmitProviderAuth = settingsViewModel::submitProviderAuth,
+                    onCompleteProviderOAuth = settingsViewModel::completeProviderOAuth,
+                    onDisconnectProvider = settingsViewModel::disconnectProvider,
+                    onLaunchOAuthBrowser = { url ->
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            )
+                        }.onFailure { error ->
+                            settingsViewModel.reportOAuthError(error.message.orEmpty())
+                        }
+                    },
+                    onDismissProviderAuth = settingsViewModel::dismissProviderAuth,
                     onBack = { navController.popBackStack() }
                 )
             }

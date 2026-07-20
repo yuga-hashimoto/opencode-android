@@ -91,6 +91,24 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
             preferences.getString(KEY_PROVIDER_API_KEYS, null)
         )
 
+    val hasManagedProviderApiKeyIds: Boolean
+        get() = preferences.contains(KEY_MANAGED_PROVIDER_API_KEY_IDS)
+
+    var managedProviderApiKeyIds: Set<String>
+        get() = preferences.getStringSet(KEY_MANAGED_PROVIDER_API_KEY_IDS, emptySet())
+            .orEmpty()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        set(value) {
+            preferences.edit()
+                .putStringSet(
+                    KEY_MANAGED_PROVIDER_API_KEY_IDS,
+                    value.map(String::trim).filter(String::isNotEmpty).toSet()
+                )
+                .apply()
+        }
+
     var assistantRuntimeId: String?
         get() = preferences.getString(KEY_ASSISTANT_RUNTIME_ID, null)
         set(value) = preferences.edit().putString(KEY_ASSISTANT_RUNTIME_ID, value).apply()
@@ -127,6 +145,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_MODEL_ID = "model_id"
         private const val KEY_AGENT_ID = "agent_id"
         private const val KEY_PROVIDER_API_KEYS = "provider_api_keys"
+        private const val KEY_MANAGED_PROVIDER_API_KEY_IDS = "managed_provider_api_key_ids"
         private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"
         private const val KEY_ASSISTANT_WORKSPACE_PATH = "assistant_workspace_path"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"

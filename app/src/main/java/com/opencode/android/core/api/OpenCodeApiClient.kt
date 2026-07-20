@@ -32,6 +32,10 @@ class OpenCodeApiClient(
     private val eventParser: OpenCodeEventParser = OpenCodeEventParser(gson)
 ) {
     private val baseUrl: HttpUrl = OpenCodeUrl.normalize(profile.baseUrl).getOrThrow()
+    private val providerAuthHttpClient: OkHttpClient = httpClient.newBuilder()
+        .readTimeout(PROVIDER_AUTH_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+        .callTimeout(PROVIDER_AUTH_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+        .build()
 
     suspend fun health(): OpenCodeHealth = get("global/health", OpenCodeHealth::class.java)
 
@@ -59,6 +63,69 @@ class OpenCodeApiClient(
     suspend fun providers(): ProviderCatalog = get("provider", ProviderCatalog::class.java)
 
     suspend fun agents(): List<OpenCodeAgent> = getList("agent")
+
+    suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        withContext(Dispatchers.IO) {
+            val type = object : TypeToken<Map<String, List<ProviderAuthMethod>>>() {}.type
+            execute(requestBuilder("provider/auth").get().build()) { body ->
+                gson.fromJson<Map<String, List<ProviderAuthMethod>>>(body, type).orEmpty()
+            }
+        }
+
+    suspend fun authorizeProvider(
+        providerId: String,
+        methodIndex: Int,
+        inputs: Map<String, String> = emptyMap()
+    ): ProviderAuthAuthorization = post(
+        "provider/${encodePath(providerId)}/oauth/authorize",
+        JsonObject().apply {
+            addProperty("method", methodIndex)
+            if (inputs.isNotEmpty()) {
+                add("inputs", JsonObject().apply {
+                    inputs.forEach { (key, value) -> addProperty(key, value) }
+                })
+            }
+        },
+        ProviderAuthAuthorization::class.java
+    )
+
+    suspend fun setProviderApiKey(
+        providerId: String,
+        apiKey: String,
+        metadata: Map<String, String> = emptyMap()
+    ): Boolean = put(
+        "auth/${encodePath(providerId)}",
+        JsonObject().apply {
+            addProperty("type", "api")
+            addProperty("key", apiKey)
+            if (metadata.isNotEmpty()) {
+                add("metadata", JsonObject().apply {
+                    metadata.forEach { (key, value) -> addProperty(key, value) }
+                })
+            }
+        },
+        Boolean::class.java
+    )
+
+    suspend fun removeProviderAuth(providerId: String): Boolean =
+        delete("auth/${encodePath(providerId)}", Boolean::class.java)
+
+    suspend fun completeProviderOAuth(
+        providerId: String,
+        methodIndex: Int,
+        code: String?
+    ): Boolean = withContext(Dispatchers.IO) {
+        val body = JsonObject().apply {
+            addProperty("method", methodIndex)
+            code?.takeIf { it.isNotBlank() }?.let { addProperty("code", it) }
+        }
+        val request = requestBuilder("provider/${encodePath(providerId)}/oauth/callback")
+            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request, providerAuthHttpClient) { responseBody ->
+            gson.fromJson(responseBody, Boolean::class.java)
+        }
+    }
 
     suspend fun projects(directory: String? = null): List<OpenCodeProject> =
         getList("project", query("directory" to directory))
@@ -285,6 +352,18 @@ class OpenCodeApiClient(
         execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
     }
 
+    private suspend fun <T> put(
+        path: String,
+        body: JsonObject,
+        clazz: Class<T>,
+        queryParameters: List<Pair<String, String>> = emptyList()
+    ): T = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path, queryParameters)
+            .put(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
+
     private suspend fun <T> patch(
         path: String,
         body: JsonObject,
@@ -315,22 +394,30 @@ class OpenCodeApiClient(
         execute(request) { Unit }
     }
 
-    private fun <T> execute(request: Request, parse: (String) -> T): T {
-        httpClient.newCall(request).execute().use { response ->
+    private fun <T> execute(
+        request: Request,
+        client: OkHttpClient = httpClient,
+        parse: (String) -> T
+    ): T {
+        client.newCall(request).execute().use { response ->
             val bodyText = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 throw OpenCodeApiException(
                     statusCode = response.code,
-                    message = formatHttpError(response.code, bodyText)
+                    message = formatHttpError(
+                        statusCode = response.code,
+                        body = bodyText,
+                        sensitive = request.isProviderAuthRequest()
+                    )
                 )
             }
             return parse(bodyText)
         }
     }
 
-    private fun formatHttpError(statusCode: Int, body: String): String {
-        // Never attach bodies for auth failures — they may contain secrets.
-        if (statusCode == 401 || statusCode == 403) {
+    private fun formatHttpError(statusCode: Int, body: String, sensitive: Boolean = false): String {
+        // Never attach bodies for auth operations or authorization failures — they may contain secrets.
+        if (sensitive || statusCode == 401 || statusCode == 403) {
             return "OpenCode request failed (HTTP $statusCode)"
         }
         val snippet = body
@@ -366,6 +453,13 @@ class OpenCodeApiClient(
             }
     }
 
+    private fun Request.isProviderAuthRequest(): Boolean {
+        val path = url.encodedPath
+        return path.startsWith("/auth/") ||
+            path == "/provider/auth" ||
+            path.contains("/oauth/")
+    }
+
     private fun query(vararg parameters: Pair<String, String?>): List<Pair<String, String>> =
         parameters.mapNotNull { (name, value) ->
             value?.takeIf { it.isNotBlank() }?.let { name to it }
@@ -377,6 +471,7 @@ class OpenCodeApiClient(
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MAX_ERROR_BODY_CHARS = 240
+        private const val PROVIDER_AUTH_TIMEOUT_MINUTES = 6L
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)

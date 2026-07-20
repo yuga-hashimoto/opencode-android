@@ -37,6 +37,33 @@ val prepareOpenCodeRuntimeNativeLibs = tasks.register<Exec>("prepareOpenCodeRunt
     )
 }
 
+val releaseStoreFile = (System.getenv("OPENCODE_STORE_FILE")
+    ?: findProperty("OPENCODE_STORE_FILE")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseStorePassword = (System.getenv("OPENCODE_STORE_PASSWORD")
+    ?: findProperty("OPENCODE_STORE_PASSWORD")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = (System.getenv("OPENCODE_KEY_ALIAS")
+    ?: findProperty("OPENCODE_KEY_ALIAS")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = (System.getenv("OPENCODE_KEY_PASSWORD")
+    ?: findProperty("OPENCODE_KEY_PASSWORD")?.toString())
+    ?.takeIf { it.isNotBlank() }
+val hasReleaseSigning = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() } &&
+    releaseStoreFile!!.let { path ->
+        val resolved = if (File(path).isAbsolute) {
+            File(path)
+        } else {
+            File(rootProject.projectDir, path)
+        }
+        resolved.isFile
+    }
+
 android {
     namespace = "com.opencode.android"
     compileSdk = 34
@@ -45,12 +72,28 @@ android {
         applicationId = "com.opencode.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                val storeFilePath = releaseStoreFile!!
+                storeFile = if (File(storeFilePath).isAbsolute) {
+                    File(storeFilePath)
+                } else {
+                    File(rootProject.projectDir, storeFilePath)
+                }
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -61,6 +104,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
