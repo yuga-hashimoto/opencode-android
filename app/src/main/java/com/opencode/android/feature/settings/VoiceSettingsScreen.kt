@@ -99,7 +99,7 @@ fun VoiceSettingsScreen(
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.settings_wake_word_row)) {
+                SettingsGroup(title = stringResource(R.string.wake_word_section_title)) {
                     VoiceToggleRow(
                         icon = Icons.Default.VoiceChat,
                         title = stringResource(R.string.settings_wake_word_row),
