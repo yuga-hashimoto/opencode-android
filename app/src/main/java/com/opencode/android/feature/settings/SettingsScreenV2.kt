@@ -1,6 +1,5 @@
 package com.opencode.android.feature.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,10 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
@@ -92,13 +91,11 @@ fun SettingsScreenV2(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
-                SettingsSection(
-                    title = stringResource(R.string.section_assistant_settings)
-                ) {
+                SettingsSection(title = stringResource(R.string.section_assistant_settings)) {
                     SettingsRow(
                         icon = Icons.Default.Home,
                         title = stringResource(R.string.settings_home_assistant_row),
@@ -131,9 +128,7 @@ fun SettingsScreenV2(
             }
 
             item {
-                SettingsSection(
-                    title = stringResource(R.string.section_system_settings)
-                ) {
+                SettingsSection(title = stringResource(R.string.section_system_settings)) {
                     SettingsRow(
                         icon = Icons.Default.Key,
                         title = stringResource(R.string.provider_settings_row),
@@ -161,9 +156,7 @@ fun SettingsScreenV2(
             }
 
             item {
-                SettingsSection(
-                    title = stringResource(R.string.section_app_settings)
-                ) {
+                SettingsSection(title = stringResource(R.string.section_app_settings)) {
                     SettingsToggleRow(
                         icon = Icons.Default.Notifications,
                         title = stringResource(R.string.notifications_row),
@@ -205,24 +198,15 @@ private fun SettingsSection(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column {
         Text(
             text = title,
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
         )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f))
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp)) {
-                content()
-            }
-        }
+        Column { content() }
     }
 }
 
@@ -238,7 +222,7 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 11.dp),
+            .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -251,7 +235,7 @@ private fun SettingsRow(
         Text(
             title,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyLarge
         )
         value?.let {
             Text(
@@ -262,7 +246,7 @@ private fun SettingsRow(
         }
         trailing?.invoke()
         Icon(
-            Icons.Default.KeyboardArrowRight,
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp)
@@ -280,7 +264,7 @@ private fun SettingsToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(horizontal = 4.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -293,7 +277,7 @@ private fun SettingsToggleRow(
         Text(
             title,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyLarge
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
@@ -301,7 +285,10 @@ private fun SettingsToggleRow(
 
 @Composable
 private fun SettingsDivider() {
-    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 36.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
+    )
 }
 
 @Composable
