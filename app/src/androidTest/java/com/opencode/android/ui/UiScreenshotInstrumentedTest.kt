@@ -32,7 +32,9 @@ import com.opencode.android.feature.chat.ChatUiState
 import com.opencode.android.feature.chat.ModelAndRuntimePickerSheet
 import com.opencode.android.feature.onboarding.AndroidSetupScreen
 import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
+import com.opencode.android.feature.settings.ProviderSettingsScreen
 import com.opencode.android.feature.settings.SettingsScreenV2
+import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.workspace.RemoteConnectionScreen
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeType
@@ -87,43 +89,30 @@ class UiScreenshotInstrumentedTest {
     fun captureReviewedScreens() {
         useJapaneseResources()
 
-        capture(
-            name = "01-chat-empty",
-            assertions = {
-                composeRule.onNodeWithText("チャット").assertIsDisplayed()
-                composeRule.onNodeWithText("OpenCodeで開発を進める").assertIsDisplayed()
-                composeRule.onNodeWithText("GLM-5").assertIsDisplayed()
-                composeRule.onNodeWithText("project").assertIsDisplayed()
-            }
-        ) {
-            PreviewChatHome()
-        }
+        capture("01-chat-empty", {
+            composeRule.onNodeWithText("チャット").assertIsDisplayed()
+            composeRule.onNodeWithText("OpenCodeで開発を進める").assertIsDisplayed()
+            composeRule.onNodeWithText("GLM-5").assertIsDisplayed()
+            composeRule.onNodeWithText("project").assertIsDisplayed()
+        }) { PreviewChatHome() }
 
-        capture(
-            name = "02-runtime-not-ready",
-            assertions = {
-                composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
-                composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
-                check(
-                    composeRule
-                        .onAllNodesWithText("OpenCodeにメッセージを送る…")
-                        .fetchSemanticsNodes()
-                        .isEmpty()
-                ) { "Composer must be hidden while the runtime is not ready" }
-            }
-        ) {
+        capture("02-runtime-not-ready", {
+            composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
+            composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
+            check(
+                composeRule.onAllNodesWithText("OpenCodeにメッセージを送る…")
+                    .fetchSemanticsNodes().isEmpty()
+            ) { "Composer must be hidden while the runtime is not ready" }
+        }) {
             PreviewChatHome(
                 state = ChatUiState(error = "Android local OpenCode runtime is not installed")
             )
         }
 
-        capture(
-            name = "03-drawer",
-            assertions = {
-                composeRule.onNodeWithText("最近のチャット").assertIsDisplayed()
-                composeRule.onNodeWithText("設定").assertIsDisplayed()
-            }
-        ) {
+        capture("03-drawer", {
+            composeRule.onNodeWithText("最近のチャット").assertIsDisplayed()
+            composeRule.onNodeWithText("設定").assertIsDisplayed()
+        }) {
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Open)
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -144,18 +133,13 @@ class UiScreenshotInstrumentedTest {
                         )
                     }
                 }
-            ) {
-                PreviewChatHome()
-            }
+            ) { PreviewChatHome() }
         }
 
-        capture(
-            name = "04-settings",
-            assertions = {
-                composeRule.onNodeWithText("設定").assertIsDisplayed()
-                composeRule.onNodeWithText("ウェイクワード").assertIsDisplayed()
-            }
-        ) {
+        capture("04-settings", {
+            composeRule.onNodeWithText("設定").assertIsDisplayed()
+            composeRule.onNodeWithText("ウェイクワード").assertIsDisplayed()
+        }) {
             SettingsScreenV2(
                 assistantConfigured = true,
                 notificationsEnabled = true,
@@ -172,14 +156,11 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture(
-            name = "05-onboarding",
-            assertions = {
-                composeRule.onNodeWithText("OpenCodeへようこそ").assertIsDisplayed()
-                composeRule.onNodeWithText("このAndroidで始める").assertIsDisplayed()
-                composeRule.onNodeWithText("PC・Macに接続する").assertIsDisplayed()
-            }
-        ) {
+        capture("05-onboarding", {
+            composeRule.onNodeWithText("OpenCodeへようこそ").assertIsDisplayed()
+            composeRule.onNodeWithText("このAndroidで始める").assertIsDisplayed()
+            composeRule.onNodeWithText("PC・Macに接続する").assertIsDisplayed()
+        }) {
             OnboardingChoiceScreen(
                 onSelectAndroid = {},
                 onSelectRemote = {},
@@ -187,14 +168,11 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture(
-            name = "06-android-setup",
-            assertions = {
-                composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
-                composeRule.onNodeWithText("ランタイムをダウンロード").assertIsDisplayed()
-                composeRule.onNodeWithText("ランタイムをダウンロード中").assertIsDisplayed()
-            }
-        ) {
+        capture("06-android-setup", {
+            composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
+            composeRule.onNodeWithText("ランタイムをダウンロード").assertIsDisplayed()
+            composeRule.onNodeWithText("ランタイムをダウンロード中").assertIsDisplayed()
+        }) {
             AndroidSetupScreen(
                 runtimeStatus = LocalRuntimeStatus.Installing(
                     progress = 0.68f,
@@ -207,13 +185,10 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture(
-            name = "07-remote-connection",
-            assertions = {
-                composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
-                composeRule.onNodeWithText("接続をテスト").assertIsDisplayed()
-            }
-        ) {
+        capture("07-remote-connection", {
+            composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
+            composeRule.onNodeWithText("接続をテスト").assertIsDisplayed()
+        }) {
             RemoteConnectionScreen(
                 onTestConnection = { Result.success(OpenCodeHealth(true, "1.0.0")) },
                 onSaveConnection = {},
@@ -222,17 +197,14 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture(
-            name = "08-model-runtime-picker",
-            assertions = {
-                composeRule.onNodeWithText("実行先").assertIsDisplayed()
-                composeRule.onNodeWithText("このAndroid").assertIsDisplayed()
-                composeRule.onNodeWithText("自宅のMacBook").assertIsDisplayed()
-                check(composeRule.onAllNodesWithText("GLM-5").fetchSemanticsNodes().isNotEmpty()) {
-                    "Model picker must display GLM-5"
-                }
+        capture("08-model-runtime-picker", {
+            composeRule.onNodeWithText("実行先").assertIsDisplayed()
+            composeRule.onNodeWithText("このAndroid").assertIsDisplayed()
+            composeRule.onNodeWithText("自宅のMacBook").assertIsDisplayed()
+            check(composeRule.onAllNodesWithText("GLM-5").fetchSemanticsNodes().isNotEmpty()) {
+                "Model picker must display GLM-5"
             }
-        ) {
+        }) {
             Box(modifier = Modifier.fillMaxSize()) {
                 PreviewChatHome()
                 ModelAndRuntimePickerSheet(
@@ -247,6 +219,38 @@ class UiScreenshotInstrumentedTest {
                     onDismiss = {}
                 )
             }
+        }
+
+        capture("09-provider-settings", {
+            composeRule.onNodeWithText("プロバイダ設定").assertIsDisplayed()
+            composeRule.onNodeWithText("保存済みの認証情報").assertIsDisplayed()
+            composeRule.onNodeWithText("APIキーを追加・更新").assertIsDisplayed()
+        }) {
+            ProviderSettingsScreen(
+                credentialStatuses = linkedMapOf("openai" to true, "anthropic" to false),
+                draftProviderId = "",
+                draftApiKey = "",
+                credentialMessage = null,
+                onDraftProviderId = {},
+                onDraftApiKey = {},
+                onSaveApiKey = {},
+                onClearApiKey = {},
+                onBack = {}
+            )
+        }
+
+        capture("10-voice-settings", {
+            composeRule.onNodeWithText("音声設定").assertIsDisplayed()
+            composeRule.onNodeWithText("ウェイクワード").assertIsDisplayed()
+            composeRule.onNodeWithText("ウェイクワード用の追加パックはまだ導入されていません。").assertIsDisplayed()
+        }) {
+            VoiceSettingsScreen(
+                ttsEnabled = true,
+                continuousConversation = false,
+                onTtsChange = {},
+                onContinuousChange = {},
+                onBack = {}
+            )
         }
     }
 
@@ -307,9 +311,7 @@ class UiScreenshotInstrumentedTest {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground
-                ) {
-                    content()
-                }
+                ) { content() }
             }
         }
         composeRule.waitForIdle()
