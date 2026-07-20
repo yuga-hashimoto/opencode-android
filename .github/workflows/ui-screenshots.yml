@@ -6,84 +6,228 @@ on:
       - 'app/src/main/**'
       - 'app/src/androidTest/**'
       - '.github/workflows/ui-screenshots.yml'
-      - '.github/workflows/finalize-ui-pr.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ui-screenshots-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  finalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+  capture:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
 
-      - name: Apply final fixes and restore screenshot workflow
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
         shell: bash
-        env:
-          GATE_B64: cGFja2FnZSBjb20ub3BlbmNvZGUuYW5kcm9pZAoKaW1wb3J0IGNvbS5vcGVuY29kZS5hbmRyb2lkLnJ1bnRpbWUuTG9jYWxSdW50aW1lU3RhdHVzCgovKioKICogQSB1c2FibGUgc2V0dXAgaXMgZWl0aGVyIGEgY29uZmlndXJlZCByZW1vdGUgcnVudGltZSwgb3IgYW4gaW5zdGFsbGVkIGxvY2FsCiAqIHJ1bnRpbWUgd2l0aCBhdCBsZWFzdCBvbmUgcHJvdmlkZXIgY3JlZGVudGlhbC4gVGhlIHBlcnNpc3RlZCBvbmJvYXJkaW5nIGZsYWcKICogbXVzdCBuZXZlciBieXBhc3MgdGhpcyBjaGVjay4KICovCmludGVybmFsIGZ1biBoYXNVc2FibGVSdW50aW1lU2V0dXAoCiAgICBsb2NhbFJ1bnRpbWVTdGF0dXM6IExvY2FsUnVudGltZVN0YXR1cywKICAgIGhhc0xvY2FsUHJvdmlkZXJDcmVkZW50aWFsOiBCb29sZWFuLAogICAgaGFzUmVtb3RlQ29ubmVjdGlvbjogQm9vbGVhbgopOiBCb29sZWFuIHsKICAgIGlmIChoYXNSZW1vdGVDb25uZWN0aW9uKSByZXR1cm4gdHJ1ZQogICAgaWYgKCFoYXNMb2NhbFByb3ZpZGVyQ3JlZGVudGlhbCkgcmV0dXJuIGZhbHNlCgogICAgcmV0dXJuIHdoZW4gKGxvY2FsUnVudGltZVN0YXR1cykgewogICAgICAgIGlzIExvY2FsUnVudGltZVN0YXR1cy5TdG9wcGVkLAogICAgICAgIGlzIExvY2FsUnVudGltZVN0YXR1cy5TdGFydGluZywKICAgICAgICBpcyBMb2NhbFJ1bnRpbWVTdGF0dXMuVXBkYXRpbmcsCiAgICAgICAgaXMgTG9jYWxSdW50aW1lU3RhdHVzLlJlYWR5IC0+IHRydWUKICAgICAgICBMb2NhbFJ1bnRpbWVTdGF0dXMuTm90SW5zdGFsbGVkLAogICAgICAgIGlzIExvY2FsUnVudGltZVN0YXR1cy5JbnN0YWxsaW5nLAogICAgICAgIGlzIExvY2FsUnVudGltZVN0YXR1cy5Ccm9rZW4sCiAgICAgICAgaXMgTG9jYWxSdW50aW1lU3RhdHVzLlVuc3VwcG9ydGVkQWJpIC0+IGZhbHNlCiAgICB9Cn0K
-          GATE_TEST_B64: cGFja2FnZSBjb20ub3BlbmNvZGUuYW5kcm9pZAoKaW1wb3J0IGNvbS5vcGVuY29kZS5hbmRyb2lkLnJ1bnRpbWUuTG9jYWxSdW50aW1lU3RhdHVzCmltcG9ydCBvcmcuanVuaXQuQXNzZXJ0LmFzc2VydEZhbHNlCmltcG9ydCBvcmcuanVuaXQuQXNzZXJ0LmFzc2VydFRydWUKaW1wb3J0IG9yZy5qdW5pdC5UZXN0CgpjbGFzcyBPbmJvYXJkaW5nR2F0ZVRlc3QgewogICAgQFRlc3QKICAgIGZ1biBtaXNzaW5nUnVudGltZUFuZFJlbW90ZVJlcXVpcmVzT25ib2FyZGluZygpIHsKICAgICAgICBhc3NlcnRGYWxzZSgKICAgICAgICAgICAgaGFzVXNhYmxlUnVudGltZVNldHVwKAogICAgICAgICAgICAgICAgbG9jYWxSdW50aW1lU3RhdHVzID0gTG9jYWxSdW50aW1lU3RhdHVzLk5vdEluc3RhbGxlZCwKICAgICAgICAgICAgICAgIGhhc0xvY2FsUHJvdmlkZXJDcmVkZW50aWFsID0gZmFsc2UsCiAgICAgICAgICAgICAgICBoYXNSZW1vdGVDb25uZWN0aW9uID0gZmFsc2UKICAgICAgICAgICAgKQogICAgICAgICkKICAgIH0KCiAgICBAVGVzdAogICAgZnVuIGNvbmZpZ3VyZWRSZW1vdGVJc1VzYWJsZVdpdGhvdXRMb2NhbFJ1bnRpbWUoKSB7CiAgICAgICAgYXNzZXJ0VHJ1ZSgKICAgICAgICAgICAgaGFzVXNhYmxlUnVudGltZVNldHVwKAogICAgICAgICAgICAgICAgbG9jYWxSdW50aW1lU3RhdHVzID0gTG9jYWxSdW50aW1lU3RhdHVzLk5vdEluc3RhbGxlZCwKICAgICAgICAgICAgICAgIGhhc0xvY2FsUHJvdmlkZXJDcmVkZW50aWFsID0gZmFsc2UsCiAgICAgICAgICAgICAgICBoYXNSZW1vdGVDb25uZWN0aW9uID0gdHJ1ZQogICAgICAgICAgICApCiAgICAgICAgKQogICAgfQoKICAgIEBUZXN0CiAgICBmdW4gaW5zdGFsbGVkTG9jYWxSdW50aW1lU3RpbGxSZXF1aXJlc1Byb3ZpZGVyQ3JlZGVudGlhbCgpIHsKICAgICAgICBhc3NlcnRGYWxzZSgKICAgICAgICAgICAgaGFzVXNhYmxlUnVudGltZVNldHVwKAogICAgICAgICAgICAgICAgbG9jYWxSdW50aW1lU3RhdHVzID0gTG9jYWxSdW50aW1lU3RhdHVzLlN0b3BwZWQoIjEuMC4wIiwgNDA5NyksCiAgICAgICAgICAgICAgICBoYXNMb2NhbFByb3ZpZGVyQ3JlZGVudGlhbCA9IGZhbHNlLAogICAgICAgICAgICAgICAgaGFzUmVtb3RlQ29ubmVjdGlvbiA9IGZhbHNlCiAgICAgICAgICAgICkKICAgICAgICApCiAgICB9CgogICAgQFRlc3QKICAgIGZ1biBpbnN0YWxsZWRMb2NhbFJ1bnRpbWVXaXRoQ3JlZGVudGlhbElzVXNhYmxlKCkgewogICAgICAgIGFzc2VydFRydWUoCiAgICAgICAgICAgIGhhc1VzYWJsZVJ1bnRpbWVTZXR1cCgKICAgICAgICAgICAgICAgIGxvY2FsUnVudGltZVN0YXR1cyA9IExvY2FsUnVudGltZVN0YXR1cy5TdG9wcGVkKCIxLjAuMCIsIDQwOTcpLAogICAgICAgICAgICAgICAgaGFzTG9jYWxQcm92aWRlckNyZWRlbnRpYWwgPSB0cnVlLAogICAgICAgICAgICAgICAgaGFzUmVtb3RlQ29ubmVjdGlvbiA9IGZhbHNlCiAgICAgICAgICAgICkKICAgICAgICApCiAgICB9CgogICAgQFRlc3QKICAgIGZ1biBicm9rZW5Mb2NhbFJ1bnRpbWVDYW5ub3RCeXBhc3NPbmJvYXJkaW5nKCkgewogICAgICAgIGFzc2VydEZhbHNlKAogICAgICAgICAgICBoYXNVc2FibGVSdW50aW1lU2V0dXAoCiAgICAgICAgICAgICAgICBsb2NhbFJ1bnRpbWVTdGF0dXMgPSBMb2NhbFJ1bnRpbWVTdGF0dXMuQnJva2VuKCJtZXRhZGF0YSBtaXNzaW5nIiksCiAgICAgICAgICAgICAgICBoYXNMb2NhbFByb3ZpZGVyQ3JlZGVudGlhbCA9IHRydWUsCiAgICAgICAgICAgICAgICBoYXNSZW1vdGVDb25uZWN0aW9uID0gZmFsc2UKICAgICAgICAgICAgKQogICAgICAgICkKICAgIH0KfQo=
-          FINAL_WORKFLOW_B64: bmFtZTogRW11bGF0b3IgVUkgU2NyZWVuc2hvdHMKCm9uOgogIHB1bGxfcmVxdWVzdDoKICAgIHBhdGhzOgogICAgICAtICdhcHAvc3JjL21haW4vKionCiAgICAgIC0gJ2FwcC9zcmMvYW5kcm9pZFRlc3QvKionCiAgICAgIC0gJy5naXRodWIvd29ya2Zsb3dzL3VpLXNjcmVlbnNob3RzLnltbCcKICB3b3JrZmxvd19kaXNwYXRjaDoKCnBlcm1pc3Npb25zOgogIGNvbnRlbnRzOiByZWFkCiAgcHVsbC1yZXF1ZXN0czogd3JpdGUKCmpvYnM6CiAgY2FwdHVyZToKICAgIGlmOiBnaXRodWIuZXZlbnRfbmFtZSA9PSAnd29ya2Zsb3dfZGlzcGF0Y2gnIHx8IGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QuaGVhZC5yZXBvLmZ1bGxfbmFtZSA9PSBnaXRodWIucmVwb3NpdG9yeQogICAgcnVucy1vbjogdWJ1bnR1LTIyLjA0CiAgICB0aW1lb3V0LW1pbnV0ZXM6IDYwCgogICAgc3RlcHM6CiAgICAgIC0gbmFtZTogQ2hlY2tvdXQgUFIgYnJhbmNoCiAgICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICByZWY6ICR7eyBnaXRodWIuaGVhZF9yZWYgfHwgZ2l0aHViLnJlZl9uYW1lIH19CiAgICAgICAgICBmZXRjaC1kZXB0aDogMAoKICAgICAgLSBuYW1lOiBTZXQgdXAgSkRLIDE3CiAgICAgICAgdXNlczogYWN0aW9ucy9zZXR1cC1qYXZhQHY0CiAgICAgICAgd2l0aDoKICAgICAgICAgIGRpc3RyaWJ1dGlvbjogdGVtdXJpbgogICAgICAgICAgamF2YS12ZXJzaW9uOiAnMTcnCgogICAgICAtIG5hbWU6IFNldCB1cCBQeXRob24KICAgICAgICB1c2VzOiBhY3Rpb25zL3NldHVwLXB5dGhvbkB2NQogICAgICAgIHdpdGg6CiAgICAgICAgICBweXRob24tdmVyc2lvbjogJzMuMTEnCgogICAgICAtIG5hbWU6IFNldCB1cCBBbmRyb2lkIFNESwogICAgICAgIHVzZXM6IGFuZHJvaWQtYWN0aW9ucy9zZXR1cC1hbmRyb2lkQHYzCgogICAgICAtIG5hbWU6IFNldCB1cCBHcmFkbGUKICAgICAgICB1c2VzOiBncmFkbGUvYWN0aW9ucy9zZXR1cC1ncmFkbGVAdjQKCiAgICAgIC0gbmFtZTogRW5hYmxlIEtWTQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBlY2hvICdLRVJORUw9PSJrdm0iLCBHUk9VUD0ia3ZtIiwgTU9ERT0iMDY2NiIsIE9QVElPTlMrPSJzdGF0aWNfbm9kZT1rdm0iJyBcCiAgICAgICAgICAgIHwgc3VkbyB0ZWUgL2V0Yy91ZGV2L3J1bGVzLmQvOTkta3ZtNGFsbC5ydWxlcwogICAgICAgICAgc3VkbyB1ZGV2YWRtIGNvbnRyb2wgLS1yZWxvYWQtcnVsZXMKICAgICAgICAgIHN1ZG8gdWRldmFkbSB0cmlnZ2VyIC0tbmFtZS1tYXRjaD1rdm0KCiAgICAgIC0gbmFtZTogQ2FwdHVyZSBBUEkgMzQgZW11bGF0b3Igc2NyZWVuc2hvdHMKICAgICAgICBpZDogZW11bGF0b3IKICAgICAgICBjb250aW51ZS1vbi1lcnJvcjogdHJ1ZQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBzZXQgLUVldW8gcGlwZWZhaWwKICAgICAgICAgIGV4ZWMgPiAiJEdJVEhVQl9XT1JLU1BBQ0UvdWktc2NyZWVuc2hvdC10ZXN0LmxvZyIgMj4mMQoKICAgICAgICAgIEFWRF9OQU1FPSdvcGVuY29kZS11aS1hcGkzNCcKICAgICAgICAgIFNZU1RFTV9JTUFHRT0nc3lzdGVtLWltYWdlczthbmRyb2lkLTM0O2dvb2dsZV9hcGlzO3g4Nl82NCcKICAgICAgICAgIFNES19ST09UPSIke0FORFJPSURfU0RLX1JPT1Q6LSRBTkRST0lEX0hPTUV9IgogICAgICAgICAgZXhwb3J0IEFORFJPSURfQVZEX0hPTUU9IiRIT01FLy5hbmRyb2lkL2F2ZCIKICAgICAgICAgIEVNVUxBVE9SX1BJRD0nJwogICAgICAgICAgRVhQRUNURURfSU1BR0VTPSgKICAgICAgICAgICAgMDEtY2hhdC1lbXB0eS5wbmcKICAgICAgICAgICAgMDItcnVudGltZS1ub3QtcmVhZHkucG5nCiAgICAgICAgICAgIDAzLWRyYXdlci5wbmcKICAgICAgICAgICAgMDQtc2V0dGluZ3MucG5nCiAgICAgICAgICAgIDA1LW9uYm9hcmRpbmcucG5nCiAgICAgICAgICAgIDA2LWFuZHJvaWQtc2V0dXAucG5nCiAgICAgICAgICAgIDA3LXJlbW90ZS1jb25uZWN0aW9uLnBuZwogICAgICAgICAgICAwOC1tb2RlbC1ydW50aW1lLXBpY2tlci5wbmcKICAgICAgICAgICAgMDktcHJvdmlkZXItc2V0dGluZ3MucG5nCiAgICAgICAgICAgIDEwLXZvaWNlLXNldHRpbmdzLnBuZwogICAgICAgICAgKQoKICAgICAgICAgIHdhaXRfZm9yX2FuZHJvaWQoKSB7CiAgICAgICAgICAgIHRpbWVvdXQgMzAwIGFkYiB3YWl0LWZvci1kZXZpY2UKICAgICAgICAgICAgdGltZW91dCA2MDAgYmFzaCAtYyAnCiAgICAgICAgICAgICAgdW50aWwgXAogICAgICAgICAgICAgICAgWyAiJChhZGIgc2hlbGwgZ2V0cHJvcCBzeXMuYm9vdF9jb21wbGV0ZWQgMj4vZGV2L251bGwgfCB0ciAtZCAiXHIiKSIgPSAiMSIgXSAmJiBcCiAgICAgICAgICAgICAgICBhZGIgc2hlbGwgc2VydmljZSBjaGVjayBhY3Rpdml0eSAyPi9kZXYvbnVsbCB8IGdyZXAgLXEgImZvdW5kIiAmJiBcCiAgICAgICAgICAgICAgICBhZGIgc2hlbGwgc2VydmljZSBjaGVjayBwYWNrYWdlIDI+L2Rldi9udWxsIHwgZ3JlcCAtcSAiZm91bmQiICYmIFwKICAgICAgICAgICAgICAgIGFkYiBzaGVsbCBjbWQgc2V0dGluZ3MgZ2V0IGdsb2JhbCB3aW5kb3dfYW5pbWF0aW9uX3NjYWxlID4vZGV2L251bGwgMj4mMQogICAgICAgICAgICAgIGRvCiAgICAgICAgICAgICAgICBzbGVlcCA1CiAgICAgICAgICAgICAgZG9uZQogICAgICAgICAgICAnCiAgICAgICAgICB9CgogICAgICAgICAgY2xlYW51cCgpIHsKICAgICAgICAgICAgYWRiIGVtdSBraWxsIDI+L2Rldi9udWxsIHx8IHRydWUKICAgICAgICAgICAgaWYgdGVzdCAtbiAiJEVNVUxBVE9SX1BJRCI7IHRoZW4KICAgICAgICAgICAgICBraWxsICIkRU1VTEFUT1JfUElEIiAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgICAgICAgICAgIGZpCiAgICAgICAgICB9CiAgICAgICAgICB0cmFwIGNsZWFudXAgRVhJVAoKICAgICAgICAgIHllcyB8IHNka21hbmFnZXIgLS1saWNlbnNlcyA+L2Rldi9udWxsIDI+JjEgfHwgdHJ1ZQogICAgICAgICAgc2RrbWFuYWdlciAtLWluc3RhbGwgJ3BsYXRmb3JtLXRvb2xzJyAnZW11bGF0b3InICIkU1lTVEVNX0lNQUdFIiBcCiAgICAgICAgICAgID4gIiRHSVRIVUJfV09SS1NQQUNFL3Nkay1pbnN0YWxsLmxvZyIgMj4mMQoKICAgICAgICAgIG1rZGlyIC1wICIkQU5EUk9JRF9BVkRfSE9NRSIKICAgICAgICAgIHByaW50ZiAnbm9cbicgfCBhdmRtYW5hZ2VyIGNyZWF0ZSBhdmQgXAogICAgICAgICAgICAtLWZvcmNlIFwKICAgICAgICAgICAgLS1uYW1lICIkQVZEX05BTUUiIFwKICAgICAgICAgICAgLS1wYWNrYWdlICIkU1lTVEVNX0lNQUdFIiBcCiAgICAgICAgICAgIC0tZGV2aWNlICdwaXhlbF82JyBcCiAgICAgICAgICAgID4gIiRHSVRIVUJfV09SS1NQQUNFL2F2ZC1jcmVhdGUubG9nIiAyPiYxCiAgICAgICAgICAiJFNES19ST09UL2VtdWxhdG9yL2VtdWxhdG9yIiAtbGlzdC1hdmRzIHwgZ3JlcCAtRnhxICIkQVZEX05BTUUiCgogICAgICAgICAgIiRTREtfUk9PVC9lbXVsYXRvci9lbXVsYXRvciIgXAogICAgICAgICAgICAtYXZkICIkQVZEX05BTUUiIFwKICAgICAgICAgICAgLW5vLXdpbmRvdyBcCiAgICAgICAgICAgIC1ncHUgc3dpZnRzaGFkZXJfaW5kaXJlY3QgXAogICAgICAgICAgICAtbm9hdWRpbyBcCiAgICAgICAgICAgIC1uby1ib290LWFuaW0gXAogICAgICAgICAgICAtY2FtZXJhLWJhY2sgbm9uZSBcCiAgICAgICAgICAgIC1uby1zbmFwc2hvdC1zYXZlIFwKICAgICAgICAgICAgPiAiJEdJVEhVQl9XT1JLU1BBQ0UvZW11bGF0b3IubG9nIiAyPiYxICYKICAgICAgICAgIEVNVUxBVE9SX1BJRD0kIQoKICAgICAgICAgIHdhaXRfZm9yX2FuZHJvaWQKICAgICAgICAgIGFkYiBzaGVsbCBpbnB1dCBrZXlldmVudCA4MiB8fCB0cnVlCiAgICAgICAgICBhZGIgc2hlbGwgc2V0dGluZ3MgcHV0IGdsb2JhbCB3aW5kb3dfYW5pbWF0aW9uX3NjYWxlIDAKICAgICAgICAgIGFkYiBzaGVsbCBzZXR0aW5ncyBwdXQgZ2xvYmFsIHRyYW5zaXRpb25fYW5pbWF0aW9uX3NjYWxlIDAKICAgICAgICAgIGFkYiBzaGVsbCBzZXR0aW5ncyBwdXQgZ2xvYmFsIGFuaW1hdG9yX2R1cmF0aW9uX3NjYWxlIDAKCiAgICAgICAgICAuL2dyYWRsZXcgYXNzZW1ibGVEZWJ1ZyBhc3NlbWJsZURlYnVnQW5kcm9pZFRlc3QKICAgICAgICAgIEFQUF9BUEs9J2FwcC9idWlsZC9vdXRwdXRzL2Fway9kZWJ1Zy9hcHAtZGVidWcuYXBrJwogICAgICAgICAgVEVTVF9BUEs9J2FwcC9idWlsZC9vdXRwdXRzL2Fway9hbmRyb2lkVGVzdC9kZWJ1Zy9hcHAtZGVidWctYW5kcm9pZFRlc3QuYXBrJwogICAgICAgICAgdGVzdCAtcyAiJEFQUF9BUEsiCiAgICAgICAgICB0ZXN0IC1zICIkVEVTVF9BUEsiCiAgICAgICAgICBhZGIgaW5zdGFsbCAtciAiJEFQUF9BUEsiCiAgICAgICAgICBhZGIgaW5zdGFsbCAtciAiJFRFU1RfQVBLIgogICAgICAgICAgYWRiIHNoZWxsIHBtIGdyYW50IGNvbS5vcGVuY29kZS5hbmRyb2lkIGFuZHJvaWQucGVybWlzc2lvbi5QT1NUX05PVElGSUNBVElPTlMKCiAgICAgICAgICBhZGIgc2hlbGwgYW0gaW5zdHJ1bWVudCAtdyAtciBcCiAgICAgICAgICAgIC1lIGNsYXNzIGNvbS5vcGVuY29kZS5hbmRyb2lkLnVpLlVpU2NyZWVuc2hvdEluc3RydW1lbnRlZFRlc3QgXAogICAgICAgICAgICBjb20ub3BlbmNvZGUuYW5kcm9pZC50ZXN0L2FuZHJvaWR4LnRlc3QucnVubmVyLkFuZHJvaWRKVW5pdFJ1bm5lciBcCiAgICAgICAgICAgIHwgdGVlICIkR0lUSFVCX1dPUktTUEFDRS9pbnN0cnVtZW50YXRpb24ubG9nIgogICAgICAgICAgZ3JlcCAtcSAnXk9LICgxIHRlc3QpJyAiJEdJVEhVQl9XT1JLU1BBQ0UvaW5zdHJ1bWVudGF0aW9uLmxvZyIKCiAgICAgICAgICBybSAtcmYgZG9jcy91aS1zY3JlZW5zaG90cy9wci00CiAgICAgICAgICBta2RpciAtcCBkb2NzL3VpLXNjcmVlbnNob3RzL3ByLTQKICAgICAgICAgIGZvciBpbWFnZSBpbiAiJHtFWFBFQ1RFRF9JTUFHRVNbQF19IjsgZG8KICAgICAgICAgICAgYWRiIGV4ZWMtb3V0IHJ1bi1hcyBjb20ub3BlbmNvZGUuYW5kcm9pZCBjYXQgImZpbGVzL3VpLXNjcmVlbnNob3RzLyRpbWFnZSIgXAogICAgICAgICAgICAgID4gImRvY3MvdWktc2NyZWVuc2hvdHMvcHItNC8kaW1hZ2UiCiAgICAgICAgICBkb25lCgogICAgICAgICAgcHl0aG9uMyAtIDw8J1BZJwogICAgICAgICAgZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCiAgICAgICAgICBpbXBvcnQgc3RydWN0CgogICAgICAgICAgZXhwZWN0ZWQgPSBbCiAgICAgICAgICAgICAgJzAxLWNoYXQtZW1wdHkucG5nJywKICAgICAgICAgICAgICAnMDItcnVudGltZS1ub3QtcmVhZHkucG5nJywKICAgICAgICAgICAgICAnMDMtZHJhd2VyLnBuZycsCiAgICAgICAgICAgICAgJzA0LXNldHRpbmdzLnBuZycsCiAgICAgICAgICAgICAgJzA1LW9uYm9hcmRpbmcucG5nJywKICAgICAgICAgICAgICAnMDYtYW5kcm9pZC1zZXR1cC5wbmcnLAogICAgICAgICAgICAgICcwNy1yZW1vdGUtY29ubmVjdGlvbi5wbmcnLAogICAgICAgICAgICAgICcwOC1tb2RlbC1ydW50aW1lLXBpY2tlci5wbmcnLAogICAgICAgICAgICAgICcwOS1wcm92aWRlci1zZXR0aW5ncy5wbmcnLAogICAgICAgICAgICAgICcxMC12b2ljZS1zZXR0aW5ncy5wbmcnLAogICAgICAgICAgXQogICAgICAgICAgZGlyZWN0b3J5ID0gUGF0aCgnZG9jcy91aS1zY3JlZW5zaG90cy9wci00JykKICAgICAgICAgIGZvciBuYW1lIGluIGV4cGVjdGVkOgogICAgICAgICAgICAgIGRhdGEgPSAoZGlyZWN0b3J5IC8gbmFtZSkucmVhZF9ieXRlcygpCiAgICAgICAgICAgICAgaWYgbm90IGRhdGEuc3RhcnRzd2l0aChiJ1x4ODlQTkdcclxuXHgxYVxuJyk6CiAgICAgICAgICAgICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZid7bmFtZX06IGludmFsaWQgUE5HIHNpZ25hdHVyZToge2RhdGFbOjgwXSFyfScpCiAgICAgICAgICAgICAgaWYgbGVuKGRhdGEpIDwgMTBfMDAwOgogICAgICAgICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYne25hbWV9OiBzdXNwaWNpb3VzbHkgc21hbGwgKHtsZW4oZGF0YSl9IGJ5dGVzKScpCiAgICAgICAgICAgICAgd2lkdGgsIGhlaWdodCA9IHN0cnVjdC51bnBhY2soJz5JSScsIGRhdGFbMTY6MjRdKQogICAgICAgICAgICAgIGlmIHdpZHRoIDwgNzIwIG9yIGhlaWdodCA8IDEyMDA6CiAgICAgICAgICAgICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZid7bmFtZX06IHVuZXhwZWN0ZWQgZGltZW5zaW9ucyB7d2lkdGh9eHtoZWlnaHR9JykKICAgICAgICAgICAgICBwcmludChmJ3tuYW1lfToge3dpZHRofXh7aGVpZ2h0fSwge2xlbihkYXRhKX0gYnl0ZXMnKQogICAgICAgICAgUFkKCiAgICAgIC0gbmFtZTogVXBsb2FkIHNjcmVlbnNob3QgZGlhZ25vc3RpY3MKICAgICAgICBpZjogc3RlcHMuZW11bGF0b3Iub3V0Y29tZSA9PSAnZmFpbHVyZScKICAgICAgICB1c2VzOiBhY3Rpb25zL3VwbG9hZC1hcnRpZmFjdEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiBlbXVsYXRvci11aS1kaWFnbm9zdGljcwogICAgICAgICAgcGF0aDogfAogICAgICAgICAgICBpbnN0cnVtZW50YXRpb24ubG9nCiAgICAgICAgICAgIHVpLXNjcmVlbnNob3QtdGVzdC5sb2cKICAgICAgICAgICAgZW11bGF0b3IubG9nCiAgICAgICAgICAgIHNkay1pbnN0YWxsLmxvZwogICAgICAgICAgICBhdmQtY3JlYXRlLmxvZwogICAgICAgICAgaWYtbm8tZmlsZXMtZm91bmQ6IHdhcm4KCiAgICAgIC0gbmFtZTogUmVwb3J0IHNjcmVlbnNob3QgZmFpbHVyZQogICAgICAgIGlmOiBzdGVwcy5lbXVsYXRvci5vdXRjb21lID09ICdmYWlsdXJlJwogICAgICAgIGVudjoKICAgICAgICAgIEdIX1RPS0VOOiAke3sgZ2l0aHViLnRva2VuIH19CiAgICAgICAgICBQUl9OVU1CRVI6ICR7eyBnaXRodWIuZXZlbnQucHVsbF9yZXF1ZXN0Lm51bWJlciB9fQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICB7CiAgICAgICAgICAgIGVjaG8gJyMjIEFQSSAzNCBlbXVsYXRvciBzY3JlZW5zaG90IGZhaWx1cmUnCiAgICAgICAgICAgIGVjaG8KICAgICAgICAgICAgZWNobyAnRGlhZ25vc3RpYyBsb2dzIHdlcmUgdXBsb2FkZWQgYXMgdGhlIGBlbXVsYXRvci11aS1kaWFnbm9zdGljc2Agd29ya2Zsb3cgYXJ0aWZhY3QuJwogICAgICAgICAgICBlY2hvCiAgICAgICAgICAgIGVjaG8gJ2BgYHRleHQnCiAgICAgICAgICAgIGlmIHRlc3QgLXMgaW5zdHJ1bWVudGF0aW9uLmxvZzsgdGhlbgogICAgICAgICAgICAgIGNhdCBpbnN0cnVtZW50YXRpb24ubG9nCiAgICAgICAgICAgIGVsc2UKICAgICAgICAgICAgICB0ciAnXHInICdcbicgPCB1aS1zY3JlZW5zaG90LXRlc3QubG9nIDI+L2Rldi9udWxsIHwgdGFpbCAtbiA4MCB8fCB0cnVlCiAgICAgICAgICAgIGZpCiAgICAgICAgICAgIGVjaG8gJ2BgYCcKICAgICAgICAgIH0gPiAvdG1wL3VpLXNjcmVlbnNob3QtZmFpbHVyZS5tZAogICAgICAgICAgaWYgdGVzdCAtbiAiJFBSX05VTUJFUiI7IHRoZW4KICAgICAgICAgICAgZ2ggcHIgY29tbWVudCAiJFBSX05VTUJFUiIgLS1ib2R5LWZpbGUgL3RtcC91aS1zY3JlZW5zaG90LWZhaWx1cmUubWQKICAgICAgICAgIGZpCiAgICAgICAgICBleGl0IDEKCiAgICAgIC0gbmFtZTogVXBsb2FkIGVtdWxhdG9yIHNjcmVlbnNob3RzCiAgICAgICAgaWY6IHN0ZXBzLmVtdWxhdG9yLm91dGNvbWUgPT0gJ3N1Y2Nlc3MnCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogZW11bGF0b3ItdWktc2NyZWVuc2hvdHMKICAgICAgICAgIHBhdGg6IGRvY3MvdWktc2NyZWVuc2hvdHMvcHItNC8qLnBuZwogICAgICAgICAgaWYtbm8tZmlsZXMtZm91bmQ6IGVycm9yCg==
         run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Capture API 34 emulator screenshots
+        id: emulator
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export SCREENSHOT_OUTPUT_DIR="$RUNNER_TEMP/ui-screenshots"
+          exec > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
+
+          AVD_NAME='opencode-ui-api34'
+          SYSTEM_IMAGE='system-images;android-34;google_apis;x86_64'
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          EMULATOR_PID=''
+          EXPECTED_IMAGES=(
+            01-chat-empty.png
+            02-runtime-not-ready.png
+            03-drawer.png
+            04-settings.png
+            05-onboarding.png
+            06-android-setup.png
+            07-remote-connection.png
+            08-model-runtime-picker.png
+            09-provider-settings.png
+            10-voice-settings.png
+          )
+
+          wait_for_android() {
+            timeout 300 adb wait-for-device
+            timeout 600 bash -c '
+              until \
+                [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ] && \
+                adb shell service check activity 2>/dev/null | grep -q "found" && \
+                adb shell service check package 2>/dev/null | grep -q "found" && \
+                adb shell cmd settings get global window_animation_scale >/dev/null 2>&1
+              do
+                sleep 5
+              done
+            '
+          }
+
+          cleanup() {
+            adb emu kill 2>/dev/null || true
+            if test -n "$EMULATOR_PID"; then
+              kill "$EMULATOR_PID" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install 'platform-tools' 'emulator' "$SYSTEM_IMAGE" \
+            > "$GITHUB_WORKSPACE/sdk-install.log" 2>&1
+
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | avdmanager create avd \
+            --force \
+            --name "$AVD_NAME" \
+            --package "$SYSTEM_IMAGE" \
+            --device 'pixel_6' \
+            > "$GITHUB_WORKSPACE/avd-create.log" 2>&1
+          "$SDK_ROOT/emulator/emulator" -list-avds | grep -Fxq "$AVD_NAME"
+
+          "$SDK_ROOT/emulator/emulator" \
+            -avd "$AVD_NAME" \
+            -no-window \
+            -gpu swiftshader_indirect \
+            -noaudio \
+            -no-boot-anim \
+            -camera-back none \
+            -no-snapshot-save \
+            > "$GITHUB_WORKSPACE/emulator.log" 2>&1 &
+          EMULATOR_PID=$!
+
+          wait_for_android
+          adb shell input keyevent 82 || true
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          ./gradlew assembleDebug assembleDebugAndroidTest
+          APP_APK='app/build/outputs/apk/debug/app-debug.apk'
+          TEST_APK='app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+          test -s "$APP_APK"
+          test -s "$TEST_APK"
+          adb install -r "$APP_APK"
+          adb install -r "$TEST_APK"
+          adb shell pm grant com.opencode.android android.permission.POST_NOTIFICATIONS
+
+          adb shell am instrument -w -r \
+            -e class com.opencode.android.ui.UiScreenshotInstrumentedTest \
+            com.opencode.android.test/androidx.test.runner.AndroidJUnitRunner \
+            | tee "$GITHUB_WORKSPACE/instrumentation.log"
+          grep -q '^OK (1 test)' "$GITHUB_WORKSPACE/instrumentation.log"
+
+          mkdir -p "$SCREENSHOT_OUTPUT_DIR"
+          for image in "${EXPECTED_IMAGES[@]}"; do
+            adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
+              > "$SCREENSHOT_OUTPUT_DIR/$image"
+          done
+
           python3 - <<'PY'
-          import base64
           from pathlib import Path
-          import shutil
+          import os
+          import struct
 
-          test_path = Path('app/src/androidTest/java/com/opencode/android/ui/UiScreenshotInstrumentedTest.kt')
-          test_text = test_path.read_text()
-          old_assertion = '            composeRule.onNodeWithText("ウェイクワード").assertIsDisplayed()'
-          replacement = '''            check(
-              composeRule.onAllNodesWithText("ウェイクワード").fetchSemanticsNodes().isNotEmpty()
-            ) { "Wake-word settings must be visible" }'''
-          count = test_text.count(old_assertion)
-          if count != 2:
-              raise SystemExit(f'Expected 2 wake-word assertions, found {count}')
-          test_path.write_text(test_text.replace(old_assertion, replacement))
-
-          Path('app/src/main/java/com/opencode/android/OnboardingGate.kt').write_bytes(base64.b64decode(os.environ['GATE_B64']))
-          gate_test_path = Path('app/src/test/java/com/opencode/android/OnboardingGateTest.kt')
-          gate_test_path.parent.mkdir(parents=True, exist_ok=True)
-          gate_test_path.write_bytes(base64.b64decode(os.environ['GATE_TEST_B64']))
-
-          app_path = Path('app/src/main/java/com/opencode/android/OpenCodeApplication.kt')
-          app_text = app_path.read_text()
-          anchor = '''        runtimeRegistry = RuntimeRegistry(
-            store = settings,
-            localTarget = LocalRuntimeTarget(localRuntimeManager)
-        )'''
-          replacement = anchor + '''
-        val setupConfigured = hasUsableRuntimeSetup(
-            localRuntimeStatus = localRuntimeManager.status(),
-            hasLocalProviderCredential = providerCredentials.credentials().isNotEmpty(),
-            hasRemoteConnection = settings.connections().isNotEmpty()
-        )
-        if (settings.onboardingCompleted != setupConfigured) {
-            settings.onboardingCompleted = setupConfigured
-        }'''
-          if app_text.count(anchor) != 1:
-              raise SystemExit('OpenCodeApplication runtime registry anchor not found exactly once')
-          app_path.write_text(app_text.replace(anchor, replacement, 1))
-
-          screenshots = Path('docs/ui-screenshots/pr-4')
-          if screenshots.exists():
-              shutil.rmtree(screenshots)
-          temporary_workflow = Path('.github/workflows/finalize-ui-pr.yml')
-          if temporary_workflow.exists():
-              temporary_workflow.unlink()
-          Path('.github/workflows/ui-screenshots.yml').write_bytes(base64.b64decode(os.environ['FINAL_WORKFLOW_B64']))
+          expected = [
+              '01-chat-empty.png',
+              '02-runtime-not-ready.png',
+              '03-drawer.png',
+              '04-settings.png',
+              '05-onboarding.png',
+              '06-android-setup.png',
+              '07-remote-connection.png',
+              '08-model-runtime-picker.png',
+              '09-provider-settings.png',
+              '10-voice-settings.png',
+          ]
+          directory = Path(os.environ['SCREENSHOT_OUTPUT_DIR'])
+          for name in expected:
+              data = (directory / name).read_bytes()
+              if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                  raise SystemExit(f'{name}: invalid PNG signature: {data[:80]!r}')
+              if len(data) < 10_000:
+                  raise SystemExit(f'{name}: suspiciously small ({len(data)} bytes)')
+              width, height = struct.unpack('>II', data[16:24])
+              if width < 720 or height < 1200:
+                  raise SystemExit(f'{name}: unexpected dimensions {width}x{height}')
+              print(f'{name}: {width}x{height}, {len(data)} bytes')
           PY
 
-      - name: Commit finalized files
+      - name: Upload screenshot diagnostics
+        if: steps.emulator.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-ui-diagnostics-${{ github.run_id }}
+          path: |
+            instrumentation.log
+            ui-screenshot-test.log
+            emulator.log
+            sdk-install.log
+            avd-create.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report screenshot failure
+        if: steps.emulator.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         shell: bash
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'fix: complete UI verification and onboarding guard'
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          {
+            echo '## API 34 emulator screenshot failure'
+            echo
+            echo 'Diagnostic logs were uploaded as the `emulator-ui-diagnostics-${{ github.run_id }}` workflow artifact.'
+            echo
+            echo '```text'
+            if test -s instrumentation.log; then
+              cat instrumentation.log
+            else
+              tr '\r' '\n' < ui-screenshot-test.log 2>/dev/null | tail -n 80 || true
+            fi
+            echo '```'
+          } > /tmp/ui-screenshot-failure.md
+          if test -n "$PR_NUMBER"; then
+            gh pr comment "$PR_NUMBER" --body-file /tmp/ui-screenshot-failure.md
+          fi
+          exit 1
+
+      - name: Upload emulator screenshots
+        if: steps.emulator.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-ui-screenshots-${{ github.run_id }}
+          path: ${{ runner.temp }}/ui-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
