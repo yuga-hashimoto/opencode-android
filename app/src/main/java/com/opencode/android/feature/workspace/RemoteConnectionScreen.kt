@@ -3,8 +3,10 @@ package com.opencode.android.feature.workspace
 import android.content.Context
 import android.net.nsd.NsdManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,26 +14,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,9 +42,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,13 +55,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.journeyapps.barcodescanner.ScanContract
@@ -64,17 +69,12 @@ import com.journeyapps.barcodescanner.ScanOptions
 import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.core.security.ConnectionQrPayload
-import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Dedicated "connect to PC/Mac" screen used both from first-run onboarding and from
- * the drawer's "リモート接続" entry. Reuses [ConnectionFormState] plus
- * WorkspaceViewModel.testConnection/saveConnection and the QR/LAN discovery helpers
- * already used by ConnectionDialog.kt.
- */
+/** Minimal connection setup for an existing OpenCode server. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RemoteConnectionScreen(
     onTestConnection: suspend (ConnectionFormState) -> Result<OpenCodeHealth>,
@@ -119,14 +119,64 @@ fun RemoteConnectionScreen(
         }
     }
 
+    fun testConnection() {
+        scope.launch {
+            form = form.copy(isTesting = true, testMessage = null)
+            onTestConnection(form).fold(
+                onSuccess = { health ->
+                    form = form.copy(
+                        isTesting = false,
+                        testSucceeded = health.healthy,
+                        testMessage = if (health.healthy) {
+                            "OpenCode ${health.version}"
+                        } else {
+                            context.getString(R.string.remote_connection_unhealthy)
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    form = form.copy(
+                        isTesting = false,
+                        testSucceeded = false,
+                        testMessage = error.message ?: context.getString(R.string.remote_connection_failed)
+                    )
+                }
+            )
+        }
+    }
+
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.remote_connection_title)) },
+                title = {
+                    Text(
+                        stringResource(R.string.remote_connection_title),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.nav_back)
+                        )
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        },
+        bottomBar = {
+            RemoteConnectionBottomBar(
+                form = form,
+                onTest = ::testConnection,
+                onSave = {
+                    onSaveConnection(form)
+                    onConnected()
                 }
             )
         }
@@ -136,48 +186,72 @@ fun RemoteConnectionScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            SectionCard {
-                StepRow(1, Icons.Default.PlayArrow, stringResource(R.string.remote_step1_title), stringResource(R.string.remote_step1_desc))
-                Spacer(Modifier.height(12.dp))
-                StepRow(2, Icons.Default.Link, stringResource(R.string.remote_step2_title), stringResource(R.string.remote_step2_desc))
-                Spacer(Modifier.height(12.dp))
-                StepRow(3, Icons.Default.CheckCircle, stringResource(R.string.remote_step3_title), stringResource(R.string.remote_step3_desc))
+            Text(
+                text = stringResource(R.string.remote_connection_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                CompactStepRow(
+                    number = 1,
+                    title = stringResource(R.string.remote_step1_title),
+                    description = stringResource(R.string.remote_step1_desc)
+                )
+                CompactStepRow(
+                    number = 2,
+                    title = stringResource(R.string.remote_step2_title),
+                    description = stringResource(R.string.remote_step2_desc)
+                )
+                CompactStepRow(
+                    number = 3,
+                    title = stringResource(R.string.remote_step3_title),
+                    description = stringResource(R.string.remote_step3_desc)
+                )
             }
 
-            SectionCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = form.name,
-                    onValueChange = { form = form.copy(name = it, testSucceeded = false, testMessage = null) },
+                    onValueChange = {
+                        form = form.copy(name = it, testSucceeded = false, testMessage = null)
+                    },
                     label = { Text(stringResource(R.string.connection_name)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
                 )
-                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = form.baseUrl,
-                    onValueChange = { form = form.copy(baseUrl = it, testSucceeded = false, testMessage = null) },
+                    onValueChange = {
+                        form = form.copy(baseUrl = it, testSucceeded = false, testMessage = null)
+                    },
                     label = { Text(stringResource(R.string.server_url)) },
                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    isError = form.baseUrl.isNotBlank() && form.normalizedUrl == null
+                    isError = form.baseUrl.isNotBlank() && form.normalizedUrl == null,
+                    shape = RoundedCornerShape(14.dp)
                 )
-                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = form.username,
-                    onValueChange = { form = form.copy(username = it) },
+                    onValueChange = {
+                        form = form.copy(username = it, testSucceeded = false, testMessage = null)
+                    },
                     label = { Text(stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
                 )
-                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = form.password,
-                    onValueChange = { form = form.copy(password = it, testSucceeded = false, testMessage = null) },
+                    onValueChange = {
+                        form = form.copy(password = it, testSucceeded = false, testMessage = null)
+                    },
                     label = { Text(stringResource(R.string.password)) },
                     leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
                     trailingIcon = {
@@ -188,9 +262,14 @@ fun RemoteConnectionScreen(
                             )
                         }
                     },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
 
@@ -200,27 +279,42 @@ fun RemoteConnectionScreen(
             ) {
                 OutlinedButton(
                     onClick = {
-                        qrScanLauncher.launch(ScanOptions().setBeepEnabled(false).setOrientationLocked(false))
+                        qrScanLauncher.launch(
+                            ScanOptions().setBeepEnabled(false).setOrientationLocked(false)
+                        )
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(19.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.add_via_qr))
+                    Text(stringResource(R.string.add_via_qr), maxLines = 1)
                 }
                 OutlinedButton(
                     onClick = { startLanDiscovery() },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.WifiFind, contentDescription = null)
+                    Icon(Icons.Default.WifiFind, contentDescription = null, modifier = Modifier.size(19.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.discover_on_lan))
+                    Text(stringResource(R.string.discover_on_lan), maxLines = 1)
                 }
             }
 
-            SectionCard {
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Text(
                         stringResource(R.string.remote_hint),
                         style = MaterialTheme.typography.bodySmall,
@@ -229,68 +323,29 @@ fun RemoteConnectionScreen(
                 }
             }
 
-            if (form.testMessage != null) {
-                Text(
-                    text = form.testMessage.orEmpty(),
-                    color = if (form.testSucceeded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        form = form.copy(isTesting = true, testMessage = null)
-                        onTestConnection(form).fold(
-                            onSuccess = { health ->
-                                form = form.copy(
-                                    isTesting = false,
-                                    testSucceeded = health.healthy,
-                                    testMessage = "OpenCode ${health.version}"
-                                )
-                            },
-                            onFailure = { error ->
-                                form = form.copy(
-                                    isTesting = false,
-                                    testSucceeded = false,
-                                    testMessage = error.message ?: "Connection failed"
-                                )
-                            }
-                        )
+            form.testMessage?.let { message ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (form.testSucceeded) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    } else {
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
                     }
-                },
-                enabled = form.canSave && !form.isTesting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-            ) {
-                if (form.isTesting) {
-                    CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.remote_test_connection_button), fontWeight = FontWeight.SemiBold)
-            }
-
-            if (form.testSucceeded) {
-                Button(
-                    onClick = {
-                        onSaveConnection(form)
-                        onConnected()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
                 ) {
-                    Text(stringResource(R.string.remote_save_connection_button), fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = message,
+                        modifier = Modifier.padding(14.dp),
+                        color = if (form.testSucceeded) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -309,33 +364,37 @@ fun RemoteConnectionScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(4.dp))
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else if (discoveredServers.isEmpty()) {
+                        Text(
+                            stringResource(R.string.no_servers_found),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    if (discoveredServers.isEmpty()) {
-                        if (!isDiscovering) {
-                            Text(
-                                stringResource(R.string.no_servers_found),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        discoveredServers.forEach { server ->
-                            SectionCard(
-                                modifier = Modifier.clickable {
+                    discoveredServers.forEach { server ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
                                     form = ConnectionFormState(
                                         name = server.name,
                                         baseUrl = server.baseUrl,
                                         allowInsecureLan = true
                                     )
                                     discoveryDialogOpen = false
-                                }
-                            ) {
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
                                 Text(server.name, fontWeight = FontWeight.Medium)
                                 Text(
                                     server.baseUrl,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -353,19 +412,63 @@ fun RemoteConnectionScreen(
 }
 
 @Composable
-private fun StepRow(number: Int, icon: ImageVector, title: String, description: String) {
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Column {
-            Text(
-                text = "$number. $title",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+private fun CompactStepRow(number: Int, title: String, description: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            modifier = Modifier.size(28.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(number.toString(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RemoteConnectionBottomBar(
+    form: ConnectionFormState,
+    onTest: () -> Unit,
+    onSave: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+    ) {
+        Button(
+            onClick = if (form.testSucceeded) onSave else onTest,
+            enabled = if (form.testSucceeded) true else form.canSave && !form.isTesting,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .height(48.dp)
+        ) {
+            if (form.isTesting) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (form.testSucceeded) {
+                    stringResource(R.string.remote_save_connection_button)
+                } else {
+                    stringResource(R.string.remote_test_connection_button)
+                },
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
