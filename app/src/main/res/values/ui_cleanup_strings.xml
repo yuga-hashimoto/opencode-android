@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="runtime_setup_required_title">OpenCode is not ready</string>
-    <string name="runtime_setup_required_body">Open Settings to install the Android runtime or add a connection to your PC or Mac.</string>
-    <string name="open_settings_action">Open Settings</string>
+    <string name="runtime_setup_required_body">Open the menu, then Settings, to install the Android runtime or add a connection to your PC or Mac.</string>
+    <string name="open_settings_action">Open menu</string>
 </resources>
