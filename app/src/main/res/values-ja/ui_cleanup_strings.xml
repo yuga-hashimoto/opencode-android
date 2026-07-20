@@ -12,7 +12,7 @@
     <string name="chat_workspace_short_default">既定</string>
     <string name="chat_build_subtitle_compact">実装、修正、調査をOpenCodeに依頼できます。</string>
     <string name="settings_wake_word_row">ウェイクワード</string>
-    <string name="settings_wake_word_value">OpenCode</string>
+    <string name="settings_wake_word_value">未導入</string>
     <string name="setup_step_counter">ステップ %1$d / %2$d</string>
     <string name="setup_next_action">次へ</string>
     <string name="setup_back_action">戻る</string>
@@ -29,4 +29,8 @@
     <string name="remote_connection_failed">接続に失敗しました。</string>
     <string name="provider_saved_credentials_title">保存済みの認証情報</string>
     <string name="provider_add_credentials_title">APIキーを追加・更新</string>
+    <string name="voice_settings_intro">音声入力と読み上げの動作を設定します。</string>
+    <string name="voice_conversation_section">音声会話</string>
+    <string name="voice_response_description">OpenCodeの回答を音声で読み上げます。</string>
+    <string name="wake_word_pack_required">ウェイクワード用の追加パックはまだ導入されていません。</string>
 </resources>
