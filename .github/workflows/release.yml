@@ -12,6 +12,10 @@ on:
         description: "Tag to create and release (e.g. v0.2.0)"
         required: true
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -107,3 +111,15 @@ jobs:
           gh release upload "$TAG" --clobber \
             "opencode-android-$TAG-debug.apk" \
             "opencode-android-$TAG-release-unsigned.apk"
+
+      - name: Record successful release
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          printf 'tag=%s\nsource_sha=%s\nworkflow_run=%s\n' \
+            "$TAG" "${{ github.sha }}" "${{ github.run_id }}" > .last-release
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .last-release
+          git commit -m "chore: record $TAG release"
+          git push origin "HEAD:${{ github.ref_name }}"
