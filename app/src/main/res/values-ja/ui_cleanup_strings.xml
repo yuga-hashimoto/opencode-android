@@ -27,4 +27,6 @@
     <string name="remote_connection_intro">OpenCodeを実行しているPC・Macの接続情報を入力します。</string>
     <string name="remote_connection_unhealthy">OpenCodeサーバーが正常に応答しませんでした。</string>
     <string name="remote_connection_failed">接続に失敗しました。</string>
+    <string name="provider_saved_credentials_title">保存済みの認証情報</string>
+    <string name="provider_add_credentials_title">APIキーを追加・更新</string>
 </resources>
