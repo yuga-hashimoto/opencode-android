@@ -12,7 +12,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.LargeTest
 import androidx.test.platform.app.InstrumentationRegistry
@@ -38,7 +41,13 @@ class UiScreenshotInstrumentedTest {
     fun captureReviewedScreens() {
         useJapaneseResources()
 
-        capture("01-chat-empty") {
+        capture(
+            name = "01-chat-empty",
+            assertions = {
+                composeRule.onNodeWithText("チャット").assertIsDisplayed()
+                composeRule.onNodeWithText("OpenCodeで開発を進める").assertIsDisplayed()
+            }
+        ) {
             ChatHomeScreen(
                 state = ChatUiState(isConnected = true),
                 providers = emptyList(),
@@ -63,7 +72,14 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture("02-runtime-not-ready") {
+        capture(
+            name = "02-runtime-not-ready",
+            assertions = {
+                composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
+                composeRule.onNodeWithText("PC・Macに接続").assertIsDisplayed()
+                composeRule.onNodeWithText("OpenCodeにメッセージを送る…").assertDoesNotExist()
+            }
+        ) {
             ChatHomeScreen(
                 state = ChatUiState(error = "Android local OpenCode runtime is not installed"),
                 providers = emptyList(),
@@ -88,7 +104,13 @@ class UiScreenshotInstrumentedTest {
             )
         }
 
-        capture("03-drawer") {
+        capture(
+            name = "03-drawer",
+            assertions = {
+                composeRule.onNodeWithText("最近のチャット").assertIsDisplayed()
+                composeRule.onNodeWithText("設定").assertIsDisplayed()
+            }
+        ) {
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Open)
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -99,7 +121,9 @@ class UiScreenshotInstrumentedTest {
                             recentSessions = listOf(
                                 DrawerRecentSession("1", "認証エラーの調査", "3時間前"),
                                 DrawerRecentSession("2", "READMEを更新", "昨日"),
-                                DrawerRecentSession("3", "テスト失敗を修正", "2日前")
+                                DrawerRecentSession("3", "テスト失敗を修正", "2日前"),
+                                DrawerRecentSession("4", "APIレスポンスを整理", "4日前"),
+                                DrawerRecentSession("5", "依存関係を更新", "1週間前")
                             ),
                             onNewChat = {},
                             onOpenSession = { _, _ -> },
@@ -133,7 +157,13 @@ class UiScreenshotInstrumentedTest {
             }
         }
 
-        capture("04-settings") {
+        capture(
+            name = "04-settings",
+            assertions = {
+                composeRule.onNodeWithText("設定").assertIsDisplayed()
+                composeRule.onNodeWithText("ウェイクワード").assertIsDisplayed()
+            }
+        ) {
             SettingsScreenV2(
                 assistantConfigured = true,
                 notificationsEnabled = true,
@@ -164,7 +194,11 @@ class UiScreenshotInstrumentedTest {
         composeRule.waitForIdle()
     }
 
-    private fun capture(name: String, content: @Composable () -> Unit) {
+    private fun capture(
+        name: String,
+        assertions: () -> Unit,
+        content: @Composable () -> Unit
+    ) {
         composeRule.activity.setContent {
             OpenCodeAndroidTheme {
                 Surface(
@@ -178,6 +212,7 @@ class UiScreenshotInstrumentedTest {
         }
         composeRule.waitForIdle()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        assertions()
         Thread.sleep(400)
 
         val bitmap = requireNotNull(
