@@ -52,6 +52,15 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Enable KVM
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Capture API 34 emulator screenshots
         id: emulator
         if: steps.guard.outputs.skip != 'true'
@@ -63,18 +72,19 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
           script: |
             set -o pipefail
-            ./gradlew connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest \
-              > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
-            mkdir -p docs/ui-screenshots/pr-4
-            for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
-              adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
-                > "docs/ui-screenshots/pr-4/$image"
-              test -s "docs/ui-screenshots/pr-4/$image"
-            done
+            {
+              ./gradlew connectedDebugAndroidTest \
+                -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest
+              mkdir -p docs/ui-screenshots/pr-4
+              for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
+                adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
+                  > "docs/ui-screenshots/pr-4/$image"
+                test -s "docs/ui-screenshots/pr-4/$image"
+              done
+            } > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
 
       - name: Report screenshot failure
         if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
