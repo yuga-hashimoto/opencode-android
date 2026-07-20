@@ -191,7 +191,8 @@ class UiScreenshotInstrumentedTest {
             name = "06-android-setup",
             assertions = {
                 composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
-                composeRule.onNodeWithText("1. ランタイムをダウンロード").assertIsDisplayed()
+                composeRule.onNodeWithText("ランタイムをダウンロード").assertIsDisplayed()
+                composeRule.onNodeWithText("ランタイムをダウンロード中").assertIsDisplayed()
             }
         ) {
             AndroidSetupScreen(
