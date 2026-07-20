@@ -80,45 +80,39 @@ jobs:
           export ANDROID_AVD_HOME="$HOME/.android/avd"
           EMULATOR_PID=''
 
-          wait_for_boot() {
+          wait_for_android() {
             timeout 300 adb wait-for-device
             timeout 600 bash -c '
-              until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do
+              until \
+                [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ] && \
+                adb shell service check activity 2>/dev/null | grep -q "found" && \
+                adb shell service check package 2>/dev/null | grep -q "found" && \
+                adb shell cmd settings get global window_animation_scale >/dev/null 2>&1
+              do
                 sleep 5
               done
             '
           }
 
           cleanup() {
-            if adb devices | grep -q '^emulator-'; then
-              adb emu kill || true
-            fi
+            adb emu kill 2>/dev/null || true
             if test -n "$EMULATOR_PID"; then
               kill "$EMULATOR_PID" 2>/dev/null || true
             fi
           }
           trap cleanup EXIT
 
-          echo 'Installing API 34 emulator components...'
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install \
-            'platform-tools' \
-            'emulator' \
-            "$SYSTEM_IMAGE"
+          sdkmanager --install 'platform-tools' 'emulator' "$SYSTEM_IMAGE"
 
-          echo 'Creating AVD...'
           mkdir -p "$ANDROID_AVD_HOME"
           printf 'no\n' | avdmanager create avd \
             --force \
             --name "$AVD_NAME" \
             --package "$SYSTEM_IMAGE" \
             --device 'pixel_6'
-
-          echo 'Available AVDs:'
-          "$SDK_ROOT/emulator/emulator" -list-avds
           "$SDK_ROOT/emulator/emulator" -list-avds | grep -Fxq "$AVD_NAME"
 
-          echo 'Starting emulator...'
           "$SDK_ROOT/emulator/emulator" \
             -avd "$AVD_NAME" \
             -no-window \
@@ -130,21 +124,17 @@ jobs:
             > "$GITHUB_WORKSPACE/emulator.log" 2>&1 &
           EMULATOR_PID=$!
 
-          wait_for_boot
-          echo 'Switching emulator locale to Japanese...'
+          wait_for_android
           adb root
           timeout 60 adb wait-for-device
           adb shell 'setprop persist.sys.locale ja-JP; stop; sleep 5; start'
-          wait_for_boot
-          adb unroot || true
-          timeout 60 adb wait-for-device
-          wait_for_boot
+          wait_for_android
+
           adb shell input keyevent 82 || true
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
 
-          echo 'Building and installing app/test APKs...'
           ./gradlew assembleDebug assembleDebugAndroidTest
           APP_APK='app/build/outputs/apk/debug/app-debug.apk'
           TEST_APK='app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
@@ -152,18 +142,14 @@ jobs:
           test -s "$TEST_APK"
           adb install -r "$APP_APK"
           adb install -r "$TEST_APK"
-          adb shell pm path com.opencode.android | grep -q '^package:'
-          adb shell pm path com.opencode.android.test | grep -q '^package:'
           adb shell pm grant com.opencode.android android.permission.POST_NOTIFICATIONS
 
-          echo 'Running screenshot instrumentation test...'
           adb shell am instrument -w -r \
             -e class com.opencode.android.ui.UiScreenshotInstrumentedTest \
             com.opencode.android.test/androidx.test.runner.AndroidJUnitRunner \
             | tee "$GITHUB_WORKSPACE/instrumentation.log"
           grep -q '^OK (1 test)' "$GITHUB_WORKSPACE/instrumentation.log"
 
-          echo 'Collecting and validating screenshots...'
           rm -rf docs/ui-screenshots/pr-4
           mkdir -p docs/ui-screenshots/pr-4
           for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
@@ -176,26 +162,22 @@ jobs:
           import struct
 
           directory = Path('docs/ui-screenshots/pr-4')
-          expected = [
+          for name in (
               '01-chat-empty.png',
               '02-runtime-not-ready.png',
               '03-drawer.png',
               '04-settings.png',
-          ]
-          for name in expected:
-              path = directory / name
-              data = path.read_bytes()
+          ):
+              data = (directory / name).read_bytes()
               if not data.startswith(b'\x89PNG\r\n\x1a\n'):
                   raise SystemExit(f'{name}: invalid PNG signature: {data[:80]!r}')
               if len(data) < 10_000:
-                  raise SystemExit(f'{name}: screenshot is suspiciously small ({len(data)} bytes)')
+                  raise SystemExit(f'{name}: suspiciously small ({len(data)} bytes)')
               width, height = struct.unpack('>II', data[16:24])
               if width < 720 or height < 1200:
                   raise SystemExit(f'{name}: unexpected dimensions {width}x{height}')
               print(f'{name}: {width}x{height}, {len(data)} bytes')
           PY
-
-          echo 'Screenshot capture completed.'
 
       - name: Report screenshot failure
         if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
@@ -208,11 +190,7 @@ jobs:
             echo '## API 34 emulator screenshot failure'
             echo
             echo '```text'
-            if test -f ui-screenshot-test.log; then
-              tail -n 240 ui-screenshot-test.log
-            else
-              echo 'The emulator workflow failed before producing a diagnostic log.'
-            fi
+            tail -n 240 ui-screenshot-test.log 2>/dev/null || true
             if test -f emulator.log; then
               echo
               echo '--- emulator.log ---'
@@ -241,7 +219,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add docs/ui-screenshots/pr-4
           if git diff --cached --quiet; then
-            echo 'Screenshots are unchanged.'
             exit 0
           fi
           git commit -m 'docs: add emulator UI screenshots [ui-screenshots]'
