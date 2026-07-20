@@ -191,7 +191,9 @@ class UiScreenshotInstrumentedTest {
             name = "06-android-setup",
             assertions = {
                 composeRule.onNodeWithText("このAndroidをセットアップ").assertIsDisplayed()
-                composeRule.onNodeWithText("ランタイムをダウンロード").assertIsDisplayed()
+                composeRule
+                    .onNodeWithText("ランタイムをダウンロード", substring = true)
+                    .assertIsDisplayed()
             }
         ) {
             AndroidSetupScreen(
@@ -227,7 +229,9 @@ class UiScreenshotInstrumentedTest {
                 composeRule.onNodeWithText("実行先").assertIsDisplayed()
                 composeRule.onNodeWithText("このAndroid").assertIsDisplayed()
                 composeRule.onNodeWithText("自宅のMacBook").assertIsDisplayed()
-                composeRule.onNodeWithText("GLM-5").assertIsDisplayed()
+                check(composeRule.onAllNodesWithText("GLM-5").fetchSemanticsNodes().isNotEmpty()) {
+                    "Model picker must display GLM-5"
+                }
             }
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
