@@ -24,4 +24,7 @@
     <string name="setup_api_key_description">Enter the API key for the selected provider. It is stored securely on this device.</string>
     <string name="setup_test_description">Verify that the runtime and authentication settings are ready.</string>
     <string name="setup_test_caption">After a successful check, you can start chatting.</string>
+    <string name="remote_connection_intro">Enter the connection details for a PC or Mac that is running OpenCode.</string>
+    <string name="remote_connection_unhealthy">The OpenCode server did not respond as healthy.</string>
+    <string name="remote_connection_failed">Connection failed.</string>
 </resources>
