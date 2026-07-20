@@ -47,12 +47,22 @@ jobs:
             build/generated/runtime-jni
           key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
 
+      - name: Decode release keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "RELEASE_KEYSTORE_BASE64 secret is not set" >&2
+            exit 1
+          fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
       - name: Build APKs
         env:
-          OPENCODE_STORE_FILE: app/release.keystore
-          OPENCODE_STORE_PASSWORD: opencode123
-          OPENCODE_KEY_ALIAS: opencode-android
-          OPENCODE_KEY_PASSWORD: opencode123
+          OPENCODE_STORE_FILE: ${{ runner.temp }}/release.keystore
+          OPENCODE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          OPENCODE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          OPENCODE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
 
       - name: Resolve tag

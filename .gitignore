@@ -4,3 +4,4 @@ build/
 *.iml
 .idea/
 __pycache__/
+*.keystore
