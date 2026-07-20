@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="runtime_setup_required_title">OpenCodeを利用する準備ができていません</string>
-    <string name="runtime_setup_required_body">設定から、このAndroidのランタイムをセットアップするか、PC・Macへの接続を追加してください。</string>
-    <string name="open_settings_action">設定を開く</string>
+    <string name="runtime_setup_required_body">メニューから設定を開き、このAndroidのランタイムをセットアップするか、PC・Macへの接続を追加してください。</string>
+    <string name="open_settings_action">メニューを開く</string>
 </resources>
