@@ -132,7 +132,12 @@ jobs:
 
           wait_for_boot
           echo 'Switching emulator locale to Japanese...'
+          adb root
+          timeout 60 adb wait-for-device
           adb shell 'setprop persist.sys.locale ja-JP; stop; sleep 5; start'
+          wait_for_boot
+          adb unroot || true
+          timeout 60 adb wait-for-device
           wait_for_boot
           adb shell input keyevent 82 || true
           adb shell settings put global window_animation_scale 0
