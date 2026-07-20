@@ -1,5 +1,6 @@
 package com.opencode.android.ui
 
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,6 +36,8 @@ class UiScreenshotInstrumentedTest {
 
     @Test
     fun captureReviewedScreens() {
+        useJapaneseResources()
+
         capture("01-chat-empty") {
             ChatHomeScreen(
                 state = ChatUiState(isConnected = true),
@@ -145,6 +149,19 @@ class UiScreenshotInstrumentedTest {
                 onOpenDiagnostics = {}
             )
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun useJapaneseResources() {
+        composeRule.activity.runOnUiThread {
+            Locale.setDefault(Locale.JAPAN)
+            val resources = composeRule.activity.resources
+            val configuration = Configuration(resources.configuration).apply {
+                setLocale(Locale.JAPAN)
+            }
+            resources.updateConfiguration(configuration, resources.displayMetrics)
+        }
+        composeRule.waitForIdle()
     }
 
     private fun capture(name: String, content: @Composable () -> Unit) {
