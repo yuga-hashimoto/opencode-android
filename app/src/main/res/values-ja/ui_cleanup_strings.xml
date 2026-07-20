@@ -2,5 +2,15 @@
 <resources>
     <string name="runtime_setup_required_title">OpenCodeを利用する準備ができていません</string>
     <string name="runtime_setup_required_body">メニューから設定を開き、このAndroidのランタイムをセットアップするか、PC・Macへの接続を追加してください。</string>
+    <string name="runtime_setup_required_body_compact">このAndroidでセットアップするか、OpenCodeを実行しているPC・Macへ接続してください。</string>
     <string name="open_settings_action">メニューを開く</string>
+    <string name="setup_this_android_action">このAndroidをセットアップ</string>
+    <string name="connect_pc_mac_action">PC・Macに接続</string>
+    <string name="setup_short_action">セットアップ</string>
+    <string name="connect_short_action">接続</string>
+    <string name="chat_model_short_default">モデル</string>
+    <string name="chat_workspace_short_default">既定</string>
+    <string name="chat_build_subtitle_compact">実装、修正、調査をOpenCodeに依頼できます。</string>
+    <string name="settings_wake_word_row">ウェイクワード</string>
+    <string name="settings_wake_word_value">OpenCode</string>
 </resources>
