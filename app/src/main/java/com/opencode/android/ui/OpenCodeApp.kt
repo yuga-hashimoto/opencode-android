@@ -442,6 +442,12 @@ fun OpenCodeApp(
                     onOpenHistory = {
                         navController.navigate(ROUTE_ACTIVITY) { launchSingleTop = true }
                     },
+                    onOpenLocalSetup = {
+                        navController.navigate(ROUTE_ANDROID_SETUP) { launchSingleTop = true }
+                    },
+                    onOpenRemoteSetup = {
+                        navController.navigate(ROUTE_REMOTE_CONNECTION) { launchSingleTop = true }
+                    },
                     onOpenDrawer = { drawerScope.launch { drawerState.open() } }
                 )
             }
