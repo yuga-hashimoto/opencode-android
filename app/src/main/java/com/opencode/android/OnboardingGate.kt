@@ -3,7 +3,7 @@ package com.opencode.android
 import com.opencode.android.runtime.LocalRuntimeStatus
 
 /**
- * Returns whether the app has at least one complete execution path.
+ * Returns whether the app has at least one complete, currently usable execution path.
  *
  * A remote connection is independently usable. A local runtime is usable only
  * after installation and after at least one provider credential is stored.
