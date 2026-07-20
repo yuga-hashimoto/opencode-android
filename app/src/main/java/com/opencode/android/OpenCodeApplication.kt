@@ -139,6 +139,14 @@ class OpenCodeApplication : Application() {
             store = settings,
             localTarget = LocalRuntimeTarget(localRuntimeManager)
         )
+        val setupConfigured = hasUsableRuntimeSetup(
+            localRuntimeStatus = localRuntimeManager.status(),
+            hasLocalProviderCredential = providerCredentials.credentials().isNotEmpty(),
+            hasRemoteConnection = settings.connections().isNotEmpty()
+        )
+        if (settings.onboardingCompleted != setupConfigured) {
+            settings.onboardingCompleted = setupConfigured
+        }
         catalogRepository = RuntimeCatalogRepository(runtimeRegistry, applicationScope)
         activityRepository = RuntimeActivityRepository(
             registry = runtimeRegistry,

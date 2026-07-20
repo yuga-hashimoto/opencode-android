@@ -8,23 +8,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,14 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
-import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
-/**
- * Redesigned settings landing screen: grouped rounded cards under アシスタント設定 /
- * システム設定 / アプリ設定. Real sub-flows (voice, provider credentials) navigate to
- * dedicated screens; wake word / privacy / app info are lightweight stub dialogs.
- */
+/** Compact settings landing screen backed only by real destinations and state. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SettingsScreenV2(
     assistantConfigured: Boolean,
@@ -69,43 +66,46 @@ fun SettingsScreenV2(
     onOpenWorkspaces: () -> Unit,
     onOpenDiagnostics: () -> Unit
 ) {
-    var showWakeWordDialog by remember { mutableStateOf(false) }
-    var showPrivacyDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         CenterAlignedTopAppBar(
-            title = { Text(stringResource(R.string.nav_settings), fontWeight = FontWeight.SemiBold) },
+            title = {
+                Text(
+                    stringResource(R.string.nav_settings),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             navigationIcon = {
                 IconButton(onClick = onOpenDrawer) {
                     Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu_description))
                 }
             },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                navigationIconContentColor = MaterialTheme.colorScheme.onBackground
             )
         )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
-                Text(
-                    stringResource(R.string.section_assistant_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            item {
-                SectionCard {
+                SettingsSection(title = stringResource(R.string.section_assistant_settings)) {
                     SettingsRow(
                         icon = Icons.Default.Home,
                         title = stringResource(R.string.settings_home_assistant_row),
                         trailing = {
                             StatusPill(
-                                text = if (assistantConfigured) stringResource(R.string.assistant_enabled_pill) else stringResource(R.string.assistant_disabled_pill),
+                                text = if (assistantConfigured) {
+                                    stringResource(R.string.assistant_enabled_pill)
+                                } else {
+                                    stringResource(R.string.assistant_disabled_pill)
+                                },
                                 active = assistantConfigured
                             )
                         },
@@ -114,9 +114,9 @@ fun SettingsScreenV2(
                     SettingsDivider()
                     SettingsRow(
                         icon = Icons.Default.Mic,
-                        title = stringResource(R.string.wake_word_row_title),
-                        trailingText = stringResource(R.string.wake_word_value),
-                        onClick = { showWakeWordDialog = true }
+                        title = stringResource(R.string.settings_wake_word_row),
+                        value = stringResource(R.string.settings_wake_word_value),
+                        onClick = onOpenVoiceSettings
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -128,14 +128,7 @@ fun SettingsScreenV2(
             }
 
             item {
-                Text(
-                    stringResource(R.string.section_system_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            item {
-                SectionCard {
+                SettingsSection(title = stringResource(R.string.section_system_settings)) {
                     SettingsRow(
                         icon = Icons.Default.Key,
                         title = stringResource(R.string.provider_settings_row),
@@ -163,38 +156,12 @@ fun SettingsScreenV2(
             }
 
             item {
-                Text(
-                    stringResource(R.string.section_app_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            item {
-                SectionCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text(
-                            stringResource(R.string.notifications_row),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Switch(checked = notificationsEnabled, onCheckedChange = onToggleNotifications)
-                    }
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.PrivacyTip,
-                        title = stringResource(R.string.privacy_row),
-                        onClick = { showPrivacyDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.History,
-                        title = stringResource(R.string.diagnostics_row),
-                        onClick = onOpenDiagnostics
+                SettingsSection(title = stringResource(R.string.section_app_settings)) {
+                    SettingsToggleRow(
+                        icon = Icons.Default.Notifications,
+                        title = stringResource(R.string.notifications_row),
+                        checked = notificationsEnabled,
+                        onCheckedChange = onToggleNotifications
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -207,26 +174,39 @@ fun SettingsScreenV2(
         }
     }
 
-    if (showWakeWordDialog) {
-        StubDialog(
-            title = stringResource(R.string.wake_word_row_title),
-            body = stringResource(R.string.wake_word_stub_body),
-            onDismiss = { showWakeWordDialog = false }
-        )
-    }
-    if (showPrivacyDialog) {
-        StubDialog(
-            title = stringResource(R.string.privacy_row),
-            body = stringResource(R.string.privacy_stub_body),
-            onDismiss = { showPrivacyDialog = false }
-        )
-    }
     if (showAboutDialog) {
-        StubDialog(
-            title = stringResource(R.string.app_info_row),
-            body = "${stringResource(R.string.app_name)} $appVersion\n${stringResource(R.string.unofficial_client)}",
-            onDismiss = { showAboutDialog = false }
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text(stringResource(R.string.app_info_row)) },
+            text = {
+                Text(
+                    "${stringResource(R.string.app_name)} $appVersion\n" +
+                        stringResource(R.string.unofficial_client)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) {
+                    Text(stringResource(R.string.close_description))
+                }
+            }
         )
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        )
+        Column { content() }
     }
 }
 
@@ -234,7 +214,7 @@ fun SettingsScreenV2(
 private fun SettingsRow(
     icon: ImageVector,
     title: String,
-    trailingText: String? = null,
+    value: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -242,27 +222,73 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        trailingText?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge
+        )
+        value?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         trailing?.invoke()
         Icon(
-            Icons.Default.KeyboardArrowRight,
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
         )
     }
 }
 
 @Composable
+private fun SettingsToggleRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
 private fun SettingsDivider() {
-    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 36.dp),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
+    )
 }
 
 @Composable
@@ -271,27 +297,15 @@ private fun StatusPill(text: String, active: Boolean) {
     Surface(
         color = color.copy(alpha = 0.14f),
         contentColor = color,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(100.dp)
+        shape = RoundedCornerShape(100.dp)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium
         )
     }
-}
-
-@Composable
-private fun StubDialog(title: String, body: String, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(body) },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close_description)) }
-        }
-    )
 }
 
 @Preview(showBackground = true)
@@ -302,7 +316,7 @@ private fun SettingsScreenV2Preview() {
             assistantConfigured = true,
             notificationsEnabled = true,
             onToggleNotifications = {},
-            appVersion = "0.1.0",
+            appVersion = "0.2.0",
             onOpenDrawer = {},
             onOpenAssistantSettings = {},
             onOpenVoiceSettings = {},

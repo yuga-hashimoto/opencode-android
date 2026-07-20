@@ -8,6 +8,10 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import com.opencode.android.ui.OpenCodeApp
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
@@ -16,7 +20,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             OpenCodeAndroidTheme {
-                OpenCodeApp(onOpenAssistantSettings = ::openAssistantSettings)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground
+                ) {
+                    OpenCodeApp(onOpenAssistantSettings = ::openAssistantSettings)
+                }
             }
         }
     }

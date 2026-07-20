@@ -3,7 +3,6 @@ package com.opencode.android.feature.chat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,29 +15,27 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,10 +43,9 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -60,11 +56,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
@@ -76,13 +73,8 @@ import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
-/**
- * ChatGPT-like chat home screen: hamburger + centered title top bar, empty-state
- * suggestions or the message timeline, and a rounded composer with model/agent/
- * workspace chips. Message rendering (bubbles, tool/reasoning cards, permission
- * cards) is reused from OpenCodeChatScreen.kt via the now package-visible
- * MessageBubble / AssistantTimeline / PermissionCard composables.
- */
+/** Chat-first home screen. Runtime selection remains inside the model picker. */
+@Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatHomeScreen(
@@ -105,43 +97,36 @@ fun ChatHomeScreen(
     onMic: () -> Unit,
     onNewChat: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenLocalSetup: () -> Unit,
+    onOpenRemoteSetup: () -> Unit,
     onOpenDrawer: () -> Unit
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    var overflowExpanded by remember { mutableStateOf(false) }
-    var titleMenuExpanded by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+    val errorKind = classifyChatError(state.error)
+    val runtimeNotReady = errorKind == ChatErrorKind.RUNTIME_NOT_READY && state.messages.isEmpty()
 
     LaunchedEffect(state.messages.size, state.permissions.size) {
         val totalItems = state.messages.size + state.permissions.size
         if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         CenterAlignedTopAppBar(
             title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { titleMenuExpanded = true }
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_home_title),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                    DropdownMenu(expanded = titleMenuExpanded, onDismissRequest = { titleMenuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.new_chat)) },
-                            onClick = { titleMenuExpanded = false; onNewChat() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.session_history)) },
-                            onClick = { titleMenuExpanded = false; onOpenHistory() }
-                        )
-                    }
-                }
+                Text(
+                    text = state.sessionTitle.ifBlank { stringResource(R.string.chat_home_title) },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             },
             navigationIcon = {
                 IconButton(onClick = onOpenDrawer) {
@@ -152,59 +137,48 @@ fun ChatHomeScreen(
                 IconButton(onClick = onNewChat) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_chat))
                 }
-                Box {
-                    IconButton(onClick = { overflowExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.chat_options_description))
-                    }
-                    DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.new_chat)) },
-                            onClick = { overflowExpanded = false; onNewChat() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.session_history)) },
-                            onClick = { overflowExpanded = false; onOpenHistory() }
-                        )
-                    }
-                }
             },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                actionIconContentColor = MaterialTheme.colorScheme.onBackground
             )
         )
 
         Box(modifier = Modifier.weight(1f)) {
-            val showEmptyState = state.messages.isEmpty() && state.permissions.isEmpty() &&
-                !state.isLoadingHistory && state.error == null
-            if (showEmptyState) {
-                EmptyChatState(onSuggestionClick = { text -> input = text })
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(state.messages, key = { it.id }) { message ->
-                        if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
-                    }
-                    items(state.permissions, key = { "permission-${it.id}" }) { permission ->
-                        PermissionCard(permission, onPermission)
-                    }
-                    if (state.isThinking) {
-                        item { StatusChip(text = stringResource(R.string.thinking), active = true) }
-                    }
-                    state.error?.let { error ->
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-                                )
-                            ) {
-                                Text(
-                                    text = error,
-                                    modifier = Modifier.padding(14.dp),
-                                    color = MaterialTheme.colorScheme.error
+            when {
+                state.isLoadingHistory -> LoadingState()
+                runtimeNotReady -> RuntimeSetupRequiredState(
+                    onOpenLocalSetup = onOpenLocalSetup,
+                    onOpenRemoteSetup = onOpenRemoteSetup
+                )
+                state.messages.isEmpty() && state.permissions.isEmpty() && state.error == null -> {
+                    EmptyChatState(onSuggestionClick = { text -> input = text })
+                }
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(state.messages, key = { it.id }) { message ->
+                            if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                        }
+                        items(state.permissions, key = { "permission-${it.id}" }) { permission ->
+                            PermissionCard(permission, onPermission)
+                        }
+                        if (state.isThinking) {
+                            item { StatusChip(text = stringResource(R.string.thinking), active = true) }
+                        }
+                        state.error?.let { error ->
+                            item {
+                                ChatErrorCard(
+                                    error = error,
+                                    kind = errorKind ?: ChatErrorKind.GENERIC,
+                                    onOpenLocalSetup = onOpenLocalSetup,
+                                    onOpenRemoteSetup = onOpenRemoteSetup
                                 )
                             }
                         }
@@ -213,28 +187,30 @@ fun ChatHomeScreen(
             }
         }
 
-        ChatComposer(
-            input = input,
-            onInputChange = { input = it },
-            isRunning = state.isRunning,
-            onSend = {
-                if (input.isNotBlank()) {
-                    onSendMessage(input)
-                    input = ""
-                }
-            },
-            onAbort = onAbort,
-            onMic = onMic,
-            modelLabel = selectedModelId ?: stringResource(R.string.opencode_default_value),
-            onModelChipClick = { showModelPicker = true },
-            agents = agents,
-            selectedAgentId = selectedAgentId,
-            onSelectAgent = onSelectAgent,
-            workspaces = workspaces,
-            selectedWorkspacePath = state.selectedWorkspacePath,
-            workspaceSelectable = state.sessionId == null,
-            onSelectWorkspace = onSelectWorkspace
-        )
+        if (!runtimeNotReady) {
+            ChatComposer(
+                input = input,
+                onInputChange = { input = it },
+                isRunning = state.isRunning,
+                onSend = {
+                    if (input.isNotBlank()) {
+                        onSendMessage(input)
+                        input = ""
+                    }
+                },
+                onAbort = onAbort,
+                onMic = onMic,
+                modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
+                onModelChipClick = { showModelPicker = true },
+                agents = agents,
+                selectedAgentId = selectedAgentId,
+                onSelectAgent = onSelectAgent,
+                workspaces = workspaces,
+                selectedWorkspacePath = state.selectedWorkspacePath,
+                workspaceSelectable = state.sessionId == null,
+                onSelectWorkspace = onSelectWorkspace
+            )
+        }
     }
 
     if (showModelPicker) {
@@ -253,32 +229,113 @@ fun ChatHomeScreen(
 }
 
 @Composable
+private fun LoadingState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+    }
+}
+
+@Composable
+private fun RuntimeSetupRequiredState(
+    onOpenLocalSetup: () -> Unit,
+    onOpenRemoteSetup: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        OpenCodeMark()
+        Spacer(Modifier.height(22.dp))
+        Text(
+            text = stringResource(R.string.runtime_setup_required_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.runtime_setup_required_body_compact),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(28.dp))
+        Button(
+            onClick = onOpenLocalSetup,
+            modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.setup_this_android_action))
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onOpenRemoteSetup,
+            modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.connect_pc_mac_action))
+        }
+    }
+}
+
+@Composable
+private fun ChatErrorCard(
+    error: String,
+    kind: ChatErrorKind,
+    onOpenLocalSetup: () -> Unit,
+    onOpenRemoteSetup: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            if (kind == ChatErrorKind.RUNTIME_NOT_READY) {
+                Text(
+                    text = stringResource(R.string.runtime_setup_required_title),
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.runtime_setup_required_body_compact),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onOpenLocalSetup) {
+                        Text(stringResource(R.string.setup_short_action))
+                    }
+                    OutlinedButton(onClick = onOpenRemoteSetup) {
+                        Text(stringResource(R.string.connect_short_action))
+                    }
+                }
+            } else {
+                Text(text = error, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
-    val suggestion1 = stringResource(R.string.suggestion_implement_title)
-    val suggestion2 = stringResource(R.string.suggestion_debug_title)
-    val suggestion3 = stringResource(R.string.suggestion_organize_title)
+    val prompts = listOf(
+        stringResource(R.string.suggestion_implement_title),
+        stringResource(R.string.suggestion_debug_title),
+        stringResource(R.string.suggestion_organize_title)
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Terminal,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(18.dp)
-                    .size(36.dp)
-            )
-        }
+        OpenCodeMark()
         Spacer(Modifier.height(20.dp))
         Text(
             text = stringResource(R.string.chat_build_headline),
@@ -288,81 +345,69 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = stringResource(R.string.chat_build_subtitle),
+            text = stringResource(R.string.chat_build_subtitle_compact),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(22.dp))
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SuggestionCard(
-                icon = Icons.Default.Build,
-                title = suggestion1,
-                subtitle = stringResource(R.string.suggestion_implement_subtitle),
-                onClick = { onSuggestionClick(suggestion1) }
-            )
-            SuggestionCard(
-                icon = Icons.Default.BugReport,
-                title = suggestion2,
-                subtitle = stringResource(R.string.suggestion_debug_subtitle),
-                onClick = { onSuggestionClick(suggestion2) }
-            )
-            SuggestionCard(
-                icon = Icons.Default.Folder,
-                title = suggestion3,
-                subtitle = stringResource(R.string.suggestion_organize_subtitle),
-                onClick = { onSuggestionClick(suggestion3) }
+            prompts.forEach { prompt ->
+                PromptSuggestion(text = prompt, onClick = { onSuggestionClick(prompt) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpenCodeMark() {
+    Surface(
+        modifier = Modifier.size(52.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Default.Terminal,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(27.dp)
             )
         }
     }
 }
 
 @Composable
-private fun SuggestionCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
+private fun PromptSuggestion(text: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f))
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
             Icon(
-                Icons.Default.KeyboardArrowRight,
+                imageVector = Icons.Default.Code,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(17.dp)
+            )
+            Text(
+                text = text,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -386,123 +431,147 @@ private fun ChatComposer(
     workspaceSelectable: Boolean,
     onSelectWorkspace: (String?) -> Unit
 ) {
-    var attachExpanded by remember { mutableStateOf(false) }
-
-    Column(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Column(modifier = Modifier.padding(6.dp)) {
-                TextField(
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            ) {
+                if (input.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.chat_message_placeholder),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                BasicTextField(
                     value = input,
                     onValueChange = onInputChange,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent
+                    minLines = 1,
+                    maxLines = 4,
+                    textStyle = TextStyle(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
                     ),
-                    maxLines = 6
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box {
-                        IconButton(onClick = { attachExpanded = true }) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.attach_button_description))
-                        }
-                        DropdownMenu(expanded = attachExpanded, onDismissRequest = { attachExpanded = false }) {
-                            // TODO: implement real attachments (files, images, camera capture)
-                            // once the backend supports multipart prompt attachments.
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.attach_menu_stub)) },
-                                onClick = { attachExpanded = false },
-                                enabled = false
-                            )
-                        }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CompactContextButton(
+                    label = modelLabel,
+                    maxWidth = 84.dp,
+                    onClick = onModelChipClick
+                )
+                CompactAgentButton(
+                    agents = agents,
+                    selectedAgentId = selectedAgentId,
+                    onSelect = onSelectAgent
+                )
+                CompactWorkspaceButton(
+                    workspaces = workspaces,
+                    selectedPath = selectedWorkspacePath,
+                    enabled = workspaceSelectable,
+                    onSelect = onSelectWorkspace
+                )
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onMic, modifier = Modifier.size(38.dp)) {
+                    Icon(
+                        Icons.Default.Mic,
+                        contentDescription = stringResource(R.string.voice),
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+                if (isRunning) {
+                    FilledIconButton(onClick = onAbort, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
                     }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onMic) {
-                        Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.voice))
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    if (isRunning) {
-                        FilledIconButton(onClick = onAbort) {
-                            Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
-                        }
-                    } else {
-                        FilledIconButton(onClick = onSend, enabled = input.isNotBlank()) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_description))
-                        }
+                } else {
+                    FilledIconButton(
+                        onClick = onSend,
+                        enabled = input.isNotBlank(),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            contentDescription = stringResource(R.string.send_description),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ChipButton(label = modelLabel, onClick = onModelChipClick)
-            AgentChip(agents = agents, selectedAgentId = selectedAgentId, onSelect = onSelectAgent)
-            WorkspaceChip(
-                workspaces = workspaces,
-                selectedPath = selectedWorkspacePath,
-                enabled = workspaceSelectable,
-                onSelect = onSelectWorkspace
-            )
-        }
     }
 }
 
 @Composable
-private fun ChipButton(label: String, onClick: () -> Unit) {
+private fun CompactContextButton(
+    label: String,
+    maxWidth: androidx.compose.ui.unit.Dp,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
     Surface(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .widthIn(max = maxWidth)
+            .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(100.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 1f else 0.55f),
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(14.dp))
         }
     }
 }
 
 @Composable
-private fun AgentChip(
+private fun CompactAgentButton(
     agents: List<OpenCodeAgent>,
     selectedAgentId: String?,
     onSelect: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        ChipButton(label = selectedAgentId ?: "build", onClick = { expanded = true })
+        CompactContextButton(
+            label = selectedAgentId ?: "build",
+            maxWidth = 66.dp,
+            onClick = { expanded = true }
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             agents.forEach { agent ->
                 DropdownMenuItem(
                     text = { Text(agent.name) },
-                    onClick = { onSelect(agent.name); expanded = false }
+                    onClick = {
+                        onSelect(agent.name)
+                        expanded = false
+                    }
                 )
             }
         }
@@ -510,7 +579,7 @@ private fun AgentChip(
 }
 
 @Composable
-private fun WorkspaceChip(
+private fun CompactWorkspaceButton(
     workspaces: List<WorkspaceRef>,
     selectedPath: String?,
     enabled: Boolean,
@@ -519,36 +588,27 @@ private fun WorkspaceChip(
     var expanded by remember { mutableStateOf(false) }
     val selected = workspaces.firstOrNull { it.path == selectedPath }
     Box {
-        Surface(
-            modifier = Modifier.clickable(enabled = enabled) { expanded = true },
-            shape = RoundedCornerShape(100.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
-                Text(
-                    text = selected?.name ?: stringResource(R.string.default_folder),
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
-                )
-                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-            }
-        }
+        CompactContextButton(
+            label = selected?.name ?: stringResource(R.string.chat_workspace_short_default),
+            maxWidth = 78.dp,
+            enabled = enabled,
+            onClick = { expanded = true }
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.default_folder)) },
-                onClick = { onSelect(null); expanded = false }
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
             )
             workspaces.forEach { workspace ->
                 DropdownMenuItem(
                     text = { Text(workspace.name) },
-                    onClick = { onSelect(workspace.path); expanded = false }
+                    onClick = {
+                        onSelect(workspace.path)
+                        expanded = false
+                    }
                 )
             }
         }
@@ -579,6 +639,8 @@ private fun ChatHomeScreenEmptyPreview() {
             onMic = {},
             onNewChat = {},
             onOpenHistory = {},
+            onOpenLocalSetup = {},
+            onOpenRemoteSetup = {},
             onOpenDrawer = {}
         )
     }

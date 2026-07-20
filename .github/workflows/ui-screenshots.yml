@@ -1,0 +1,233 @@
+name: Emulator UI Screenshots
+
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/**'
+      - 'app/src/androidTest/**'
+      - '.github/workflows/ui-screenshots.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ui-screenshots-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  capture:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Capture API 34 emulator screenshots
+        id: emulator
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export SCREENSHOT_OUTPUT_DIR="$RUNNER_TEMP/ui-screenshots"
+          exec > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
+
+          AVD_NAME='opencode-ui-api34'
+          SYSTEM_IMAGE='system-images;android-34;google_apis;x86_64'
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          EMULATOR_PID=''
+          EXPECTED_IMAGES=(
+            01-chat-empty.png
+            02-runtime-not-ready.png
+            03-drawer.png
+            04-settings.png
+            05-onboarding.png
+            06-android-setup.png
+            07-remote-connection.png
+            08-model-runtime-picker.png
+            09-provider-settings.png
+            10-voice-settings.png
+          )
+
+          wait_for_android() {
+            timeout 300 adb wait-for-device
+            timeout 600 bash -c '
+              until \
+                [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ] && \
+                adb shell service check activity 2>/dev/null | grep -q "found" && \
+                adb shell service check package 2>/dev/null | grep -q "found" && \
+                adb shell cmd settings get global window_animation_scale >/dev/null 2>&1
+              do
+                sleep 5
+              done
+            '
+          }
+
+          cleanup() {
+            adb emu kill 2>/dev/null || true
+            if test -n "$EMULATOR_PID"; then
+              kill "$EMULATOR_PID" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install 'platform-tools' 'emulator' "$SYSTEM_IMAGE" \
+            > "$GITHUB_WORKSPACE/sdk-install.log" 2>&1
+
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | avdmanager create avd \
+            --force \
+            --name "$AVD_NAME" \
+            --package "$SYSTEM_IMAGE" \
+            --device 'pixel_6' \
+            > "$GITHUB_WORKSPACE/avd-create.log" 2>&1
+          "$SDK_ROOT/emulator/emulator" -list-avds | grep -Fxq "$AVD_NAME"
+
+          "$SDK_ROOT/emulator/emulator" \
+            -avd "$AVD_NAME" \
+            -no-window \
+            -gpu swiftshader_indirect \
+            -noaudio \
+            -no-boot-anim \
+            -camera-back none \
+            -no-snapshot-save \
+            > "$GITHUB_WORKSPACE/emulator.log" 2>&1 &
+          EMULATOR_PID=$!
+
+          wait_for_android
+          adb shell input keyevent 82 || true
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          ./gradlew assembleDebug assembleDebugAndroidTest
+          APP_APK='app/build/outputs/apk/debug/app-debug.apk'
+          TEST_APK='app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+          test -s "$APP_APK"
+          test -s "$TEST_APK"
+          adb install -r "$APP_APK"
+          adb install -r "$TEST_APK"
+          adb shell pm grant com.opencode.android android.permission.POST_NOTIFICATIONS
+
+          adb shell am instrument -w -r \
+            -e class com.opencode.android.ui.UiScreenshotInstrumentedTest \
+            com.opencode.android.test/androidx.test.runner.AndroidJUnitRunner \
+            | tee "$GITHUB_WORKSPACE/instrumentation.log"
+          grep -q '^OK (1 test)' "$GITHUB_WORKSPACE/instrumentation.log"
+
+          mkdir -p "$SCREENSHOT_OUTPUT_DIR"
+          for image in "${EXPECTED_IMAGES[@]}"; do
+            adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
+              > "$SCREENSHOT_OUTPUT_DIR/$image"
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import struct
+
+          expected = [
+              '01-chat-empty.png',
+              '02-runtime-not-ready.png',
+              '03-drawer.png',
+              '04-settings.png',
+              '05-onboarding.png',
+              '06-android-setup.png',
+              '07-remote-connection.png',
+              '08-model-runtime-picker.png',
+              '09-provider-settings.png',
+              '10-voice-settings.png',
+          ]
+          directory = Path(os.environ['SCREENSHOT_OUTPUT_DIR'])
+          for name in expected:
+              data = (directory / name).read_bytes()
+              if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                  raise SystemExit(f'{name}: invalid PNG signature: {data[:80]!r}')
+              if len(data) < 10_000:
+                  raise SystemExit(f'{name}: suspiciously small ({len(data)} bytes)')
+              width, height = struct.unpack('>II', data[16:24])
+              if width < 720 or height < 1200:
+                  raise SystemExit(f'{name}: unexpected dimensions {width}x{height}')
+              print(f'{name}: {width}x{height}, {len(data)} bytes')
+          PY
+
+      - name: Upload screenshot diagnostics
+        if: steps.emulator.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-ui-diagnostics-${{ github.run_id }}
+          path: |
+            instrumentation.log
+            ui-screenshot-test.log
+            emulator.log
+            sdk-install.log
+            avd-create.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report screenshot failure
+        if: steps.emulator.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          {
+            echo '## API 34 emulator screenshot failure'
+            echo
+            echo 'Diagnostic logs were uploaded as the `emulator-ui-diagnostics-${{ github.run_id }}` workflow artifact.'
+            echo
+            echo '```text'
+            if test -s instrumentation.log; then
+              cat instrumentation.log
+            else
+              tr '\r' '\n' < ui-screenshot-test.log 2>/dev/null | tail -n 80 || true
+            fi
+            echo '```'
+          } > /tmp/ui-screenshot-failure.md
+          if test -n "$PR_NUMBER"; then
+            gh pr comment "$PR_NUMBER" --body-file /tmp/ui-screenshot-failure.md
+          fi
+          exit 1
+
+      - name: Upload emulator screenshots
+        if: steps.emulator.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-ui-screenshots-${{ github.run_id }}
+          path: ${{ runner.temp }}/ui-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 14
