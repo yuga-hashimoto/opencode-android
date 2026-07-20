@@ -48,6 +48,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Set up Android SDK
+        if: steps.guard.outputs.skip != 'true'
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle
         if: steps.guard.outputs.skip != 'true'
         uses: gradle/actions/setup-gradle@v4
