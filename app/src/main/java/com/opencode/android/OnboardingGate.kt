@@ -4,6 +4,7 @@ import com.opencode.android.runtime.LocalRuntimeStatus
 
 /**
  * Returns whether the app has at least one complete, currently usable execution path.
+ * Incomplete setup state must always return the user to guided onboarding.
  *
  * A remote connection is independently usable. A local runtime is usable only
  * after installation and after at least one provider credential is stored.
