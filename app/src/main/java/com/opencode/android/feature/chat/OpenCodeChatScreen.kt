@@ -538,8 +538,9 @@ private fun AgentSelector(
     }
 }
 
+// Not private: reused by ChatHomeScreen.kt (same package) for the redesigned chat screen.
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+fun MessageBubble(message: ChatMessage) {
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.CenterEnd
@@ -557,8 +558,9 @@ private fun MessageBubble(message: ChatMessage) {
     }
 }
 
+// Not private: reused by ChatHomeScreen.kt (same package) for the redesigned chat screen.
 @Composable
-private fun AssistantTimeline(message: ChatMessage) {
+fun AssistantTimeline(message: ChatMessage) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -823,8 +825,9 @@ private fun PatchCard(part: ChatPart.Patch) {
     }
 }
 
+// Not private: reused by ChatHomeScreen.kt (same package) for the redesigned chat screen.
 @Composable
-private fun PermissionCard(
+fun PermissionCard(
     permission: PermissionRequest,
     onPermission: (String, PermissionResponse, Boolean) -> Unit
 ) {

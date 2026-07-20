@@ -324,4 +324,122 @@
     <string name="install_step_installing_dev_tools">Gitと開発ツールを導入しています</string>
     <string name="install_step_activating_runtime">ランタイムを有効化しています</string>
     <string name="install_step_done">ローカルOpenCodeを導入しました</string>
+
+    <!-- Redesign: drawer -->
+    <string name="menu_description">メニュー</string>
+    <string name="drawer_search_description">検索</string>
+    <string name="drawer_recent_chats">最近のチャット</string>
+    <string name="drawer_pinned">ピン留め</string>
+    <string name="drawer_pinned_sample_1">重要な会話</string>
+    <string name="drawer_pinned_sample_2">プロジェクトのメモ</string>
+    <string name="drawer_features">機能</string>
+    <string name="drawer_plan_label">無料プラン</string>
+    <string name="drawer_user_email_placeholder">user@example.com</string>
+    <string name="drawer_time_just_now">たった今</string>
+    <string name="drawer_time_minutes_ago">%1$d分前</string>
+    <string name="drawer_time_hours_ago">%1$d時間前</string>
+    <string name="drawer_time_days_ago">%1$d日前</string>
+
+    <!-- Redesign: chat home -->
+    <string name="chat_home_title">チャット</string>
+    <string name="chat_build_headline">OpenCodeで開発を進める</string>
+    <string name="chat_build_subtitle">コードの実装、修正、レビューまで、何でも聞いてください。</string>
+    <string name="chat_message_placeholder">OpenCodeにメッセージを送る…</string>
+    <string name="suggestion_implement_title">関数の実装を手伝って</string>
+    <string name="suggestion_implement_subtitle">コードを書いて実装する</string>
+    <string name="suggestion_debug_title">バグの原因を調べて</string>
+    <string name="suggestion_debug_subtitle">問題を診断して修正する</string>
+    <string name="suggestion_organize_title">プロジェクトの構成を整理して</string>
+    <string name="suggestion_organize_subtitle">ファイルやフォルダを整理する</string>
+    <string name="attach_button_description">添付</string>
+    <string name="attach_menu_stub">ファイルを添付（準備中）</string>
+    <string name="session_history">セッション履歴</string>
+
+    <!-- Redesign: model & runtime picker -->
+    <string name="picker_title">モデルと実行先を選択</string>
+    <string name="picker_caption">使用するモデルと実行先を選びます。</string>
+    <string name="section_runtime">実行先</string>
+    <string name="section_model">モデル</string>
+    <string name="this_android">このAndroid</string>
+    <string name="picker_no_providers">接続済みのプロバイダがありません</string>
+
+    <!-- Redesign: onboarding -->
+    <string name="onboarding_welcome_title">OpenCodeへようこそ</string>
+    <string name="onboarding_subtitle">コードを書く・修正する・理解する。はじめるには、いずれか1つの実行パスを選ぶだけです。</string>
+    <string name="onboarding_recommended_badge">おすすめ</string>
+    <string name="onboarding_android_title">このAndroidで始める</string>
+    <string name="onboarding_android_desc">端末内でOpenCodeを直接実行します。</string>
+    <string name="onboarding_remote_title">PC・Macに接続する</string>
+    <string name="onboarding_remote_desc">既存のOpenCodeサーバーに接続します。</string>
+    <string name="onboarding_switch_note">どちらを選んでも、あとからもう一方を追加して切り替えることができます。</string>
+    <string name="onboarding_primary_button_android">Androidでセットアップを開始</string>
+    <string name="onboarding_primary_button_remote">PC・Macへ接続する</string>
+    <string name="onboarding_skip_link">後でリモート接続を追加</string>
+
+    <!-- Redesign: Android local setup -->
+    <string name="android_setup_title">このAndroidをセットアップ</string>
+    <string name="setup_step_download">ランタイムをダウンロード</string>
+    <string name="setup_step_provider">プロバイダを選択</string>
+    <string name="setup_step_apikey">APIキーを設定</string>
+    <string name="setup_step_test">接続テスト</string>
+    <string name="apikey_caption">APIキーはこの端末に安全に保存されます</string>
+    <string name="test_status_untested">未テスト</string>
+    <string name="test_status_testing">テスト中…</string>
+    <string name="test_status_success">接続に成功しました</string>
+    <string name="test_status_failure">接続に失敗しました</string>
+    <string name="run_connection_test_button">接続テストを実行</string>
+    <string name="setup_complete_button">完了</string>
+    <string name="provider_openai">OpenAI</string>
+    <string name="provider_google">Google</string>
+    <string name="provider_anthropic">Anthropic</string>
+    <string name="provider_ollama">Ollama</string>
+    <string name="provider_other">その他</string>
+
+    <!-- Redesign: remote connection -->
+    <string name="remote_connection_title">PC・Macに接続</string>
+    <string name="remote_step1_title">PCでOpenCodeを起動</string>
+    <string name="remote_step1_desc">PCでopencode serveを起動します。</string>
+    <string name="remote_step2_title">URLを入力またはQRで読み取り</string>
+    <string name="remote_step2_desc">サーバーのアドレスを入力するか、QRコードを読み取ります。</string>
+    <string name="remote_step3_title">接続を確認</string>
+    <string name="remote_step3_desc">保存する前に接続を確認します。</string>
+    <string name="remote_hint">PCのOpenCodeで「接続を許可」が有効になっていることを確認してください。</string>
+    <string name="remote_test_connection_button">接続をテスト</string>
+    <string name="remote_save_connection_button">この接続を保存</string>
+
+    <!-- Redesign: schedule -->
+    <string name="schedule_title">スケジュール</string>
+    <string name="schedule_subtitle">タスクの自動実行を管理します。</string>
+    <string name="filter_description">フィルター</string>
+    <string name="filter_all">すべて</string>
+    <string name="filter_enabled">有効</string>
+    <string name="filter_disabled">停止中</string>
+    <string name="new_schedule_button">+ 新規スケジュール</string>
+    <string name="schedule_create_dialog_title">新規スケジュール</string>
+    <string name="schedule_name_hint">名前</string>
+    <string name="schedule_time_hint">時刻 (例: 09:00)</string>
+    <string name="schedule_repeat_label">繰り返し</string>
+    <string name="schedule_repeat_daily">毎日</string>
+    <string name="schedule_repeat_weekly">毎週</string>
+
+    <!-- Redesign: settings V2 -->
+    <string name="section_assistant_settings">アシスタント設定</string>
+    <string name="section_system_settings">システム設定</string>
+    <string name="section_app_settings">アプリ設定</string>
+    <string name="settings_home_assistant_row">ホームアシスタント</string>
+    <string name="assistant_enabled_pill">有効</string>
+    <string name="assistant_disabled_pill">無効</string>
+    <string name="wake_word_row_title">ウェイクワード</string>
+    <string name="wake_word_value">OpenCode</string>
+    <string name="wake_word_stub_body">この機能は準備中です。</string>
+    <string name="voice_settings_row">音声設定</string>
+    <string name="provider_settings_row">プロバイダ設定</string>
+    <string name="settings_local_runtime_row">ローカルランタイム</string>
+    <string name="remote_connection_row">リモート接続</string>
+    <string name="settings_workspace_row">ワークスペース</string>
+    <string name="notifications_row">通知</string>
+    <string name="privacy_row">プライバシーとデータ</string>
+    <string name="privacy_stub_body">この機能は準備中です。</string>
+    <string name="diagnostics_row">診断・ログ</string>
+    <string name="app_info_row">アプリ情報</string>
 </resources>

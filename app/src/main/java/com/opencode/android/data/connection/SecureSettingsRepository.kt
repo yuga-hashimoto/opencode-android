@@ -111,6 +111,11 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
                 .apply()
         }
 
+    /** True once the user has completed (or explicitly skipped) first-run onboarding. */
+    var onboardingCompleted: Boolean
+        get() = preferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        set(value) = preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
     companion object {
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
@@ -125,5 +130,6 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"
         private const val KEY_ASSISTANT_WORKSPACE_PATH = "assistant_workspace_path"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
 }

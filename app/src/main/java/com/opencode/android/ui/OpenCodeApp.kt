@@ -4,18 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -25,13 +17,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -45,15 +34,20 @@ import com.opencode.android.feature.activity.SessionDetailScreen
 import com.opencode.android.feature.activity.SessionDetailViewModel
 import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
+import com.opencode.android.feature.chat.ChatHomeScreen
 import com.opencode.android.feature.chat.ChatViewModel
-import com.opencode.android.feature.chat.OpenCodeChatScreen
 import com.opencode.android.feature.chat.buildHandoffPrompt
-import com.opencode.android.feature.home.HomeScreen
-import com.opencode.android.feature.home.HomeViewModel
-import com.opencode.android.feature.settings.SettingsScreen
+import com.opencode.android.feature.onboarding.AndroidSetupScreen
+import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
+import com.opencode.android.feature.schedule.ScheduleScreen
+import com.opencode.android.feature.schedule.ScheduleViewModel
+import com.opencode.android.feature.settings.ProviderSettingsScreen
+import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementViewModel
+import com.opencode.android.feature.workspace.RemoteConnectionScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
@@ -64,21 +58,22 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Destination(
-    val route: String,
-    val labelRes: Int,
-    val icon: ImageVector
-) {
-    HOME("home", R.string.nav_home, Icons.Default.Dashboard),
-    CHAT("chat", R.string.nav_chat, Icons.AutoMirrored.Filled.Chat),
-    WORKSPACES("workspaces", R.string.nav_workspaces, Icons.Default.Folder),
-    ACTIVITY("activity", R.string.nav_activity, Icons.Default.History),
-    SETTINGS("settings", R.string.nav_settings, Icons.Default.Settings)
-}
-
+private const val ROUTE_ONBOARDING = "onboarding"
+private const val ROUTE_ANDROID_SETUP = "android-setup"
+private const val ROUTE_REMOTE_CONNECTION = "remote-connection"
+private const val ROUTE_CHAT = "chat"
+private const val ROUTE_SCHEDULE = "schedule"
+private const val ROUTE_SETTINGS = "settings"
+private const val ROUTE_SETTINGS_VOICE = "settings-voice"
+private const val ROUTE_SETTINGS_PROVIDERS = "settings-providers"
+private const val ROUTE_WORKSPACES = "workspaces"
+private const val ROUTE_ACTIVITY = "activity"
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
+
+/** Routes whose top bar exposes the hamburger menu / drawer swipe gesture. */
+private val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULE)
 
 private fun speechLocaleTag(context: android.content.Context): String {
     val locale = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
@@ -88,6 +83,20 @@ private fun speechLocaleTag(context: android.content.Context): String {
         context.resources.configuration.locale
     }
     return locale?.toLanguageTag()?.takeIf { it.isNotBlank() } ?: "en-US"
+}
+
+/** Relative-time label ("3時間前" / "3 hours ago") for the drawer's recent-chats list. */
+private fun relativeTimeLabel(context: android.content.Context, epochMillis: Long): String {
+    val diffMillis = (System.currentTimeMillis() - epochMillis).coerceAtLeast(0L)
+    val minutes = diffMillis / 60_000L
+    val hours = minutes / 60L
+    val days = hours / 24L
+    return when {
+        minutes < 1L -> context.getString(R.string.drawer_time_just_now)
+        hours < 1L -> context.getString(R.string.drawer_time_minutes_ago, minutes)
+        days < 1L -> context.getString(R.string.drawer_time_hours_ago, hours)
+        else -> context.getString(R.string.drawer_time_days_ago, days)
+    }
 }
 
 @Composable
@@ -102,15 +111,11 @@ fun OpenCodeApp(
     var pendingHandoffPrompt by remember { mutableStateOf<Pair<String, String>?>(null) }
     var selectedWorkspace by remember { mutableStateOf<WorkspaceRef?>(null) }
     var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
+    var notificationsEnabled by remember { mutableStateOf(true) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
     val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
     val preferences by app.preferences.state.collectAsState()
-    val homeViewModel: HomeViewModel = viewModel(
-        key = "home",
-        factory = ViewModelFactory { HomeViewModel(app.catalogRepository, app.preferences) }
-    )
-    val homeState by homeViewModel.state.collectAsState()
 
     val workspaceViewModel: WorkspaceViewModel = viewModel(
         key = "workspaces",
@@ -294,56 +299,103 @@ fun OpenCodeApp(
         app.runtimeRegistry.select(targetRuntimeId)
     }
 
-    val showBottomBar = Destination.entries.any { destination ->
-        destination.route == backStackEntry?.destination?.route
+    // First-run gate: onboarding is the start destination until completed or skipped.
+    val startDestination = remember { if (app.settings.onboardingCompleted) ROUTE_CHAT else ROUTE_ONBOARDING }
+    val completeOnboardingAndGoToChat: () -> Unit = {
+        app.settings.onboardingCompleted = true
+        navController.navigate(ROUTE_CHAT) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+            launchSingleTop = true
+        }
     }
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) NavigationBar {
-                Destination.entries.forEach { destination ->
-                    val selected = backStackEntry?.destination?.hierarchy
-                        ?.any { it.route == destination.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(Destination.HOME.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
-                        label = { Text(stringResource(destination.labelRes)) }
-                    )
-                }
-            }
+    val appVersion = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
+
+    val recentSessions = remember(activityState.sessions) {
+        activityState.sessions.take(8).map { session ->
+            DrawerRecentSession(
+                id = session.id,
+                title = session.title.ifBlank { session.slug ?: session.id },
+                relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created)
+            )
         }
-    ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = Destination.HOME.route,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            composable(Destination.HOME.route) {
-                HomeScreen(
-                    state = homeState,
+    }
+
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerScope = rememberCoroutineScope()
+    val currentRoute = backStackEntry?.destination?.route
+
+    fun closeDrawer() {
+        drawerScope.launch { drawerState.close() }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = currentRoute in DRAWER_ROOT_ROUTES,
+        drawerContent = {
+            ModalDrawerSheet {
+                AppDrawerContent(
+                    recentSessions = recentSessions,
                     onNewChat = {
+                        closeDrawer()
                         pendingSession = null
                         chatViewModel.newSession()
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
-                    onOpenWorkspaces = { navController.navigate(Destination.WORKSPACES.route) },
-                    onOpenActivity = { navController.navigate(Destination.ACTIVITY.route) },
                     onOpenSession = { id, title ->
+                        closeDrawer()
                         pendingSession = id to title
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
-                    onRefresh = homeViewModel::refresh
+                    onNavigate = { route ->
+                        closeDrawer()
+                        navController.navigate(route) { launchSingleTop = true }
+                    }
+                )
+            }
+        }
+    ) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination
+        ) {
+            composable(ROUTE_ONBOARDING) {
+                OnboardingChoiceScreen(
+                    onSelectAndroid = { navController.navigate(ROUTE_ANDROID_SETUP) },
+                    onSelectRemote = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+                    onAddRemoteLater = { navController.navigate(ROUTE_REMOTE_CONNECTION) }
                 )
             }
 
-            composable(Destination.CHAT.route) {
+            composable(ROUTE_ANDROID_SETUP) {
+                val localRuntimeStatus by app.localRuntimeManager.state.collectAsState()
+                AndroidSetupScreen(
+                    runtimeStatus = localRuntimeStatus,
+                    onStartRuntimeSetup = workspaceViewModel::setupLocalRuntime,
+                    onSaveApiKey = { providerId, apiKey ->
+                        settingsViewModel.updateDraftProviderId(providerId)
+                        settingsViewModel.updateDraftApiKey(apiKey)
+                        settingsViewModel.saveApiKey()
+                    },
+                    onBack = { navController.popBackStack() },
+                    onFinish = completeOnboardingAndGoToChat
+                )
+            }
+
+            composable(ROUTE_REMOTE_CONNECTION) {
+                RemoteConnectionScreen(
+                    onTestConnection = workspaceViewModel::testConnection,
+                    onSaveConnection = workspaceViewModel::saveConnection,
+                    onBack = { navController.popBackStack() },
+                    onConnected = completeOnboardingAndGoToChat
+                )
+            }
+
+            composable(ROUTE_CHAT) {
                 LaunchedEffect(pendingSession) {
                     pendingSession?.let { (id, title) ->
                         chatViewModel.openSession(id, title)
@@ -357,7 +409,7 @@ fun OpenCodeApp(
                         pendingHandoffPrompt = null
                     }
                 }
-                OpenCodeChatScreen(
+                ChatHomeScreen(
                     state = chatState,
                     providers = settingsState.providers,
                     agents = settingsState.agents,
@@ -365,7 +417,17 @@ fun OpenCodeApp(
                     selectedProviderId = settingsState.providerId,
                     selectedModelId = settingsState.modelId,
                     selectedAgentId = settingsState.agentId,
-                    otherRuntimes = runtimeTargets.filter { it.id != selectedRuntime?.id },
+                    runtimeTargets = runtimeTargets,
+                    selectedRuntimeId = selectedRuntime?.id,
+                    onSelectRuntime = { id ->
+                        if (id != selectedRuntime?.id) {
+                            if (chatState.messages.isNotEmpty()) {
+                                onHandoff(id)
+                            } else {
+                                app.runtimeRegistry.select(id)
+                            }
+                        }
+                    },
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
@@ -373,11 +435,82 @@ fun OpenCodeApp(
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
                     onMic = requestVoiceInput,
-                    onHandoff = onHandoff
+                    onNewChat = {
+                        pendingSession = null
+                        chatViewModel.newSession()
+                    },
+                    onOpenHistory = {
+                        navController.navigate(ROUTE_ACTIVITY) { launchSingleTop = true }
+                    },
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } }
                 )
             }
 
-            composable(Destination.WORKSPACES.route) {
+            composable(ROUTE_SCHEDULE) {
+                val scheduleViewModel: ScheduleViewModel = viewModel(
+                    key = "schedule",
+                    factory = ViewModelFactory { ScheduleViewModel() }
+                )
+                val scheduleItems by scheduleViewModel.state.collectAsState()
+                ScheduleScreen(
+                    items = scheduleItems,
+                    onToggle = scheduleViewModel::toggle,
+                    onAdd = scheduleViewModel::add,
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } }
+                )
+            }
+
+            composable(ROUTE_SETTINGS) {
+                SettingsScreenV2(
+                    assistantConfigured = settingsState.assistantRuntimeId != null,
+                    notificationsEnabled = notificationsEnabled,
+                    onToggleNotifications = { enabled ->
+                        // Local UI toggle only — Android has no API to programmatically revoke
+                        // notification access, so turning this off is visual until the user
+                        // also disables notifications from system settings. TODO: reflect the
+                        // real system permission state instead of local-only UI state.
+                        notificationsEnabled = enabled
+                        if (enabled && android.os.Build.VERSION.SDK_INT >= 33) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    appVersion = appVersion,
+                    onOpenDrawer = { drawerScope.launch { drawerState.open() } },
+                    onOpenAssistantSettings = onOpenAssistantSettings,
+                    onOpenVoiceSettings = { navController.navigate(ROUTE_SETTINGS_VOICE) },
+                    onOpenProviderSettings = { navController.navigate(ROUTE_SETTINGS_PROVIDERS) },
+                    onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
+                    onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
+                    onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
+                    onOpenDiagnostics = { navController.navigate(ROUTE_ACTIVITY) }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_VOICE) {
+                VoiceSettingsScreen(
+                    ttsEnabled = settingsState.ttsEnabled,
+                    continuousConversation = settingsState.continuousConversation,
+                    onTtsChange = settingsViewModel::setTtsEnabled,
+                    onContinuousChange = settingsViewModel::setContinuousConversation,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_PROVIDERS) {
+                ProviderSettingsScreen(
+                    credentialStatuses = settingsState.credentialStatuses,
+                    draftProviderId = settingsState.draftProviderId,
+                    draftApiKey = settingsState.draftApiKey,
+                    credentialMessage = settingsState.credentialMessage,
+                    onDraftProviderId = settingsViewModel::updateDraftProviderId,
+                    onDraftApiKey = settingsViewModel::updateDraftApiKey,
+                    onSaveApiKey = settingsViewModel::saveApiKey,
+                    onClearApiKey = settingsViewModel::clearApiKey,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_WORKSPACES) {
                 WorkspacesScreen(
                     state = workspaceState,
                     onSelectRuntime = workspaceViewModel::selectRuntime,
@@ -472,7 +605,7 @@ fun OpenCodeApp(
                 }
             }
 
-            composable(Destination.ACTIVITY.route) {
+            composable(ROUTE_ACTIVITY) {
                 ActivityScreen(
                     state = activityState,
                     onRefresh = activityViewModel::refresh,
@@ -482,7 +615,7 @@ fun OpenCodeApp(
                     },
                     onOpenSession = { id, title ->
                         pendingSession = id to title
-                        navController.navigate(Destination.CHAT.route)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
                     onPermission = activityViewModel::respondToPermission,
                     onRenameSession = activityViewModel::renameSession,
@@ -509,31 +642,10 @@ fun OpenCodeApp(
                         onRefresh = detailViewModel::refresh,
                         onContinueChat = {
                             pendingSession = session.id to session.title
-                            navController.navigate(Destination.CHAT.route)
+                            navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                         }
                     )
                 }
-            }
-
-            composable(Destination.SETTINGS.route) {
-                SettingsScreen(
-                    state = settingsState,
-                    onOpenAssistantSettings = onOpenAssistantSettings,
-                    onTtsChange = settingsViewModel::setTtsEnabled,
-                    onContinuousChange = settingsViewModel::setContinuousConversation,
-                    onDraftProviderId = settingsViewModel::updateDraftProviderId,
-                    onDraftApiKey = settingsViewModel::updateDraftApiKey,
-                    onSaveApiKey = settingsViewModel::saveApiKey,
-                    onClearApiKey = settingsViewModel::clearApiKey,
-                    onAssistantRuntime = settingsViewModel::setAssistantRuntimeId,
-                    onAssistantWorkspace = settingsViewModel::setAssistantWorkspacePath,
-                    onImportWorkspace = { workspaceImportLauncher.launch(null) },
-                    onRequestNotifications = {
-                        if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        }
-                    }
-                )
             }
         }
     }

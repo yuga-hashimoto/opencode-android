@@ -324,4 +324,122 @@
     <string name="install_step_installing_dev_tools">Installing Git and development tools</string>
     <string name="install_step_activating_runtime">Activating the runtime</string>
     <string name="install_step_done">Local OpenCode installed</string>
+
+    <!-- Redesign: drawer -->
+    <string name="menu_description">Menu</string>
+    <string name="drawer_search_description">Search</string>
+    <string name="drawer_recent_chats">Recent chats</string>
+    <string name="drawer_pinned">Pinned</string>
+    <string name="drawer_pinned_sample_1">Important conversation</string>
+    <string name="drawer_pinned_sample_2">Project notes</string>
+    <string name="drawer_features">Features</string>
+    <string name="drawer_plan_label">Free plan</string>
+    <string name="drawer_user_email_placeholder">user@example.com</string>
+    <string name="drawer_time_just_now">Just now</string>
+    <string name="drawer_time_minutes_ago">%1$d minutes ago</string>
+    <string name="drawer_time_hours_ago">%1$d hours ago</string>
+    <string name="drawer_time_days_ago">%1$d days ago</string>
+
+    <!-- Redesign: chat home -->
+    <string name="chat_home_title">Chat</string>
+    <string name="chat_build_headline">Build with OpenCode</string>
+    <string name="chat_build_subtitle">Ask anything — implement, fix, and review code together.</string>
+    <string name="chat_message_placeholder">Message OpenCode…</string>
+    <string name="suggestion_implement_title">Help me implement a function</string>
+    <string name="suggestion_implement_subtitle">Write and implement code</string>
+    <string name="suggestion_debug_title">Find the cause of a bug</string>
+    <string name="suggestion_debug_subtitle">Diagnose and fix issues</string>
+    <string name="suggestion_organize_title">Organize the project structure</string>
+    <string name="suggestion_organize_subtitle">Clean up files and folders</string>
+    <string name="attach_button_description">Attach</string>
+    <string name="attach_menu_stub">Attach file (coming soon)</string>
+    <string name="session_history">Session history</string>
+
+    <!-- Redesign: model & runtime picker -->
+    <string name="picker_title">Select model &amp; runtime</string>
+    <string name="picker_caption">Choose where to run and which model to use.</string>
+    <string name="section_runtime">Runtime</string>
+    <string name="section_model">Model</string>
+    <string name="this_android">This Android</string>
+    <string name="picker_no_providers">No connected providers yet</string>
+
+    <!-- Redesign: onboarding -->
+    <string name="onboarding_welcome_title">Welcome to OpenCode</string>
+    <string name="onboarding_subtitle">Write, fix, and understand code. To get started, just choose one execution path.</string>
+    <string name="onboarding_recommended_badge">Recommended</string>
+    <string name="onboarding_android_title">Start with this Android</string>
+    <string name="onboarding_android_desc">Run OpenCode directly on this device.</string>
+    <string name="onboarding_remote_title">Connect to a PC or Mac</string>
+    <string name="onboarding_remote_desc">Connect to an existing OpenCode server.</string>
+    <string name="onboarding_switch_note">Either way, you can add the other option later and switch anytime.</string>
+    <string name="onboarding_primary_button_android">Start setup on Android</string>
+    <string name="onboarding_primary_button_remote">Connect to a PC or Mac</string>
+    <string name="onboarding_skip_link">Add a remote connection later</string>
+
+    <!-- Redesign: Android local setup -->
+    <string name="android_setup_title">Set up this Android</string>
+    <string name="setup_step_download">Download runtime</string>
+    <string name="setup_step_provider">Choose a provider</string>
+    <string name="setup_step_apikey">Set API key</string>
+    <string name="setup_step_test">Test connection</string>
+    <string name="apikey_caption">Your API key is stored securely on this device</string>
+    <string name="test_status_untested">Not tested</string>
+    <string name="test_status_testing">Testing…</string>
+    <string name="test_status_success">Connection succeeded</string>
+    <string name="test_status_failure">Connection failed</string>
+    <string name="run_connection_test_button">Run connection test</string>
+    <string name="setup_complete_button">Done</string>
+    <string name="provider_openai">OpenAI</string>
+    <string name="provider_google">Google</string>
+    <string name="provider_anthropic">Anthropic</string>
+    <string name="provider_ollama">Ollama</string>
+    <string name="provider_other">Other</string>
+
+    <!-- Redesign: remote connection -->
+    <string name="remote_connection_title">Connect to PC/Mac</string>
+    <string name="remote_step1_title">Start OpenCode on your PC</string>
+    <string name="remote_step1_desc">Launch opencode serve on your computer.</string>
+    <string name="remote_step2_title">Enter URL or scan QR</string>
+    <string name="remote_step2_desc">Type in the server address, or scan its QR code.</string>
+    <string name="remote_step3_title">Verify connection</string>
+    <string name="remote_step3_desc">Run a quick health check before saving.</string>
+    <string name="remote_hint">Make sure \"Allow connections\" is enabled in OpenCode on your PC.</string>
+    <string name="remote_test_connection_button">Test connection</string>
+    <string name="remote_save_connection_button">Save this connection</string>
+
+    <!-- Redesign: schedule -->
+    <string name="schedule_title">Schedule</string>
+    <string name="schedule_subtitle">Manage automated task runs.</string>
+    <string name="filter_description">Filter</string>
+    <string name="filter_all">All</string>
+    <string name="filter_enabled">Enabled</string>
+    <string name="filter_disabled">Disabled</string>
+    <string name="new_schedule_button">+ New schedule</string>
+    <string name="schedule_create_dialog_title">New schedule</string>
+    <string name="schedule_name_hint">Name</string>
+    <string name="schedule_time_hint">Time (e.g. 09:00)</string>
+    <string name="schedule_repeat_label">Repeat</string>
+    <string name="schedule_repeat_daily">Daily</string>
+    <string name="schedule_repeat_weekly">Weekly</string>
+
+    <!-- Redesign: settings V2 -->
+    <string name="section_assistant_settings">Assistant settings</string>
+    <string name="section_system_settings">System settings</string>
+    <string name="section_app_settings">App settings</string>
+    <string name="settings_home_assistant_row">Home assistant</string>
+    <string name="assistant_enabled_pill">Enabled</string>
+    <string name="assistant_disabled_pill">Disabled</string>
+    <string name="wake_word_row_title">Wake word</string>
+    <string name="wake_word_value">OpenCode</string>
+    <string name="wake_word_stub_body">This feature is coming soon.</string>
+    <string name="voice_settings_row">Voice settings</string>
+    <string name="provider_settings_row">Provider settings</string>
+    <string name="settings_local_runtime_row">Local runtime</string>
+    <string name="remote_connection_row">Remote connection</string>
+    <string name="settings_workspace_row">Workspace</string>
+    <string name="notifications_row">Notifications</string>
+    <string name="privacy_row">Privacy &amp; data</string>
+    <string name="privacy_stub_body">This feature is coming soon.</string>
+    <string name="diagnostics_row">Diagnostics &amp; logs</string>
+    <string name="app_info_row">App info</string>
 </resources>
