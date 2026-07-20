@@ -27,4 +27,6 @@
     <string name="remote_connection_intro">Enter the connection details for a PC or Mac that is running OpenCode.</string>
     <string name="remote_connection_unhealthy">The OpenCode server did not respond as healthy.</string>
     <string name="remote_connection_failed">Connection failed.</string>
+    <string name="provider_saved_credentials_title">Saved credentials</string>
+    <string name="provider_add_credentials_title">Add or update an API key</string>
 </resources>
