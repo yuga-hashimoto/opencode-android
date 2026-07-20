@@ -176,6 +176,19 @@ jobs:
               print(f'{name}: {width}x{height}, {len(data)} bytes')
           PY
 
+      - name: Upload screenshot diagnostics
+        if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-ui-diagnostics
+          path: |
+            instrumentation.log
+            ui-screenshot-test.log
+            emulator.log
+            sdk-install.log
+            avd-create.log
+          if-no-files-found: warn
+
       - name: Report screenshot failure
         if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
         env:
@@ -186,18 +199,13 @@ jobs:
           {
             echo '## API 34 emulator screenshot failure'
             echo
+            echo 'Diagnostic logs were uploaded as the `emulator-ui-diagnostics` workflow artifact.'
+            echo
             echo '```text'
             if test -s instrumentation.log; then
-              echo '--- instrumentation.log ---'
               cat instrumentation.log
-              echo
-            fi
-            echo '--- relevant workflow tail ---'
-            tr '\r' '\n' < ui-screenshot-test.log 2>/dev/null | tail -n 180 || true
-            if test -f emulator.log; then
-              echo
-              echo '--- emulator.log ---'
-              tail -n 60 emulator.log
+            else
+              tr '\r' '\n' < ui-screenshot-test.log 2>/dev/null | tail -n 80 || true
             fi
             echo '```'
           } > /tmp/ui-screenshot-failure.md
