@@ -47,30 +47,61 @@ jobs:
             build/generated/runtime-jni
           key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
 
-      - name: Build APKs
-        run: ./gradlew assembleDebug assembleRelease
-
-      - name: Resolve tag
+      - name: Resolve and validate tag
         id: tag
+        shell: bash
         run: |
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             TAG="${{ github.event.inputs.tag }}"
           else
             TAG="$(tr -d '[:space:]' < .release-version)"
           fi
+          VERSION_NAME="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION_NAME"
+          test "$TAG" = "v$VERSION_NAME"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create release and upload APKs
+      - name: Test and build APKs
+        run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
+
+      - name: Update tag and publish release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --target "${{ github.sha }}" \
-              --title "$TAG" \
-              --generate-notes
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -f "$TAG" "${{ github.sha }}"
+          git push origin "refs/tags/$TAG" --force
+
+          cat > /tmp/release-notes.md <<'EOF'
+          ## OpenCode Android v0.2.0
+
+          チャット中心のモバイルUIへ再設計し、初回セットアップと実行環境の選択導線を刷新しました。
+
+          ### 主な変更
+          - チャットを中心にした画面構成とナビゲーションドロワー
+          - Androidローカル実行／PC・Macリモート接続の初回セットアップ
+          - モデル、エージェント、ワークスペース、実行先の選択UI
+          - プロバイダAPIキー、音声、ランタイム、接続設定の整理
+          - 未設定・破損状態でチャットへ進ませない起動時ガード
+          - API 34エミュレータによる主要10画面のUI検証
+
+          ### 配布物
+          - Debug APK
+          - Unsigned Release APK
+
+          Release APKは未署名です。正式配布用には署名が必要です。
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
           fi
+
           cp app/build/outputs/apk/debug/app-debug.apk "opencode-android-$TAG-debug.apk"
           cp app/build/outputs/apk/release/app-release-unsigned.apk "opencode-android-$TAG-release-unsigned.apk"
           gh release upload "$TAG" --clobber \
