@@ -48,6 +48,11 @@ jobs:
           key: opencode-android-runtime-${{ runner.os }}-${{ hashFiles('runtime_tools/termux_assets.lock.json', 'runtime_tools/termux_assets.py', 'scripts/prepare_android_runtime_*.py') }}
 
       - name: Build APKs
+        env:
+          OPENCODE_STORE_FILE: app/release.keystore
+          OPENCODE_STORE_PASSWORD: opencode123
+          OPENCODE_KEY_ALIAS: opencode-android
+          OPENCODE_KEY_PASSWORD: opencode123
         run: ./gradlew assembleDebug assembleRelease
 
       - name: Resolve tag
@@ -72,7 +77,13 @@ jobs:
               --generate-notes
           fi
           cp app/build/outputs/apk/debug/app-debug.apk "opencode-android-$TAG-debug.apk"
-          cp app/build/outputs/apk/release/app-release-unsigned.apk "opencode-android-$TAG-release-unsigned.apk"
-          gh release upload "$TAG" --clobber \
-            "opencode-android-$TAG-debug.apk" \
-            "opencode-android-$TAG-release-unsigned.apk"
+          ASSETS=("opencode-android-$TAG-debug.apk")
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk "opencode-android-$TAG-release.apk"
+            ASSETS+=("opencode-android-$TAG-release.apk")
+            gh release delete-asset "$TAG" "opencode-android-$TAG-release-unsigned.apk" -y || true
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk "opencode-android-$TAG-release-unsigned.apk"
+            ASSETS+=("opencode-android-$TAG-release-unsigned.apk")
+          fi
+          gh release upload "$TAG" --clobber "${ASSETS[@]}"
