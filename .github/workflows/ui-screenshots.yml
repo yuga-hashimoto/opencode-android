@@ -102,15 +102,17 @@ jobs:
           }
           trap cleanup EXIT
 
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install 'platform-tools' 'emulator' "$SYSTEM_IMAGE"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install 'platform-tools' 'emulator' "$SYSTEM_IMAGE" \
+            > "$GITHUB_WORKSPACE/sdk-install.log" 2>&1
 
           mkdir -p "$ANDROID_AVD_HOME"
           printf 'no\n' | avdmanager create avd \
             --force \
             --name "$AVD_NAME" \
             --package "$SYSTEM_IMAGE" \
-            --device 'pixel_6'
+            --device 'pixel_6' \
+            > "$GITHUB_WORKSPACE/avd-create.log" 2>&1
           "$SDK_ROOT/emulator/emulator" -list-avds | grep -Fxq "$AVD_NAME"
 
           "$SDK_ROOT/emulator/emulator" \
@@ -185,11 +187,17 @@ jobs:
             echo '## API 34 emulator screenshot failure'
             echo
             echo '```text'
-            tail -n 240 ui-screenshot-test.log 2>/dev/null || true
+            if test -s instrumentation.log; then
+              echo '--- instrumentation.log ---'
+              cat instrumentation.log
+              echo
+            fi
+            echo '--- relevant workflow tail ---'
+            tr '\r' '\n' < ui-screenshot-test.log 2>/dev/null | tail -n 180 || true
             if test -f emulator.log; then
               echo
               echo '--- emulator.log ---'
-              tail -n 100 emulator.log
+              tail -n 60 emulator.log
             fi
             echo '```'
           } > /tmp/ui-screenshot-failure.md
