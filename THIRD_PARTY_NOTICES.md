@@ -20,6 +20,13 @@ OpenCode Android includes or depends on the following third-party software.
 - License: Apache License 2.0
 - https://github.com/google/gson
 
+## ZXing (Barcode Scanning)
+
+- com.journeyapps:zxing-android-embedded, com.google.zxing:core
+- License: Apache License 2.0
+- https://github.com/journeyapps/zxing-android-embedded
+- https://github.com/zxing/zxing
+
 ## Apache Commons Compress
 
 - org.apache.commons:commons-compress

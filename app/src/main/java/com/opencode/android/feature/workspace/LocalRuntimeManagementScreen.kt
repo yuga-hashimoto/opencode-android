@@ -39,10 +39,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.opencode.android.R
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.local.LocalRuntimeDiagnostics
 import com.opencode.android.runtime.local.LocalRuntimeOperationResult
@@ -72,10 +74,10 @@ fun LocalRuntimeManagementScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ローカルOpenCode") },
+                title = { Text(stringResource(R.string.local_runtime_screen_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back))
                     }
                 },
                 actions = {
@@ -83,7 +85,7 @@ fun LocalRuntimeManagementScreen(
                         onClick = onRefresh,
                         enabled = !state.isLoading && !state.isCheckingUpdate && !busy
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "診断と更新情報を再取得")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_diagnostics_description))
                     }
                 }
             )
@@ -133,7 +135,7 @@ fun LocalRuntimeManagementScreen(
             }
 
             state.error?.let { error ->
-                ErrorCard("操作に失敗しました", error)
+                ErrorCard(stringResource(R.string.operation_failed_title), error)
             }
         }
     }
@@ -142,22 +144,22 @@ fun LocalRuntimeManagementScreen(
     if (state.showUpdateConfirmation && available != null) {
         AlertDialog(
             onDismissRequest = onDismissUpdate,
-            title = { Text("OpenCode ${available.release.version}へ更新しますか？") },
+            title = { Text(stringResource(R.string.update_confirm_title, available.release.version)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("更新中はローカルOpenCodeを停止し、検証後に再起動します。")
-                    Text("失敗した場合は現在のOpenCode ${available.currentVersion}へ自動復旧します。")
+                    Text(stringResource(R.string.update_confirm_body1))
+                    Text(stringResource(R.string.update_confirm_body2, available.currentVersion))
                     Text(
-                        "必要な空き容量: ${formatBytes(available.release.asset.requiredFreeBytes)}",
+                        stringResource(R.string.required_free_space, formatBytes(available.release.asset.requiredFreeBytes)),
                         fontWeight = FontWeight.Medium
                     )
                 }
             },
             confirmButton = {
-                TextButton(onClick = onConfirmUpdate) { Text("更新する") }
+                TextButton(onClick = onConfirmUpdate) { Text(stringResource(R.string.update_confirm_button)) }
             },
             dismissButton = {
-                TextButton(onClick = onDismissUpdate) { Text("キャンセル") }
+                TextButton(onClick = onDismissUpdate) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -165,17 +167,15 @@ fun LocalRuntimeManagementScreen(
     if (state.showRollbackConfirmation && !state.rollbackVersion.isNullOrBlank()) {
         AlertDialog(
             onDismissRequest = onDismissRollback,
-            title = { Text("OpenCode ${state.rollbackVersion}へ戻しますか？") },
+            title = { Text(stringResource(R.string.rollback_confirm_title, state.rollbackVersion)) },
             text = {
-                Text(
-                    "現在のローカルOpenCodeを停止し、保存されている直前バージョンへ切り替えて再起動します。起動できない場合は現在のバージョンへ復旧します。"
-                )
+                Text(stringResource(R.string.rollback_confirm_body))
             },
             confirmButton = {
-                TextButton(onClick = onConfirmRollback) { Text("ロールバック") }
+                TextButton(onClick = onConfirmRollback) { Text(stringResource(R.string.rollback_button)) }
             },
             dismissButton = {
-                TextButton(onClick = onDismissRollback) { Text("キャンセル") }
+                TextButton(onClick = onDismissRollback) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -183,19 +183,17 @@ fun LocalRuntimeManagementScreen(
     if (state.showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = onDismissDelete,
-            title = { Text("ローカルランタイムを削除しますか？") },
+            title = { Text(stringResource(R.string.delete_runtime_confirm_title)) },
             text = {
-                Text(
-                    "OpenCode、Linux環境、キャッシュ、ログ、アプリ内のローカル作業領域が削除されます。PC接続設定は削除されません。"
-                )
+                Text(stringResource(R.string.delete_runtime_confirm_body))
             },
             confirmButton = {
                 TextButton(onClick = onConfirmDelete) {
-                    Text("完全削除", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete_completely), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismissDelete) { Text("キャンセル") }
+                TextButton(onClick = onDismissDelete) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -212,7 +210,7 @@ private fun RuntimeUpdateProgressCard(status: LocalRuntimeStatus.Updating) {
             Icon(Icons.Default.SystemUpdate, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "OpenCode ${status.currentVersion} → ${status.targetVersion}",
+                    stringResource(R.string.runtime_version_transition, status.currentVersion, status.targetVersion),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -242,37 +240,37 @@ private fun RuntimeOperationResultCard(result: LocalRuntimeOperationResult) {
     val (icon, title, detail, isError) = when (result) {
         is LocalRuntimeOperationResult.UpdateSkipped -> OperationPresentation(
             Icons.Default.CheckCircle,
-            "OpenCodeは最新です",
-            "現在のバージョン: ${result.version}",
+            stringResource(R.string.update_skipped_title),
+            stringResource(R.string.current_version_label, result.version),
             false
         )
         is LocalRuntimeOperationResult.Updated -> OperationPresentation(
             Icons.Default.CheckCircle,
-            "OpenCodeを更新しました",
-            "${result.fromVersion} → ${result.toVersion}",
+            stringResource(R.string.update_success_title),
+            stringResource(R.string.version_transition, result.fromVersion, result.toVersion),
             false
         )
         is LocalRuntimeOperationResult.AutomaticRollback -> OperationPresentation(
             Icons.Default.Warning,
-            "更新に失敗し、自動復旧しました",
-            "${result.failedVersion}を起動できなかったため${result.restoredVersion}へ戻しました。${result.reason}",
+            stringResource(R.string.auto_rollback_title),
+            stringResource(R.string.auto_rollback_detail, result.failedVersion, result.restoredVersion, result.reason),
             false
         )
         is LocalRuntimeOperationResult.RolledBack -> OperationPresentation(
             Icons.Default.History,
-            "ロールバックしました",
-            "${result.fromVersion} → ${result.toVersion}",
+            stringResource(R.string.rollback_success_title),
+            stringResource(R.string.version_transition, result.fromVersion, result.toVersion),
             false
         )
         is LocalRuntimeOperationResult.RollbackFailedRestored -> OperationPresentation(
             Icons.Default.Warning,
-            "ロールバックを取り消しました",
-            "${result.attemptedVersion}を起動できなかったため${result.restoredVersion}へ復旧しました。${result.reason}",
+            stringResource(R.string.rollback_failed_restored_title),
+            stringResource(R.string.rollback_failed_restored_detail, result.attemptedVersion, result.restoredVersion, result.reason),
             false
         )
         is LocalRuntimeOperationResult.Failed -> OperationPresentation(
             Icons.Default.Error,
-            "${result.operation}に失敗しました",
+            stringResource(R.string.operation_failed_generic, result.operation),
             result.message,
             true
         )
@@ -304,7 +302,7 @@ private fun RuntimeSummaryCard(diagnostics: LocalRuntimeDiagnostics) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("状態", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.runtime_status_label), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             StatusChip(
                 text = diagnostics.status.displayName(),
                 active = diagnostics.status is LocalRuntimeStatus.Ready
@@ -313,11 +311,11 @@ private fun RuntimeSummaryCard(diagnostics: LocalRuntimeDiagnostics) {
         Spacer(Modifier.height(10.dp))
         MetricRow("OpenCode", diagnostics.version ?: "—")
         MetricRow("ABI", diagnostics.abi.ifBlank { "—" })
-        MetricRow("ポート", diagnostics.port?.toString() ?: "—")
+        MetricRow(stringResource(R.string.port_label), diagnostics.port?.toString() ?: "—")
         diagnostics.process?.let { process ->
-            MetricRow("PID", process.pid?.toString() ?: "取得不可")
-            MetricRow("メモリ", process.rssBytes?.let(::formatBytes) ?: "取得不可")
-            MetricRow("稼働時間", formatDuration(process.uptimeMillis))
+            MetricRow("PID", process.pid?.toString() ?: stringResource(R.string.unavailable_value))
+            MetricRow(stringResource(R.string.memory_label), process.rssBytes?.let(::formatBytes) ?: stringResource(R.string.unavailable_value))
+            MetricRow(stringResource(R.string.uptime_label), formatDuration(process.uptimeMillis))
         }
     }
 }
@@ -325,10 +323,10 @@ private fun RuntimeSummaryCard(diagnostics: LocalRuntimeDiagnostics) {
 @Composable
 private fun RuntimeStorageCard(diagnostics: LocalRuntimeDiagnostics) {
     SectionCard {
-        Text("保存容量", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.storage_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-        MetricRow("ランタイム使用量", formatBytes(diagnostics.runtimeBytes))
-        MetricRow("端末の空き容量", formatBytes(diagnostics.freeBytes))
+        MetricRow(stringResource(R.string.runtime_usage_label), formatBytes(diagnostics.runtimeBytes))
+        MetricRow(stringResource(R.string.device_free_space_label), formatBytes(diagnostics.freeBytes))
     }
 }
 
@@ -347,7 +345,7 @@ private fun RuntimeUpdateCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("OpenCodeの更新", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.opencode_update_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (state.isCheckingUpdate) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
@@ -356,7 +354,7 @@ private fun RuntimeUpdateCard(
 
         when (val check = state.updateCheck) {
             null -> {
-                Text("公式GitHub Releaseから最新版を確認します。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.check_update_source_note), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = onCheckForUpdate,
@@ -365,13 +363,13 @@ private fun RuntimeUpdateCard(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("更新を確認")
+                    Text(stringResource(R.string.check_for_update_button))
                 }
             }
             is LocalRuntimeUpdateCheck.UpToDate -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text("OpenCode ${check.currentVersion}は最新です", fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.up_to_date_label, check.currentVersion), fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -379,31 +377,31 @@ private fun RuntimeUpdateCard(
                     enabled = !state.isCheckingUpdate && !busy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("再確認")
+                    Text(stringResource(R.string.recheck_button))
                 }
             }
             is LocalRuntimeUpdateCheck.Available -> {
                 val requiredBytes = check.release.asset.requiredFreeBytes
                 val enoughSpace = freeBytes >= requiredBytes
                 Text(
-                    "OpenCode ${check.release.version}を利用できます",
+                    stringResource(R.string.update_available_label, check.release.version),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(6.dp))
-                MetricRow("現在", check.currentVersion)
-                MetricRow("ダウンロード", formatBytes(check.release.asset.sizeBytes))
-                MetricRow("必要な空き容量", formatBytes(requiredBytes))
+                MetricRow(stringResource(R.string.current_version_metric), check.currentVersion)
+                MetricRow(stringResource(R.string.download_size_label), formatBytes(check.release.asset.sizeBytes))
+                MetricRow(stringResource(R.string.required_free_space_metric), formatBytes(requiredBytes))
                 if (!enoughSpace) {
                     Text(
-                        "空き容量が不足しています。現在: ${formatBytes(freeBytes)}",
+                        stringResource(R.string.insufficient_space, formatBytes(freeBytes)),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
                 if (check.release.releaseNotes.isNotBlank()) {
                     Spacer(Modifier.height(10.dp))
-                    Text("リリースノート", fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.release_notes_label), fontWeight = FontWeight.Medium)
                     Text(
                         check.release.releaseNotes,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -418,7 +416,7 @@ private fun RuntimeUpdateCard(
                 ) {
                     Icon(Icons.Default.SystemUpdate, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("OpenCode ${check.release.version}へ更新")
+                    Text(stringResource(R.string.update_to_button, check.release.version))
                 }
             }
         }
@@ -432,9 +430,9 @@ private fun RuntimeUpdateCard(
             Spacer(Modifier.height(14.dp))
             HorizontalDivider()
             Spacer(Modifier.height(14.dp))
-            Text("直前のバージョン", fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.previous_version_label), fontWeight = FontWeight.Medium)
             Text(
-                "OpenCode ${rollbackVersion}へ戻せます。",
+                stringResource(R.string.revert_available_note, rollbackVersion),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(8.dp))
@@ -445,7 +443,7 @@ private fun RuntimeUpdateCard(
             ) {
                 Icon(Icons.Default.History, contentDescription = null)
                 Spacer(Modifier.padding(horizontal = 4.dp))
-                Text("${rollbackVersion}へロールバック")
+                Text(stringResource(R.string.rollback_to_button, rollbackVersion))
             }
         }
     }
@@ -454,7 +452,7 @@ private fun RuntimeUpdateCard(
 @Composable
 private fun RuntimeToolsCard(diagnostics: LocalRuntimeDiagnostics) {
     SectionCard {
-        Text("必須ツール", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.required_tools_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         diagnostics.tools.forEach { tool ->
             Row(
@@ -486,10 +484,10 @@ private fun RuntimeToolsCard(diagnostics: LocalRuntimeDiagnostics) {
 @Composable
 private fun RuntimeLogsCard(logTail: String) {
     SectionCard {
-        Text("最新ログ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.latest_logs_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         if (logTail.isBlank()) {
-            Text("ログはありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.no_logs), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             Box(
                 modifier = Modifier
@@ -518,7 +516,7 @@ private fun RuntimeManagementCard(
     onRequestDelete: () -> Unit
 ) {
     SectionCard {
-        Text("管理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.management_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
         Button(
             onClick = onRepair,
@@ -527,7 +525,7 @@ private fun RuntimeManagementCard(
         ) {
             Icon(Icons.Default.Build, contentDescription = null)
             Spacer(Modifier.padding(horizontal = 4.dp))
-            Text("修復して再セットアップ")
+            Text(stringResource(R.string.repair_and_resetup_button))
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -546,12 +544,12 @@ private fun RuntimeManagementCard(
             }
             Spacer(Modifier.padding(horizontal = 4.dp))
             Text(
-                if (isDeleting) "削除しています" else "ランタイムを完全削除",
+                if (isDeleting) stringResource(R.string.deleting_label) else stringResource(R.string.delete_runtime_completely_button),
                 color = MaterialTheme.colorScheme.error
             )
         }
         Text(
-            "Linux環境、ダウンロードキャッシュ、ログ、ローカル作業領域をすべて削除します。",
+            stringResource(R.string.delete_runtime_note),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -596,15 +594,16 @@ private data class OperationPresentation(
     val isError: Boolean
 )
 
+@Composable
 private fun LocalRuntimeStatus.displayName(): String = when (this) {
-    LocalRuntimeStatus.NotInstalled -> "未インストール"
-    is LocalRuntimeStatus.Installing -> "セットアップ中"
-    is LocalRuntimeStatus.Starting -> "起動中"
-    is LocalRuntimeStatus.Updating -> "更新中"
-    is LocalRuntimeStatus.Stopped -> "停止中"
-    is LocalRuntimeStatus.Ready -> "稼働中"
-    is LocalRuntimeStatus.Broken -> "問題あり"
-    is LocalRuntimeStatus.UnsupportedAbi -> "未対応"
+    LocalRuntimeStatus.NotInstalled -> stringResource(R.string.runtime_status_not_installed)
+    is LocalRuntimeStatus.Installing -> stringResource(R.string.runtime_status_setting_up)
+    is LocalRuntimeStatus.Starting -> stringResource(R.string.runtime_status_starting)
+    is LocalRuntimeStatus.Updating -> stringResource(R.string.runtime_status_updating)
+    is LocalRuntimeStatus.Stopped -> stringResource(R.string.runtime_status_stopped)
+    is LocalRuntimeStatus.Ready -> stringResource(R.string.runtime_status_ready_running)
+    is LocalRuntimeStatus.Broken -> stringResource(R.string.runtime_status_problem)
+    is LocalRuntimeStatus.UnsupportedAbi -> stringResource(R.string.runtime_status_unsupported)
 }
 
 private fun LocalRuntimeStatus.isInstalled(): Boolean =
@@ -627,14 +626,15 @@ private fun formatBytes(bytes: Long): String {
     return String.format(Locale.US, "%.1f %s", value, units[unit])
 }
 
+@Composable
 private fun formatDuration(milliseconds: Long): String {
     val totalSeconds = milliseconds.coerceAtLeast(0L) / 1_000L
     val hours = totalSeconds / 3_600L
     val minutes = (totalSeconds % 3_600L) / 60L
     val seconds = totalSeconds % 60L
     return when {
-        hours > 0 -> "${hours}時間${minutes}分"
-        minutes > 0 -> "${minutes}分${seconds}秒"
-        else -> "${seconds}秒"
+        hours > 0 -> stringResource(R.string.duration_hours_minutes, hours, minutes)
+        minutes > 0 -> stringResource(R.string.duration_minutes_seconds, minutes, seconds)
+        else -> stringResource(R.string.duration_seconds, seconds)
     }
 }

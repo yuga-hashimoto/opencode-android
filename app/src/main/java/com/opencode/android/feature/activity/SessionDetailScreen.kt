@@ -1,5 +1,6 @@
 package com.opencode.android.feature.activity
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -17,19 +20,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,28 +37,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeTodo
-import com.opencode.android.ui.components.DiffStatSummary
-import com.opencode.android.ui.components.DiffView
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SessionDetailScreen(
     state: SessionDetailUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
-    onContinueChat: () -> Unit,
-    runtimeOptions: List<Pair<String, String>> = emptyList(),
-    handoffMessage: String? = null,
-    onHandoff: (String) -> Unit = {}
+    onContinueChat: () -> Unit
 ) {
-    var handoffTarget by remember { mutableStateOf(runtimeOptions.firstOrNull()?.first.orEmpty()) }
-    var handoffExpanded by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -74,7 +65,7 @@ fun SessionDetailScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "戻る")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -93,74 +84,23 @@ fun SessionDetailScreen(
                     )
                 }
                 IconButton(onClick = onRefresh, enabled = !state.isLoading) {
-                    Icon(Icons.Default.Refresh, contentDescription = "更新")
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                 }
             }
         }
 
         item {
             SectionCard {
-                Text("セッション情報", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.session_info_title), fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(10.dp))
                 SessionInfoRow("ID", state.session.id)
                 state.session.version?.let { SessionInfoRow("OpenCode", it) }
-                state.session.projectId?.let { SessionInfoRow("プロジェクト", it) }
+                state.session.projectId?.let { SessionInfoRow(stringResource(R.string.session_info_project), it) }
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = onContinueChat, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
                     Spacer(Modifier.padding(horizontal = 4.dp))
-                    Text("このセッションのチャットを続ける")
-                }
-                if (runtimeOptions.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = handoffExpanded,
-                        onExpandedChange = { handoffExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = runtimeOptions.firstOrNull { it.first == handoffTarget }?.second
-                                ?: handoffTarget,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("引き継ぎ先") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(handoffExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = handoffExpanded,
-                            onDismissRequest = { handoffExpanded = false }
-                        ) {
-                            runtimeOptions.forEach { (id, name) ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        handoffTarget = id
-                                        handoffExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { onHandoff(handoffTarget) },
-                        enabled = handoffTarget.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = null)
-                        Spacer(Modifier.padding(horizontal = 4.dp))
-                        Text("セッションを引き継ぐ")
-                    }
-                    handoffMessage?.let {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(stringResource(R.string.continue_this_session_chat))
                 }
             }
         }
@@ -173,7 +113,7 @@ fun SessionDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator()
-                        Text("セッション情報を取得しています")
+                        Text(stringResource(R.string.session_info_loading))
                     }
                 }
             }
@@ -184,7 +124,7 @@ fun SessionDetailScreen(
         if (!state.isLoading && state.todos.isEmpty()) {
             item {
                 SectionCard {
-                    Text("このセッションにTodoはありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.session_no_todos), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -193,12 +133,12 @@ fun SessionDetailScreen(
             }
         }
 
-        item { SectionHeading("変更差分", state.diff.size) }
+        item { SectionHeading(stringResource(R.string.session_diff_title), state.diff.size) }
 
         if (!state.isLoading && state.diff.isEmpty()) {
             item {
                 SectionCard {
-                    Text("このセッションによるファイル変更はありません", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.session_no_file_changes), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -210,7 +150,7 @@ fun SessionDetailScreen(
         state.error?.let { error ->
             item {
                 SectionCard {
-                    Text("取得に失敗しました", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.fetch_failed), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                     Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -265,27 +205,29 @@ private fun SessionChangeCard(change: OpenCodeFileChange) {
         ) {
             Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
             Column(modifier = Modifier.weight(1f)) {
-                Text(change.displayPath.ifBlank { "変更ファイル" }, fontWeight = FontWeight.SemiBold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    DiffStatSummary(change.additions.toInt(), change.deletions.toInt())
-                    if (!change.status.isNullOrBlank()) {
-                        Text(
-                            "  ${change.status}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Text(change.displayPath.ifBlank { stringResource(R.string.changed_file_default) }, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "+${change.additions.toInt()}  -${change.deletions.toInt()}  ${change.status.orEmpty()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             if (!change.patch.isNullOrBlank()) {
                 OutlinedButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "閉じる" else "差分")
+                    Text(if (expanded) stringResource(R.string.collapse) else stringResource(R.string.diff_label))
                 }
             }
         }
         if (expanded && !change.patch.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
-            DiffView(change.patch, modifier = Modifier.fillMaxWidth())
+            SelectionContainer {
+                Text(
+                    change.patch,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                )
+            }
         }
     }
 }
@@ -294,7 +236,7 @@ private fun SessionChangeCard(change: OpenCodeFileChange) {
 private fun SectionHeading(title: String, count: Int) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Text("${count}件", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.item_count, count), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -306,15 +248,17 @@ private fun SessionInfoRow(label: String, value: String) {
     }
 }
 
+@Composable
 private fun todoStatusLabel(status: String): String = when (status) {
-    "in_progress" -> "進行中"
-    "completed" -> "完了"
-    "cancelled" -> "取消"
-    else -> "未着手"
+    "in_progress" -> stringResource(R.string.todo_status_in_progress)
+    "completed" -> stringResource(R.string.tool_status_completed)
+    "cancelled" -> stringResource(R.string.todo_status_cancelled)
+    else -> stringResource(R.string.todo_status_pending)
 }
 
+@Composable
 private fun todoPriorityLabel(priority: String): String = when (priority) {
-    "high" -> "高"
-    "medium" -> "中"
-    else -> "低"
+    "high" -> stringResource(R.string.priority_high)
+    "medium" -> stringResource(R.string.priority_medium)
+    else -> stringResource(R.string.priority_low)
 }

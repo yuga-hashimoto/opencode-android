@@ -56,49 +56,9 @@ class OpenCodeApiClient(
     suspend fun messages(sessionId: String): List<OpenCodeMessage> =
         getList("session/${encodePath(sessionId)}/message")
 
-    suspend fun deleteSession(sessionId: String): Boolean =
-        delete("session/${encodePath(sessionId)}", Boolean::class.java)
-
-    suspend fun renameSession(sessionId: String, title: String): OpenCodeSession {
-        val body = JsonObject().apply { addProperty("title", title) }
-        return patch("session/${encodePath(sessionId)}", body, OpenCodeSession::class.java)
-    }
-
-    suspend fun commands(): List<OpenCodeCommand> = getList("command")
-
     suspend fun providers(): ProviderCatalog = get("provider", ProviderCatalog::class.java)
 
     suspend fun agents(): List<OpenCodeAgent> = getList("agent")
-
-    suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
-        withContext(Dispatchers.IO) {
-            val type = object : TypeToken<Map<String, List<ProviderAuthMethod>>>() {}.type
-            execute(requestBuilder("provider/auth").get().build()) { body ->
-                gson.fromJson<Map<String, List<ProviderAuthMethod>>>(body, type).orEmpty()
-            }
-        }
-
-    suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
-        post(
-            "provider/${encodePath(providerId)}/oauth/authorize",
-            JsonObject().apply { addProperty("method", methodIndex) },
-            ProviderAuthAuthorization::class.java
-        )
-
-    suspend fun completeProviderOAuth(
-        providerId: String,
-        methodIndex: Int,
-        code: String?
-    ): Boolean = withContext(Dispatchers.IO) {
-        val body = JsonObject().apply {
-            addProperty("method", methodIndex)
-            code?.takeIf { it.isNotBlank() }?.let { addProperty("code", it) }
-        }
-        val request = requestBuilder("provider/${encodePath(providerId)}/oauth/callback")
-            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-        execute(request) { responseBody -> gson.fromJson(responseBody, Boolean::class.java) }
-    }
 
     suspend fun projects(directory: String? = null): List<OpenCodeProject> =
         getList("project", query("directory" to directory))
@@ -183,24 +143,12 @@ class OpenCodeApiClient(
                     addProperty("modelID", request.modelId)
                 })
             }
-            request.variant?.takeIf { it.isNotBlank() }?.let { addProperty("variant", it) }
             if (request.noReply) addProperty("noReply", true)
             add("parts", JsonArray().apply {
                 add(JsonObject().apply {
                     addProperty("type", "text")
                     addProperty("text", request.text)
                 })
-                request.attachments.forEach { attachment ->
-                    add(JsonObject().apply {
-                        addProperty("type", "file")
-                        addProperty("mime", attachment.mimeType)
-                        addProperty("filename", attachment.fileName)
-                        addProperty(
-                            "url",
-                            "data:${attachment.mimeType};base64,${attachment.base64Data}"
-                        )
-                    })
-                }
             })
         }
         postWithoutResponse("session/${encodePath(sessionId)}/prompt_async", json)
@@ -208,6 +156,27 @@ class OpenCodeApiClient(
 
     suspend fun abortSession(sessionId: String): Boolean =
         post("session/${encodePath(sessionId)}/abort", JsonObject(), Boolean::class.java)
+
+    suspend fun renameSession(
+        sessionId: String,
+        title: String,
+        directory: String? = null
+    ): OpenCodeSession {
+        val body = JsonObject().apply { addProperty("title", title) }
+        return patch(
+            "session/${encodePath(sessionId)}",
+            body,
+            OpenCodeSession::class.java,
+            query("directory" to directory)
+        )
+    }
+
+    suspend fun deleteSession(sessionId: String, directory: String? = null): Boolean =
+        delete(
+            "session/${encodePath(sessionId)}",
+            Boolean::class.java,
+            query("directory" to directory)
+        )
 
     suspend fun respondPermission(
         sessionId: String,
@@ -316,13 +285,6 @@ class OpenCodeApiClient(
         execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
     }
 
-    private suspend fun postWithoutResponse(path: String, body: JsonObject) = withContext(Dispatchers.IO) {
-        val request = requestBuilder(path)
-            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
-            .build()
-        execute(request) { Unit }
-    }
-
     private suspend fun <T> patch(
         path: String,
         body: JsonObject,
@@ -340,7 +302,17 @@ class OpenCodeApiClient(
         clazz: Class<T>,
         queryParameters: List<Pair<String, String>> = emptyList()
     ): T = withContext(Dispatchers.IO) {
-        execute(requestBuilder(path, queryParameters).delete().build()) { body -> gson.fromJson(body, clazz) }
+        val request = requestBuilder(path, queryParameters)
+            .delete()
+            .build()
+        execute(request) { responseBody -> gson.fromJson(responseBody, clazz) }
+    }
+
+    private suspend fun postWithoutResponse(path: String, body: JsonObject) = withContext(Dispatchers.IO) {
+        val request = requestBuilder(path)
+            .post(gson.toJson(body).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        execute(request) { Unit }
     }
 
     private fun <T> execute(request: Request, parse: (String) -> T): T {

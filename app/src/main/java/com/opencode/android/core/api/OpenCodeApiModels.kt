@@ -30,29 +30,13 @@ data class OpenCodeModelReference(
     @SerializedName("modelID") val modelId: String
 )
 
-data class OpenCodeTokenCache(
-    val read: Int = 0,
-    val write: Int = 0
-)
-
-data class OpenCodeTokenUsage(
-    val input: Int = 0,
-    val output: Int = 0,
-    val reasoning: Int = 0,
-    val cache: OpenCodeTokenCache = OpenCodeTokenCache()
-) {
-    val total: Int get() = input + output + reasoning
-}
-
 data class OpenCodeMessageInfo(
     val id: String,
     @SerializedName("sessionID") val sessionId: String,
     val role: String,
     val time: OpenCodeTime = OpenCodeTime(),
     val agent: String? = null,
-    val model: OpenCodeModelReference? = null,
-    val cost: Double? = null,
-    val tokens: OpenCodeTokenUsage? = null
+    val model: OpenCodeModelReference? = null
 )
 
 data class OpenCodePart(
@@ -63,10 +47,7 @@ data class OpenCodePart(
     val text: String? = null,
     val tool: String? = null,
     val callID: String? = null,
-    val state: Map<String, JsonElement>? = null,
-    @SerializedName("filename") val fileName: String? = null,
-    @SerializedName("mime") val mimeType: String? = null,
-    val url: String? = null
+    val state: Map<String, Any?>? = null
 )
 
 data class OpenCodeMessage(
@@ -77,23 +58,11 @@ data class OpenCodeMessage(
         get() = parts.filter { it.type == "text" }.mapNotNull { it.text }.joinToString("")
 }
 
-data class OpenCodeModelLimit(
-    val context: Long? = null,
-    val output: Long? = null
-)
-
-data class OpenCodeModelVariant(
-    val name: String? = null,
-    val reasoningEffort: String? = null
-)
-
 data class OpenCodeModel(
     val id: String,
     @SerializedName("providerID") val providerId: String? = null,
     val name: String = id,
-    val status: String? = null,
-    val limit: OpenCodeModelLimit? = null,
-    val variants: Map<String, OpenCodeModelVariant> = emptyMap()
+    val status: String? = null
 )
 
 data class OpenCodeProvider(
@@ -201,20 +170,9 @@ data class OpenCodeTodo(
     val priority: String
 )
 
-data class OpenCodeCommand(
-    val name: String,
-    val description: String? = null
-)
-
 data class OpenCodeVcsInfo(
     val branch: String? = null,
     @SerializedName("default_branch") val defaultBranch: String? = null
-)
-
-data class PromptAttachment(
-    val fileName: String,
-    val mimeType: String,
-    val base64Data: String
 )
 
 data class PromptRequest(
@@ -222,9 +180,7 @@ data class PromptRequest(
     val providerId: String? = null,
     val modelId: String? = null,
     val agent: String? = null,
-    val variant: String? = null,
-    val noReply: Boolean = false,
-    val attachments: List<PromptAttachment> = emptyList()
+    val noReply: Boolean = false
 )
 
 data class PermissionRequest(

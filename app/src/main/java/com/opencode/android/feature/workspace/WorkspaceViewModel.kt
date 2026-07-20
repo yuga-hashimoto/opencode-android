@@ -6,8 +6,6 @@ import com.opencode.android.core.api.OpenCodeApiClient
 import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.data.repository.RuntimeCatalogRepository
-import com.opencode.android.feature.connection.DiscoveredOpenCodeService
-import com.opencode.android.feature.connection.OpenCodeNsdDiscovery
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.RuntimeRegistry
 import com.opencode.android.runtime.RuntimeState
@@ -15,13 +13,8 @@ import com.opencode.android.runtime.RuntimeType
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.runtime.local.LocalRuntimeManager
 import com.opencode.android.runtime.local.LocalRuntimeServiceController
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -40,40 +33,22 @@ data class WorkspaceUiState(
     val selectedRuntimeId: String? = null,
     val workspaces: List<WorkspaceRef> = emptyList(),
     val localStatus: LocalRuntimeStatus = LocalRuntimeStatus.NotInstalled,
-    val discovered: List<DiscoveredOpenCodeService> = emptyList(),
     val isRefreshing: Boolean = false,
     val error: String? = null
 )
-
-sealed interface WorkspaceEvent {
-    val message: String
-
-    data class OpenEditor(val form: ConnectionFormState, override val message: String) : WorkspaceEvent
-    data class Info(override val message: String) : WorkspaceEvent
-}
 
 class WorkspaceViewModel(
     private val registry: RuntimeRegistry,
     private val catalog: RuntimeCatalogRepository,
     private val localRuntimeManager: LocalRuntimeManager,
-    private val localRuntimeController: LocalRuntimeServiceController,
-    private val nsdDiscovery: OpenCodeNsdDiscovery? = null
+    private val localRuntimeController: LocalRuntimeServiceController
 ) : ViewModel() {
-    private val mutableDiscovered = MutableStateFlow<List<DiscoveredOpenCodeService>>(emptyList())
-    private val mutableEvents = MutableSharedFlow<WorkspaceEvent>(
-        extraBufferCapacity = 16,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-
-    val events: SharedFlow<WorkspaceEvent> = mutableEvents.asSharedFlow()
-
     val state: StateFlow<WorkspaceUiState> = combine(
         registry.targets,
         registry.selected,
         catalog.state,
-        localRuntimeManager.state,
-        mutableDiscovered
-    ) { targets, selected, runtime, localStatus, discovered ->
+        localRuntimeManager.state
+    ) { targets, selected, runtime, localStatus ->
         WorkspaceUiState(
             targets = targets.map { target ->
                 RuntimeSummary(
@@ -88,7 +63,6 @@ class WorkspaceViewModel(
             selectedRuntimeId = selected?.id,
             workspaces = runtime.workspaces,
             localStatus = localStatus,
-            discovered = discovered,
             isRefreshing = runtime.isRefreshing,
             error = runtime.error
         )
@@ -103,13 +77,6 @@ class WorkspaceViewModel(
                 }
             }
         }
-        nsdDiscovery?.let { discovery ->
-            viewModelScope.launch {
-                discovery.discover().collect { services ->
-                    mutableDiscovered.value = services
-                }
-            }
-        }
     }
 
     fun selectRuntime(id: String) {
@@ -119,7 +86,6 @@ class WorkspaceViewModel(
     fun saveConnection(form: ConnectionFormState) {
         if (!form.canSave) return
         registry.upsertRemote(form.toProfile())
-        emit(WorkspaceEvent.Info("Saved ${form.name}"))
     }
 
     fun deleteConnection(id: String) {
@@ -144,26 +110,5 @@ class WorkspaceViewModel(
     fun refresh() {
         registry.refresh()
         catalog.refresh()
-    }
-
-    fun applyQrOrLink(raw: String) {
-        resolveQrConnectionForm(raw, registry.remoteProfiles()).fold(
-            onSuccess = { form ->
-                emit(WorkspaceEvent.OpenEditor(form, "接続情報を読み取りました: ${form.baseUrl}"))
-            },
-            onFailure = { error ->
-                emit(WorkspaceEvent.Info(error.message ?: "QRまたは接続リンクを読み取れませんでした"))
-            }
-        )
-    }
-
-    fun addDiscovered(service: DiscoveredOpenCodeService) {
-        val profile = profileFromDiscoveredService(service, registry.remoteProfiles())
-        registry.upsertRemote(profile)
-        emit(WorkspaceEvent.Info("${service.name}を追加しました"))
-    }
-
-    private fun emit(event: WorkspaceEvent) {
-        mutableEvents.tryEmit(event)
     }
 }

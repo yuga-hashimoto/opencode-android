@@ -34,15 +34,13 @@ data class RuntimeActivityState(
 )
 
 class RuntimeActivityRepository(
-    private val registry: RuntimeRegistry,
-    private val scope: CoroutineScope,
+    registry: RuntimeRegistry,
+    scope: CoroutineScope,
     private val retryDelayMillis: Long = 2_000L,
     private val maxRetryDelayMillis: Long = 30_000L,
     private val onPermissionAsked: ((PermissionRequest) -> Unit)? = null,
     private val onSessionIdle: ((String) -> Unit)? = null,
-    private val onSessionError: ((String?, String?) -> Unit)? = null,
-    private val autoAllowReadOnlyTools: () -> Boolean = { false },
-    private val longRunningThresholdMillis: Long = 15_000L
+    private val onSessionError: ((String?, String?) -> Unit)? = null
 ) {
     init {
         require(retryDelayMillis >= 0L)
@@ -54,14 +52,6 @@ class RuntimeActivityRepository(
 
     private val mutableEvents = MutableSharedFlow<OpenCodeEvent>(extraBufferCapacity = 128)
     val events: SharedFlow<OpenCodeEvent> = mutableEvents.asSharedFlow()
-
-    @Volatile
-    private var foregroundSessionId: String? = null
-    private val turnStartedAt = mutableMapOf<String, Long>()
-
-    fun setForegroundSessionId(sessionId: String?) {
-        foregroundSessionId = sessionId
-    }
 
     init {
         scope.launch {
@@ -115,7 +105,6 @@ class RuntimeActivityRepository(
             OpenCodeEvent.ServerConnected -> appendLog("イベント接続", "OpenCodeのリアルタイムイベントへ接続しました")
             is OpenCodeEvent.MessagePartUpdated -> {
                 val sessionId = event.part.sessionId ?: return
-                markTurnStarted(sessionId)
                 mutableState.update { current ->
                     current.copy(activeSessionIds = current.activeSessionIds + sessionId)
                 }
@@ -125,26 +114,11 @@ class RuntimeActivityRepository(
                 }
             }
             is OpenCodeEvent.MessagePartDelta -> {
-                markTurnStarted(event.sessionId)
                 mutableState.update { current ->
                     current.copy(activeSessionIds = current.activeSessionIds + event.sessionId)
                 }
             }
             is OpenCodeEvent.PermissionAsked -> {
-                if (autoAllowReadOnlyTools() && isReadOnlyPermission(event.request.permission)) {
-                    appendLog("自動許可（読み取り専用）", event.request.permission, event.request.sessionId)
-                    scope.launch {
-                        runCatching {
-                            registry.selected.value?.respondToPermission(
-                                event.request.sessionId,
-                                event.request.id,
-                                com.opencode.android.runtime.PermissionResponse.ONCE,
-                                false
-                            )
-                        }
-                    }
-                    return
-                }
                 mutableState.update { current ->
                     current.copy(
                         permissions = current.permissions.filterNot { it.id == event.request.id } + event.request,
@@ -159,12 +133,7 @@ class RuntimeActivityRepository(
                     current.copy(activeSessionIds = current.activeSessionIds - event.sessionId)
                 }
                 appendLog("実行完了", null, event.sessionId)
-                val startedAt = turnStartedAt.remove(event.sessionId)
-                val elapsed = startedAt?.let { System.currentTimeMillis() - it }
-                val isForeground = event.sessionId == foregroundSessionId
-                if (!isForeground && (elapsed == null || elapsed >= longRunningThresholdMillis)) {
-                    onSessionIdle?.invoke(event.sessionId)
-                }
+                onSessionIdle?.invoke(event.sessionId)
             }
             is OpenCodeEvent.SessionError -> {
                 event.sessionId?.let { sessionId ->
@@ -179,12 +148,6 @@ class RuntimeActivityRepository(
         }
     }
 
-    private fun markTurnStarted(sessionId: String) {
-        if (sessionId !in mutableState.value.activeSessionIds) {
-            turnStartedAt[sessionId] = System.currentTimeMillis()
-        }
-    }
-
     private fun appendLog(title: String, detail: String? = null, sessionId: String? = null) {
         mutableState.update { current ->
             current.copy(
@@ -196,12 +159,5 @@ class RuntimeActivityRepository(
 
     companion object {
         private const val MAX_LOGS = 100
-
-        private val READ_ONLY_KEYWORDS = listOf("read", "glob", "grep", "list", "search", "todoread", "webfetch")
-        private val MUTATING_KEYWORDS = listOf("write", "edit", "delete", "bash", "patch", "todowrite")
-
-        internal fun isReadOnlyPermission(permission: String): Boolean =
-            READ_ONLY_KEYWORDS.any { permission.contains(it, ignoreCase = true) } &&
-                MUTATING_KEYWORDS.none { permission.contains(it, ignoreCase = true) }
     }
 }

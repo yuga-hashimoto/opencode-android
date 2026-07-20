@@ -87,80 +87,6 @@ class OpenCodeApiClientTest {
     }
 
     @Test
-    fun `sends selected model variant`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(204))
-        val client = client()
-
-        client.promptAsync(
-            sessionId = "s1",
-            request = PromptRequest(text = "think", variant = "high")
-        )
-
-        val json = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
-        assertEquals("high", json["variant"].asString)
-    }
-
-    @Test
-    fun `sends file attachments as data URL parts`() = runBlocking {
-        server.enqueue(MockResponse().setResponseCode(204))
-        val client = client()
-
-        client.promptAsync(
-            sessionId = "s1",
-            request = PromptRequest(
-                text = "review",
-                attachments = listOf(
-                    PromptAttachment(
-                        fileName = "sample.txt",
-                        mimeType = "text/plain",
-                        base64Data = "aGVsbG8="
-                    )
-                )
-            )
-        )
-
-        val json = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
-        val parts = json.getAsJsonArray("parts")
-        assertEquals(2, parts.size())
-        val file = parts[1].asJsonObject
-        assertEquals("file", file["type"].asString)
-        assertEquals("sample.txt", file["filename"].asString)
-        assertEquals("text/plain", file["mime"].asString)
-        assertEquals("data:text/plain;base64,aGVsbG8=", file["url"].asString)
-    }
-
-    @Test
-    fun `loads provider auth methods and completes oauth callback`() = runBlocking {
-        server.enqueue(
-            MockResponse().setBody(
-                """{"openai":[{"type":"oauth","label":"ChatGPT Plus/Pro"},{"type":"api","label":"API key"}]}"""
-            )
-        )
-        server.enqueue(
-            MockResponse().setBody(
-                """{"url":"https://auth.example/login","method":"code","instructions":"Enter the code"}"""
-            )
-        )
-        server.enqueue(MockResponse().setBody("true"))
-        val client = client()
-
-        val methods = client.providerAuthMethods()
-        val authorization = client.authorizeProvider("openai", 0)
-        val completed = client.completeProviderOAuth("openai", 0, "abc")
-
-        assertEquals("ChatGPT Plus/Pro", methods["openai"]!!.first().label)
-        assertEquals("https://auth.example/login", authorization.url)
-        assertTrue(completed)
-        assertEquals("/provider/auth", server.takeRequest().path)
-        assertEquals("/provider/openai/oauth/authorize", server.takeRequest().path)
-        val callback = server.takeRequest()
-        assertEquals("/provider/openai/oauth/callback", callback.path)
-        val callbackJson = JsonParser.parseString(callback.body.readUtf8()).asJsonObject
-        assertEquals(0, callbackJson["method"].asInt)
-        assertEquals("abc", callbackJson["code"].asString)
-    }
-
-    @Test
     fun `responds to permission request`() = runBlocking {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()
@@ -185,6 +111,33 @@ class OpenCodeApiClientTest {
         assertTrue(result)
         val json = JsonParser.parseString(server.takeRequest().body.readUtf8()).asJsonObject
         assertEquals("always", json["response"].asString)
+    }
+
+    @Test
+    fun `renames session using PATCH with title body`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"id":"s1","title":"Renamed","directory":"/repo","time":{"created":1,"updated":2}}"""))
+        val client = client()
+
+        val renamed = client.renameSession("s1", "Renamed", "/repo")
+
+        assertEquals("Renamed", renamed.title)
+        val request = server.takeRequest()
+        assertEquals("PATCH", request.method)
+        assertEquals("/session/s1?directory=%2Frepo", request.path)
+        assertEquals("Renamed", JsonParser.parseString(request.body.readUtf8()).asJsonObject["title"].asString)
+    }
+
+    @Test
+    fun `deletes session using DELETE`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        val result = client.deleteSession("s1", "/repo")
+
+        assertTrue(result)
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/session/s1?directory=%2Frepo", request.path)
     }
 
     @Test

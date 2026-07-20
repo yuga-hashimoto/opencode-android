@@ -1,112 +1,101 @@
 package com.opencode.android.feature.chat
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import com.opencode.android.core.api.OpenCodeMessage
-import com.opencode.android.core.api.OpenCodeMessageInfo
-import com.opencode.android.core.api.OpenCodeTime
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionHandoffTest {
-    private val gson = Gson()
+
+    private fun userMessage(text: String) = ChatMessage(
+        isUser = true,
+        parts = listOf(ChatPart.Text(id = "u-${text.hashCode()}", text = text))
+    )
+
+    private fun assistantMessage(text: String) = ChatMessage(
+        isUser = false,
+        parts = listOf(ChatPart.Text(id = "a-${text.hashCode()}", text = text))
+    )
 
     @Test
-    fun `builds markdown transcript from messages`() {
+    fun `includes header and formats roles`() {
         val messages = listOf(
-            message("m1", "user", "Fix the bug"),
-            message("m2", "assistant", "Looking into it."),
-            message("m3", "user", "")
+            userMessage("Hello there"),
+            assistantMessage("Hi, how can I help?")
         )
-        val pack = SessionHandoff.buildPackage(
-            sourceRuntimeId = "local-android",
-            sourceRuntimeName = "Phone",
-            sessionId = "sess-1",
-            sessionTitle = "Bugfix",
-            directory = "/repo",
-            messages = messages
-        )
-        assertEquals("sess-1", pack.sessionId)
-        assertEquals("Bugfix", pack.sessionTitle)
-        assertEquals(3, pack.messageCount)
-        assertTrue(pack.transcript.contains("### user"))
-        assertTrue(pack.transcript.contains("Fix the bug"))
-        assertTrue(pack.transcript.contains("Looking into it."))
-        assertTrue(!pack.transcript.contains("### user\n\n"))
+
+        val prompt = buildHandoffPrompt(messages)
+
+        assertTrue(prompt.startsWith("以下は別の実行先から引き継いだ会話の要約です。続きから対応してください。"))
+        assertTrue(prompt.contains("ユーザー: Hello there"))
+        assertTrue(prompt.contains("アシスタント: Hi, how can I help?"))
     }
 
     @Test
-    fun `json round trip preserves fields`() {
-        val pack = SessionHandoffPackage(
-            sourceRuntimeId = "remote-pc",
-            sourceRuntimeName = "Mac",
-            sessionId = "s2",
-            sessionTitle = "Refactor",
-            directory = "/work",
-            transcript = "hello",
-            messageCount = 4
-        )
-        val raw = SessionHandoff.toJson(pack)
-        val decoded = SessionHandoff.fromJson(raw)
-        assertEquals(pack, decoded)
-    }
-
-    @Test
-    fun `json output is parseable by gson`() {
-        val pack = SessionHandoffPackage(
-            sourceRuntimeId = "remote-pc",
-            sourceRuntimeName = "Mac",
-            sessionId = "s2",
-            sessionTitle = "Refactor",
-            directory = "/work",
-            transcript = "hello",
-            messageCount = 4
-        )
-        val raw = SessionHandoff.toJson(pack)
-        // Round-trip via fromJson to ensure gson can parse our payload.
-        val decoded = SessionHandoff.fromJson(raw)
-        assertEquals("Mac", decoded.sourceRuntimeName)
-        assertEquals("s2", decoded.sessionId)
-        assertEquals(4, decoded.messageCount)
-    }
-
-    @Test
-    fun `unsupported format version is rejected`() {
-        val raw = """{
-            "version":2,
-            "payload":{
-                "sourceRuntimeId":"remote-pc",
-                "sourceRuntimeName":"Mac",
-                "sessionId":"s2",
-                "sessionTitle":"Refactor",
-                "directory":"/work",
-                "transcript":"hello",
-                "messageCount":4
-            }
-        }""".trimIndent()
-
-        assertThrows(IllegalArgumentException::class.java) {
-            SessionHandoff.fromJson(raw)
-        }
-    }
-
-    private fun message(id: String, role: String, text: String): OpenCodeMessage =
-        OpenCodeMessage(
-            info = OpenCodeMessageInfo(
-                id = id,
-                sessionId = "sess-1",
-                role = role,
-                time = OpenCodeTime(created = 1L, updated = 2L)
-            ),
-            parts = if (text.isBlank()) emptyList()
-            else listOf(
-                com.opencode.android.core.api.OpenCodePart(
-                    id = "$id-part",
-                    type = "text",
-                    text = text
+    fun `skips messages with no text parts`() {
+        val messages = listOf(
+            userMessage("Real question"),
+            ChatMessage(
+                isUser = false,
+                parts = listOf(
+                    ChatPart.Tool(id = "t1", name = "bash", status = ToolStatus.COMPLETED)
                 )
-            )
+            ),
+            assistantMessage("Answer")
         )
+
+        val prompt = buildHandoffPrompt(messages)
+
+        assertTrue(prompt.contains("ユーザー: Real question"))
+        assertTrue(prompt.contains("アシスタント: Answer"))
+        assertFalse(prompt.contains("bash"))
+    }
+
+    @Test
+    fun `skips blank text messages`() {
+        val messages = listOf(
+            userMessage("   "),
+            assistantMessage("Kept")
+        )
+
+        val prompt = buildHandoffPrompt(messages)
+
+        assertFalse(prompt.contains("ユーザー:"))
+        assertTrue(prompt.contains("アシスタント: Kept"))
+    }
+
+    @Test
+    fun `truncates from the oldest side and keeps most recent messages`() {
+        val messages = (1..20).map { index ->
+            if (index % 2 == 1) userMessage("user message number $index with some padding text")
+            else assistantMessage("assistant message number $index with some padding text")
+        }
+
+        val prompt = buildHandoffPrompt(messages, maxChars = 300)
+
+        assertTrue(prompt.length <= 300 + 200)
+        assertTrue(prompt.contains("message number 20"))
+        assertFalse(prompt.contains("message number 1 "))
+    }
+
+    @Test
+    fun `always keeps at least the most recent message even if it alone exceeds maxChars`() {
+        val longText = "x".repeat(500)
+        val messages = listOf(
+            userMessage("short earlier message"),
+            assistantMessage(longText)
+        )
+
+        val prompt = buildHandoffPrompt(messages, maxChars = 50)
+
+        assertTrue(prompt.contains(longText))
+        assertFalse(prompt.contains("short earlier message"))
+    }
+
+    @Test
+    fun `returns just the header when there is nothing to transcribe`() {
+        val prompt = buildHandoffPrompt(emptyList())
+
+        assertEquals("以下は別の実行先から引き継いだ会話の要約です。続きから対応してください。", prompt)
+    }
 }

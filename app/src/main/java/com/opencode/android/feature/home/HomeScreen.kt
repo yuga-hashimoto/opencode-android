@@ -18,12 +18,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,7 +38,6 @@ import com.opencode.android.ui.components.OpenCodeBrand
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeSuccess
-import com.opencode.android.ui.theme.OpenCodeWarning
 
 @Composable
 fun HomeScreen(
@@ -71,36 +65,6 @@ fun HomeScreen(
             }
         }
 
-        if (state.connected && (state.runningCount > 0 || state.pendingApprovalCount > 0)) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (state.pendingApprovalCount > 0) {
-                        LiveOpsStatCard(
-                            count = state.pendingApprovalCount,
-                            label = stringResource(R.string.pending_approvals),
-                            icon = Icons.Default.Security,
-                            tint = OpenCodeWarning,
-                            onClick = onOpenActivity,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    if (state.runningCount > 0) {
-                        LiveOpsStatCard(
-                            count = state.runningCount,
-                            label = stringResource(R.string.running_now),
-                            icon = Icons.Default.Terminal,
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onOpenActivity,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
         item {
             SectionCard {
                 Row(
@@ -119,7 +83,7 @@ fun HomeScreen(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = state.runtimeName.ifBlank { "実行先を選択してください" },
+                            text = state.runtimeName.ifBlank { stringResource(R.string.select_a_runtime) },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -130,7 +94,7 @@ fun HomeScreen(
                         )
                     }
                     StatusChip(
-                        text = if (state.connected) "接続済み" else "未接続",
+                        text = if (state.connected) stringResource(R.string.connected_label) else stringResource(R.string.disconnected_label),
                         active = state.connected
                     )
                 }
@@ -163,22 +127,22 @@ fun HomeScreen(
         }
 
         item {
-            Text("現在の構成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.current_configuration), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
 
         item {
             SectionCard {
-                ConfigurationRow("作業フォルダ", state.workspace?.path ?: "未選択")
+                ConfigurationRow(stringResource(R.string.workspace_folder_label), state.workspace?.path ?: stringResource(R.string.not_selected))
                 Spacer(Modifier.height(12.dp))
-                ConfigurationRow("モデル", state.modelId ?: "OpenCodeの既定値")
+                ConfigurationRow(stringResource(R.string.model), state.modelId ?: stringResource(R.string.opencode_default_value))
                 Spacer(Modifier.height(12.dp))
-                ConfigurationRow("エージェント", state.agentId ?: "build")
+                ConfigurationRow(stringResource(R.string.agent), state.agentId ?: "build")
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.padding(horizontal = 5.dp))
                     Text(
-                        text = state.providerId ?: "AIサービス未選択",
+                        text = state.providerId ?: stringResource(R.string.no_ai_service_selected),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -189,7 +153,7 @@ fun HomeScreen(
         state.error?.let { error ->
             item {
                 SectionCard {
-                    Text("接続または取得に失敗しました", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.connection_or_fetch_failed), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(6.dp))
                     Text(error, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -246,34 +210,6 @@ fun HomeScreen(
 }
 
 @Composable
-private fun LiveOpsStatCard(
-    count: Int,
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.12f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(icon, contentDescription = null, tint = tint)
-            Column {
-                Text(count.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = tint)
-                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
 private fun ConfigurationRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -281,11 +217,12 @@ private fun ConfigurationRow(label: String, value: String) {
     }
 }
 
+@Composable
 private fun runtimeDescription(state: HomeUiState): String = when {
-    state.connected -> "OpenCode ${state.version}"
-    state.isRefreshing -> "接続と状態を確認しています"
+    state.connected -> stringResource(R.string.capability_version, state.version.orEmpty())
+    state.isRefreshing -> stringResource(R.string.checking_connection_status)
     state.runtimeState is RuntimeState.Unavailable -> state.runtimeState.reason
     state.runtimeState is RuntimeState.Failed -> state.runtimeState.message
-    state.runtimeId == null -> "AndroidローカルまたはPCを選択できます"
-    else -> "OpenCodeへ未接続"
+    state.runtimeId == null -> stringResource(R.string.choose_local_or_pc_runtime)
+    else -> stringResource(R.string.not_connected_to_opencode)
 }

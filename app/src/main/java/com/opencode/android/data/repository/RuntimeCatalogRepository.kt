@@ -5,7 +5,6 @@ import com.opencode.android.core.api.OpenCodeHealth
 import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.runtime.RuntimeRegistry
-import com.opencode.android.runtime.RuntimeState
 import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
 import kotlinx.coroutines.CoroutineScope
@@ -22,7 +21,6 @@ import kotlinx.coroutines.sync.withLock
 
 data class RuntimeCatalogState(
     val runtime: RuntimeTarget? = null,
-    val runtimeState: RuntimeState = RuntimeState.Disconnected,
     val health: OpenCodeHealth? = null,
     val sessions: List<OpenCodeSession> = emptyList(),
     val providers: ProviderCatalog = ProviderCatalog(),
@@ -43,21 +41,8 @@ class RuntimeCatalogRepository(
     init {
         scope.launch {
             registry.selected.collectLatest { target ->
-                mutableState.value = RuntimeCatalogState(
-                    runtime = target,
-                    runtimeState = target?.state?.value ?: RuntimeState.Disconnected
-                )
+                mutableState.value = RuntimeCatalogState(runtime = target)
                 if (target != null) load(target)
-            }
-        }
-        scope.launch {
-            registry.selected.collectLatest { target ->
-                target?.state?.collect { liveState ->
-                    if (registry.selected.value?.id != target.id) return@collect
-                    mutableState.update {
-                        it.copy(runtime = target, runtimeState = liveState)
-                    }
-                }
             }
         }
     }
@@ -78,7 +63,6 @@ class RuntimeCatalogRepository(
             if (connection.isFailure) {
                 mutableState.value = RuntimeCatalogState(
                     runtime = target,
-                    runtimeState = target.state.value,
                     isRefreshing = false,
                     error = connection.exceptionOrNull().safeMessage()
                 )
@@ -102,7 +86,6 @@ class RuntimeCatalogRepository(
             val errors = catalog.failures()
             mutableState.value = RuntimeCatalogState(
                 runtime = target,
-                runtimeState = target.state.value,
                 health = connection.getOrNull(),
                 sessions = catalog.sessions.getOrDefault(emptyList()),
                 providers = catalog.providers.getOrDefault(ProviderCatalog()),
