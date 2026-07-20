@@ -10,19 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
@@ -49,11 +46,8 @@ import com.opencode.android.R
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
-/**
- * Redesigned settings landing screen: grouped rounded cards under アシスタント設定 /
- * システム設定 / アプリ設定. Real sub-flows (voice, provider credentials) navigate to
- * dedicated screens; wake word / privacy / app info are lightweight stub dialogs.
- */
+/** Settings landing screen containing only implemented actions and real state. */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SettingsScreenV2(
     assistantConfigured: Boolean,
@@ -69,8 +63,6 @@ fun SettingsScreenV2(
     onOpenWorkspaces: () -> Unit,
     onOpenDiagnostics: () -> Unit
 ) {
-    var showWakeWordDialog by remember { mutableStateOf(false) }
-    var showPrivacyDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -82,7 +74,9 @@ fun SettingsScreenV2(
                 }
             },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                navigationIconContentColor = MaterialTheme.colorScheme.onBackground
             )
         )
 
@@ -92,11 +86,7 @@ fun SettingsScreenV2(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Text(
-                    stringResource(R.string.section_assistant_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SettingsSectionTitle(stringResource(R.string.section_assistant_settings))
             }
             item {
                 SectionCard {
@@ -105,18 +95,15 @@ fun SettingsScreenV2(
                         title = stringResource(R.string.settings_home_assistant_row),
                         trailing = {
                             StatusPill(
-                                text = if (assistantConfigured) stringResource(R.string.assistant_enabled_pill) else stringResource(R.string.assistant_disabled_pill),
+                                text = if (assistantConfigured) {
+                                    stringResource(R.string.assistant_enabled_pill)
+                                } else {
+                                    stringResource(R.string.assistant_disabled_pill)
+                                },
                                 active = assistantConfigured
                             )
                         },
                         onClick = onOpenAssistantSettings
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Mic,
-                        title = stringResource(R.string.wake_word_row_title),
-                        trailingText = stringResource(R.string.wake_word_value),
-                        onClick = { showWakeWordDialog = true }
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -128,11 +115,7 @@ fun SettingsScreenV2(
             }
 
             item {
-                Text(
-                    stringResource(R.string.section_system_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SettingsSectionTitle(stringResource(R.string.section_system_settings))
             }
             item {
                 SectionCard {
@@ -163,20 +146,22 @@ fun SettingsScreenV2(
             }
 
             item {
-                Text(
-                    stringResource(R.string.section_app_settings),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                SettingsSectionTitle(stringResource(R.string.section_app_settings))
             }
             item {
                 SectionCard {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Text(
                             stringResource(R.string.notifications_row),
                             modifier = Modifier.weight(1f),
@@ -184,18 +169,6 @@ fun SettingsScreenV2(
                         )
                         Switch(checked = notificationsEnabled, onCheckedChange = onToggleNotifications)
                     }
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.PrivacyTip,
-                        title = stringResource(R.string.privacy_row),
-                        onClick = { showPrivacyDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.History,
-                        title = stringResource(R.string.diagnostics_row),
-                        onClick = onOpenDiagnostics
-                    )
                     SettingsDivider()
                     SettingsRow(
                         icon = Icons.Default.Info,
@@ -207,34 +180,39 @@ fun SettingsScreenV2(
         }
     }
 
-    if (showWakeWordDialog) {
-        StubDialog(
-            title = stringResource(R.string.wake_word_row_title),
-            body = stringResource(R.string.wake_word_stub_body),
-            onDismiss = { showWakeWordDialog = false }
-        )
-    }
-    if (showPrivacyDialog) {
-        StubDialog(
-            title = stringResource(R.string.privacy_row),
-            body = stringResource(R.string.privacy_stub_body),
-            onDismiss = { showPrivacyDialog = false }
-        )
-    }
     if (showAboutDialog) {
-        StubDialog(
-            title = stringResource(R.string.app_info_row),
-            body = "${stringResource(R.string.app_name)} $appVersion\n${stringResource(R.string.unofficial_client)}",
-            onDismiss = { showAboutDialog = false }
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text(stringResource(R.string.app_info_row)) },
+            text = {
+                Text(
+                    "${stringResource(R.string.app_name)} $appVersion\n" +
+                        stringResource(R.string.unofficial_client)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) {
+                    Text(stringResource(R.string.close_description))
+                }
+            }
         )
     }
+}
+
+@Composable
+private fun SettingsSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onBackground
+    )
 }
 
 @Composable
 private fun SettingsRow(
     icon: ImageVector,
     title: String,
-    trailingText: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -248,9 +226,6 @@ private fun SettingsRow(
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        trailingText?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
         trailing?.invoke()
         Icon(
             Icons.Default.KeyboardArrowRight,
@@ -262,7 +237,9 @@ private fun SettingsRow(
 
 @Composable
 private fun SettingsDivider() {
-    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+    androidx.compose.material3.HorizontalDivider(
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    )
 }
 
 @Composable
@@ -280,18 +257,6 @@ private fun StatusPill(text: String, active: Boolean) {
             fontWeight = FontWeight.Medium
         )
     }
-}
-
-@Composable
-private fun StubDialog(title: String, body: String, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(body) },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close_description)) }
-        }
-    )
 }
 
 @Preview(showBackground = true)
