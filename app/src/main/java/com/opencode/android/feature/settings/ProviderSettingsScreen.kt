@@ -8,47 +8,42 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
+import com.opencode.android.core.api.OpenCodeProvider
+import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.ui.components.LabelValueRow
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
-/**
- * Provider / API-key management detail screen. Mirrors the provider credential
- * section that used to live inline in the old SettingsScreen.kt, wired to the same
- * SettingsViewModel draft + save/clear API key actions.
- */
+/** Provider authentication driven entirely by the selected OpenCode runtime. */
 @Composable
 fun ProviderSettingsScreen(
-    credentialStatuses: Map<String, Boolean>,
-    draftProviderId: String,
-    draftApiKey: String,
-    credentialMessage: String?,
-    onDraftProviderId: (String) -> Unit,
-    onDraftApiKey: (String) -> Unit,
-    onSaveApiKey: () -> Unit,
-    onClearApiKey: (String) -> Unit,
+    state: SettingsUiState,
+    onOpenProviderAuth: (String) -> Unit,
+    onSelectProviderAuthMethod: (Int) -> Unit,
+    onProviderAuthInput: (String, String) -> Unit,
+    onProviderApiKey: (String) -> Unit,
+    onSubmitProviderAuth: () -> Unit,
+    onCompleteProviderOAuth: (String) -> Unit,
+    onDisconnectProvider: (String) -> Unit,
+    onLaunchOAuthBrowser: (String) -> Unit,
+    onDismissProviderAuth: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -57,7 +52,10 @@ fun ProviderSettingsScreen(
                 title = { Text(stringResource(R.string.provider_settings_row)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.nav_back)
+                        )
                     }
                 }
             )
@@ -77,51 +75,94 @@ fun ProviderSettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                credentialStatuses.forEach { (providerId, saved) ->
-                    LabelValueRow(
-                        label = providerId,
-                        value = if (saved) stringResource(R.string.key_saved) else stringResource(R.string.key_missing)
+                Spacer(Modifier.height(12.dp))
+
+                if (state.providerAuthMethods.isEmpty()) {
+                    Text(
+                        stringResource(R.string.provider_auth_unavailable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (saved) {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = { onClearApiKey(providerId) },
+                }
+
+                state.providerAuthMethods.toSortedMap().forEach { (providerId, methods) ->
+                    val providerName = state.availableProviders
+                        .firstOrNull { it.id == providerId }
+                        ?.name
+                        ?: providerId
+                    val connected = providerId in state.connectedProviderIds
+
+                    LabelValueRow(
+                        label = providerName,
+                        value = if (connected) {
+                            stringResource(R.string.provider_connected)
+                        } else {
+                            stringResource(R.string.provider_not_connected)
+                        }
+                    )
+                    Text(
+                        text = methods.joinToString(" · ") { it.label },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { onOpenProviderAuth(providerId) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (connected) {
+                                stringResource(R.string.provider_change_connection)
+                            } else {
+                                stringResource(R.string.provider_connect)
+                            }
+                        )
+                    }
+                    if (connected) {
+                        TextButton(
+                            onClick = { onDisconnectProvider(providerId) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(stringResource(R.string.clear_api_key))
+                            Text(stringResource(R.string.provider_disconnect))
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
                 }
-                OutlinedTextField(
-                    value = draftProviderId,
-                    onValueChange = onDraftProviderId,
-                    label = { Text(stringResource(R.string.provider_id_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) }
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = draftApiKey,
-                    onValueChange = onDraftApiKey,
-                    label = { Text(stringResource(R.string.api_key_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onSaveApiKey, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.save_api_key))
+
+                state.providerAuthNotice?.let { notice ->
+                    Text(
+                        text = stringResource(
+                            when (notice) {
+                                ProviderAuthNotice.CONNECTED -> R.string.provider_connected_success
+                                ProviderAuthNotice.DISCONNECTED -> R.string.provider_disconnected_success
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                credentialMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                state.oauthMessage?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
+    }
+
+    state.providerAuthDialog?.let { dialog ->
+        ProviderAuthDialog(
+            state = dialog,
+            onSelectMethod = onSelectProviderAuthMethod,
+            onInputChange = onProviderAuthInput,
+            onApiKeyChange = onProviderApiKey,
+            onSubmit = onSubmitProviderAuth,
+            onCompleteCode = onCompleteProviderOAuth,
+            onLaunchBrowser = onLaunchOAuthBrowser,
+            onDismiss = onDismissProviderAuth
+        )
     }
 }
 
@@ -130,14 +171,24 @@ fun ProviderSettingsScreen(
 private fun ProviderSettingsScreenPreview() {
     OpenCodeAndroidTheme {
         ProviderSettingsScreen(
-            credentialStatuses = mapOf("openai" to true, "anthropic" to false),
-            draftProviderId = "",
-            draftApiKey = "",
-            credentialMessage = null,
-            onDraftProviderId = {},
-            onDraftApiKey = {},
-            onSaveApiKey = {},
-            onClearApiKey = {},
+            state = SettingsUiState(
+                availableProviders = listOf(OpenCodeProvider(id = "openai", name = "OpenAI")),
+                providerAuthMethods = mapOf(
+                    "openai" to listOf(
+                        ProviderAuthMethod(type = "oauth", label = "ChatGPT Plus/Pro"),
+                        ProviderAuthMethod(type = "api", label = "API key")
+                    )
+                )
+            ),
+            onOpenProviderAuth = {},
+            onSelectProviderAuthMethod = {},
+            onProviderAuthInput = { _, _ -> },
+            onProviderApiKey = {},
+            onSubmitProviderAuth = {},
+            onCompleteProviderOAuth = {},
+            onDisconnectProvider = {},
+            onLaunchOAuthBrowser = {},
+            onDismissProviderAuth = {},
             onBack = {}
         )
     }

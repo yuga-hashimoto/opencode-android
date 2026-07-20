@@ -14,6 +14,8 @@ import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
+import com.opencode.android.core.api.ProviderAuthAuthorization
+import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.data.connection.ConnectionProfile
 import com.opencode.android.runtime.BackendKind
@@ -90,6 +92,25 @@ class RemoteRuntimeTarget(
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = backend.listMessages(sessionId)
     override suspend fun listProviders(): ProviderCatalog = backend.listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = backend.listAgents()
+    override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
+        backend.providerAuthMethods()
+    override suspend fun authorizeProvider(
+        providerId: String,
+        methodIndex: Int,
+        inputs: Map<String, String>
+    ): ProviderAuthAuthorization = backend.authorizeProvider(providerId, methodIndex, inputs)
+    override suspend fun setProviderApiKey(
+        providerId: String,
+        apiKey: String,
+        metadata: Map<String, String>
+    ): Boolean = backend.setProviderApiKey(providerId, apiKey, metadata)
+    override suspend fun removeProviderAuth(providerId: String): Boolean =
+        backend.removeProviderAuth(providerId)
+    override suspend fun completeProviderOAuth(
+        providerId: String,
+        methodIndex: Int,
+        code: String?
+    ): Boolean = backend.completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =
         backend.listProjects(directory)
     override suspend fun currentProject(directory: String?): OpenCodeProject =
