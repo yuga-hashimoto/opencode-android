@@ -15,7 +15,7 @@ permissions:
 jobs:
   capture:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
 
     steps:
@@ -65,26 +65,75 @@ jobs:
         id: emulator
         if: steps.guard.outputs.skip != 'true'
         continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
-          script: |
-            set -o pipefail
-            {
-              ./gradlew connectedDebugAndroidTest \
-                -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest
-              mkdir -p docs/ui-screenshots/pr-4
-              for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
-                adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
-                  > "docs/ui-screenshots/pr-4/$image"
-                test -s "docs/ui-screenshots/pr-4/$image"
-              done
-            } > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          exec > "$GITHUB_WORKSPACE/ui-screenshot-test.log" 2>&1
+
+          AVD_NAME='opencode-ui-api34'
+          SYSTEM_IMAGE='system-images;android-34;google_apis;x86_64'
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          EMULATOR_PID=''
+
+          cleanup() {
+            if adb devices | grep -q '^emulator-'; then
+              adb emu kill || true
+            fi
+            if test -n "$EMULATOR_PID"; then
+              kill "$EMULATOR_PID" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          echo 'Installing API 34 emulator components...'
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install \
+            'platform-tools' \
+            'emulator' \
+            "$SYSTEM_IMAGE"
+
+          echo 'Creating AVD...'
+          echo no | avdmanager create avd \
+            --force \
+            --name "$AVD_NAME" \
+            --package "$SYSTEM_IMAGE"
+
+          echo 'Starting emulator...'
+          "$SDK_ROOT/emulator/emulator" \
+            -avd "$AVD_NAME" \
+            -no-window \
+            -gpu swiftshader_indirect \
+            -noaudio \
+            -no-boot-anim \
+            -camera-back none \
+            -no-snapshot-save \
+            > "$GITHUB_WORKSPACE/emulator.log" 2>&1 &
+          EMULATOR_PID=$!
+
+          timeout 300 adb wait-for-device
+          timeout 600 bash -c '
+            until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do
+              sleep 5
+            done
+          '
+          adb shell input keyevent 82 || true
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          echo 'Running screenshot instrumentation test...'
+          ./gradlew connectedDebugAndroidTest \
+            -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest
+
+          echo 'Collecting screenshots...'
+          mkdir -p docs/ui-screenshots/pr-4
+          for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
+            adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
+              > "docs/ui-screenshots/pr-4/$image"
+            test -s "docs/ui-screenshots/pr-4/$image"
+          done
+
+          echo 'Screenshot capture completed.'
 
       - name: Report screenshot failure
         if: steps.guard.outputs.skip != 'true' && steps.emulator.outcome == 'failure'
@@ -98,9 +147,14 @@ jobs:
             echo
             echo '```text'
             if test -f ui-screenshot-test.log; then
-              tail -n 180 ui-screenshot-test.log
+              tail -n 240 ui-screenshot-test.log
             else
-              echo 'The emulator runner failed before the Gradle screenshot command produced a log.'
+              echo 'The emulator workflow failed before producing a diagnostic log.'
+            fi
+            if test -f emulator.log; then
+              echo
+              echo '--- emulator.log ---'
+              tail -n 100 emulator.log
             fi
             echo '```'
           } > /tmp/ui-screenshot-failure.md
