@@ -13,4 +13,15 @@
     <string name="chat_build_subtitle_compact">Ask OpenCode to implement, fix, or investigate.</string>
     <string name="settings_wake_word_row">Wake word</string>
     <string name="settings_wake_word_value">OpenCode</string>
+    <string name="setup_step_counter">Step %1$d of %2$d</string>
+    <string name="setup_next_action">Next</string>
+    <string name="setup_back_action">Back</string>
+    <string name="setup_save_and_continue_action">Save key and continue</string>
+    <string name="setup_download_description">Prepare the runtime required to run OpenCode directly on this device.</string>
+    <string name="setup_runtime_not_installed">The runtime is not installed yet.</string>
+    <string name="setup_runtime_ready">The runtime is ready</string>
+    <string name="setup_provider_description">Choose one AI provider. You can change it later in Settings.</string>
+    <string name="setup_api_key_description">Enter the API key for the selected provider. It is stored securely on this device.</string>
+    <string name="setup_test_description">Verify that the runtime and authentication settings are ready.</string>
+    <string name="setup_test_caption">After a successful check, you can start chatting.</string>
 </resources>
