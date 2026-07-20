@@ -80,6 +80,15 @@ jobs:
           export ANDROID_AVD_HOME="$HOME/.android/avd"
           EMULATOR_PID=''
 
+          wait_for_boot() {
+            timeout 300 adb wait-for-device
+            timeout 600 bash -c '
+              until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do
+                sleep 5
+              done
+            '
+          }
+
           cleanup() {
             if adb devices | grep -q '^emulator-'; then
               adb emu kill || true
@@ -121,12 +130,10 @@ jobs:
             > "$GITHUB_WORKSPACE/emulator.log" 2>&1 &
           EMULATOR_PID=$!
 
-          timeout 300 adb wait-for-device
-          timeout 600 bash -c '
-            until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do
-              sleep 5
-            done
-          '
+          wait_for_boot
+          echo 'Switching emulator locale to Japanese...'
+          adb shell 'setprop persist.sys.locale ja-JP; stop; sleep 5; start'
+          wait_for_boot
           adb shell input keyevent 82 || true
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
@@ -142,7 +149,7 @@ jobs:
           adb install -r "$TEST_APK"
           adb shell pm path com.opencode.android | grep -q '^package:'
           adb shell pm path com.opencode.android.test | grep -q '^package:'
-          adb shell cmd locale set-app-locales --user 0 com.opencode.android ja-JP || true
+          adb shell pm grant com.opencode.android android.permission.POST_NOTIFICATIONS
 
           echo 'Running screenshot instrumentation test...'
           adb shell am instrument -w -r \
