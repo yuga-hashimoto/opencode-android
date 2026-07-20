@@ -33,12 +33,14 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
@@ -77,12 +80,10 @@ import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
 /**
- * ChatGPT-like chat home screen: hamburger + centered title top bar, empty-state
- * suggestions or the message timeline, and a rounded composer with model/agent/
- * workspace chips. Message rendering (bubbles, tool/reasoning cards, permission
- * cards) is reused from OpenCodeChatScreen.kt via the now package-visible
- * MessageBubble / AssistantTimeline / PermissionCard composables.
+ * Chat-focused home screen with one clear action per navigation location.
+ * History lives in the drawer, while the top bar only exposes menu and new-chat.
  */
+@Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatHomeScreen(
@@ -109,8 +110,6 @@ fun ChatHomeScreen(
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    var overflowExpanded by remember { mutableStateOf(false) }
-    var titleMenuExpanded by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
@@ -119,29 +118,19 @@ fun ChatHomeScreen(
         if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         CenterAlignedTopAppBar(
             title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { titleMenuExpanded = true }
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_home_title),
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                    DropdownMenu(expanded = titleMenuExpanded, onDismissRequest = { titleMenuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.new_chat)) },
-                            onClick = { titleMenuExpanded = false; onNewChat() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.session_history)) },
-                            onClick = { titleMenuExpanded = false; onOpenHistory() }
-                        )
-                    }
-                }
+                Text(
+                    text = state.sessionTitle.ifBlank { stringResource(R.string.chat_home_title) },
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             },
             navigationIcon = {
                 IconButton(onClick = onOpenDrawer) {
@@ -152,59 +141,47 @@ fun ChatHomeScreen(
                 IconButton(onClick = onNewChat) {
                     Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_chat))
                 }
-                Box {
-                    IconButton(onClick = { overflowExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.chat_options_description))
-                    }
-                    DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.new_chat)) },
-                            onClick = { overflowExpanded = false; onNewChat() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.session_history)) },
-                            onClick = { overflowExpanded = false; onOpenHistory() }
-                        )
-                    }
-                }
             },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                actionIconContentColor = MaterialTheme.colorScheme.onBackground
             )
         )
 
         Box(modifier = Modifier.weight(1f)) {
-            val showEmptyState = state.messages.isEmpty() && state.permissions.isEmpty() &&
-                !state.isLoadingHistory && state.error == null
-            if (showEmptyState) {
-                EmptyChatState(onSuggestionClick = { text -> input = text })
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(state.messages, key = { it.id }) { message ->
-                        if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
-                    }
-                    items(state.permissions, key = { "permission-${it.id}" }) { permission ->
-                        PermissionCard(permission, onPermission)
-                    }
-                    if (state.isThinking) {
-                        item { StatusChip(text = stringResource(R.string.thinking), active = true) }
-                    }
-                    state.error?.let { error ->
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-                                )
-                            ) {
-                                Text(
-                                    text = error,
-                                    modifier = Modifier.padding(14.dp),
-                                    color = MaterialTheme.colorScheme.error
+            val errorKind = classifyChatError(state.error)
+            when {
+                state.isLoadingHistory -> LoadingState()
+                errorKind == ChatErrorKind.RUNTIME_NOT_READY && state.messages.isEmpty() -> {
+                    RuntimeSetupRequiredState(onOpenSettings = onOpenDrawer)
+                }
+                state.messages.isEmpty() && state.permissions.isEmpty() && state.error == null -> {
+                    EmptyChatState(onSuggestionClick = { text -> input = text })
+                }
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(state.messages, key = { it.id }) { message ->
+                            if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                        }
+                        items(state.permissions, key = { "permission-${it.id}" }) { permission ->
+                            PermissionCard(permission, onPermission)
+                        }
+                        if (state.isThinking) {
+                            item { StatusChip(text = stringResource(R.string.thinking), active = true) }
+                        }
+                        state.error?.let { error ->
+                            item {
+                                ChatErrorCard(
+                                    error = error,
+                                    kind = errorKind ?: ChatErrorKind.GENERIC,
+                                    onOpenSettings = onOpenDrawer
                                 )
                             }
                         }
@@ -253,6 +230,91 @@ fun ChatHomeScreen(
 }
 
 @Composable
+private fun LoadingState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun RuntimeSetupRequiredState(onOpenSettings: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(18.dp)
+                    .size(36.dp)
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = stringResource(R.string.runtime_setup_required_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.runtime_setup_required_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = onOpenSettings) {
+            Text(stringResource(R.string.open_settings_action))
+        }
+    }
+}
+
+@Composable
+private fun ChatErrorCard(
+    error: String,
+    kind: ChatErrorKind,
+    onOpenSettings: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            if (kind == ChatErrorKind.RUNTIME_NOT_READY) {
+                Text(
+                    text = stringResource(R.string.runtime_setup_required_title),
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.runtime_setup_required_body),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(onClick = onOpenSettings) {
+                    Text(stringResource(R.string.open_settings_action))
+                }
+            } else {
+                Text(text = error, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
     val suggestion1 = stringResource(R.string.suggestion_implement_title)
     val suggestion2 = stringResource(R.string.suggestion_debug_title)
@@ -262,7 +324,7 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -275,11 +337,11 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .padding(18.dp)
-                    .size(36.dp)
+                    .padding(16.dp)
+                    .size(34.dp)
             )
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
         Text(
             text = stringResource(R.string.chat_build_headline),
             style = MaterialTheme.typography.headlineSmall,
@@ -293,7 +355,7 @@ private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -333,6 +395,7 @@ private fun SuggestionCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Row(
@@ -345,7 +408,7 @@ private fun SuggestionCard(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
             ) {
                 Icon(
-                    icon,
+                    imageVector = icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(8.dp)
@@ -386,8 +449,6 @@ private fun ChatComposer(
     workspaceSelectable: Boolean,
     onSelectWorkspace: (String?) -> Unit
 ) {
-    var attachExpanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -398,9 +459,10 @@ private fun ChatComposer(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Column(modifier = Modifier.padding(6.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
                 TextField(
                     value = input,
                     onValueChange = onInputChange,
@@ -413,26 +475,15 @@ private fun ChatComposer(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent
                     ),
-                    maxLines = 6
+                    minLines = 1,
+                    maxLines = 5
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box {
-                        IconButton(onClick = { attachExpanded = true }) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.attach_button_description))
-                        }
-                        DropdownMenu(expanded = attachExpanded, onDismissRequest = { attachExpanded = false }) {
-                            // TODO: implement real attachments (files, images, camera capture)
-                            // once the backend supports multipart prompt attachments.
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.attach_menu_stub)) },
-                                onClick = { attachExpanded = false },
-                                enabled = false
-                            )
-                        }
-                    }
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = onMic) {
                         Icon(Icons.Default.Mic, contentDescription = stringResource(R.string.voice))
@@ -465,6 +516,7 @@ private fun ChatComposer(
                 enabled = workspaceSelectable,
                 onSelect = onSelectWorkspace
             )
+            Spacer(Modifier.width(4.dp))
         }
     }
 }
@@ -502,7 +554,10 @@ private fun AgentChip(
             agents.forEach { agent ->
                 DropdownMenuItem(
                     text = { Text(agent.name) },
-                    onClick = { onSelect(agent.name); expanded = false }
+                    onClick = {
+                        onSelect(agent.name)
+                        expanded = false
+                    }
                 )
             }
         }
@@ -535,7 +590,8 @@ private fun WorkspaceChip(
                 Text(
                     text = selected?.name ?: stringResource(R.string.default_folder),
                     style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
             }
@@ -543,12 +599,18 @@ private fun WorkspaceChip(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.default_folder)) },
-                onClick = { onSelect(null); expanded = false }
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
             )
             workspaces.forEach { workspace ->
                 DropdownMenuItem(
                     text = { Text(workspace.name) },
-                    onClick = { onSelect(workspace.path); expanded = false }
+                    onClick = {
+                        onSelect(workspace.path)
+                        expanded = false
+                    }
                 )
             }
         }
