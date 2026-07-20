@@ -79,6 +79,16 @@ jobs:
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export ANDROID_AVD_HOME="$HOME/.android/avd"
           EMULATOR_PID=''
+          EXPECTED_IMAGES=(
+            01-chat-empty.png
+            02-runtime-not-ready.png
+            03-drawer.png
+            04-settings.png
+            05-onboarding.png
+            06-android-setup.png
+            07-remote-connection.png
+            08-model-runtime-picker.png
+          )
 
           wait_for_android() {
             timeout 300 adb wait-for-device
@@ -149,7 +159,7 @@ jobs:
 
           rm -rf docs/ui-screenshots/pr-4
           mkdir -p docs/ui-screenshots/pr-4
-          for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
+          for image in "${EXPECTED_IMAGES[@]}"; do
             adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
               > "docs/ui-screenshots/pr-4/$image"
           done
@@ -158,13 +168,18 @@ jobs:
           from pathlib import Path
           import struct
 
-          directory = Path('docs/ui-screenshots/pr-4')
-          for name in (
+          expected = [
               '01-chat-empty.png',
               '02-runtime-not-ready.png',
               '03-drawer.png',
               '04-settings.png',
-          ):
+              '05-onboarding.png',
+              '06-android-setup.png',
+              '07-remote-connection.png',
+              '08-model-runtime-picker.png',
+          ]
+          directory = Path('docs/ui-screenshots/pr-4')
+          for name in expected:
               data = (directory / name).read_bytes()
               if not data.startswith(b'\x89PNG\r\n\x1a\n'):
                   raise SystemExit(f'{name}: invalid PNG signature: {data[:80]!r}')
