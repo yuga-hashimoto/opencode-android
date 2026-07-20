@@ -132,17 +132,56 @@ jobs:
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
 
-          echo 'Running screenshot instrumentation test...'
-          ./gradlew connectedDebugAndroidTest \
-            -Pandroid.testInstrumentationRunnerArguments.class=com.opencode.android.ui.UiScreenshotInstrumentedTest
+          echo 'Building and installing app/test APKs...'
+          ./gradlew assembleDebug assembleDebugAndroidTest
+          APP_APK='app/build/outputs/apk/debug/app-debug.apk'
+          TEST_APK='app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'
+          test -s "$APP_APK"
+          test -s "$TEST_APK"
+          adb install -r "$APP_APK"
+          adb install -r "$TEST_APK"
+          adb shell pm path com.opencode.android | grep -q '^package:'
+          adb shell pm path com.opencode.android.test | grep -q '^package:'
+          adb shell cmd locale set-app-locales --user 0 com.opencode.android ja-JP || true
 
-          echo 'Collecting screenshots...'
+          echo 'Running screenshot instrumentation test...'
+          adb shell am instrument -w -r \
+            -e class com.opencode.android.ui.UiScreenshotInstrumentedTest \
+            com.opencode.android.test/androidx.test.runner.AndroidJUnitRunner \
+            | tee "$GITHUB_WORKSPACE/instrumentation.log"
+          grep -q '^OK (1 test)' "$GITHUB_WORKSPACE/instrumentation.log"
+
+          echo 'Collecting and validating screenshots...'
+          rm -rf docs/ui-screenshots/pr-4
           mkdir -p docs/ui-screenshots/pr-4
           for image in 01-chat-empty.png 02-runtime-not-ready.png 03-drawer.png 04-settings.png; do
             adb exec-out run-as com.opencode.android cat "files/ui-screenshots/$image" \
               > "docs/ui-screenshots/pr-4/$image"
-            test -s "docs/ui-screenshots/pr-4/$image"
           done
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+
+          directory = Path('docs/ui-screenshots/pr-4')
+          expected = [
+              '01-chat-empty.png',
+              '02-runtime-not-ready.png',
+              '03-drawer.png',
+              '04-settings.png',
+          ]
+          for name in expected:
+              path = directory / name
+              data = path.read_bytes()
+              if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+                  raise SystemExit(f'{name}: invalid PNG signature: {data[:80]!r}')
+              if len(data) < 10_000:
+                  raise SystemExit(f'{name}: screenshot is suspiciously small ({len(data)} bytes)')
+              width, height = struct.unpack('>II', data[16:24])
+              if width < 720 or height < 1200:
+                  raise SystemExit(f'{name}: unexpected dimensions {width}x{height}')
+              print(f'{name}: {width}x{height}, {len(data)} bytes')
+          PY
 
           echo 'Screenshot capture completed.'
 
