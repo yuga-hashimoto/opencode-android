@@ -77,8 +77,18 @@ class LocalOpenCodeBackend(
     override suspend fun listProviders(): ProviderCatalog = delegate().listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = delegate().listAgents()
     override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> = delegate().providerAuthMethods()
-    override suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
-        delegate().authorizeProvider(providerId, methodIndex)
+    override suspend fun authorizeProvider(
+        providerId: String,
+        methodIndex: Int,
+        inputs: Map<String, String>
+    ): ProviderAuthAuthorization = delegate().authorizeProvider(providerId, methodIndex, inputs)
+    override suspend fun setProviderApiKey(
+        providerId: String,
+        apiKey: String,
+        metadata: Map<String, String>
+    ): Boolean = delegate().setProviderApiKey(providerId, apiKey, metadata)
+    override suspend fun removeProviderAuth(providerId: String): Boolean =
+        delegate().removeProviderAuth(providerId)
     override suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
         delegate().completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> =

@@ -674,10 +674,13 @@ fun OpenCodeApp(
                     onThemeModeChange = settingsViewModel::setThemeMode,
                     onDynamicColorChange = settingsViewModel::setDynamicColorEnabled,
                     onReplayOnboarding = settingsViewModel::replayOnboarding,
-                    onDraftProviderId = settingsViewModel::updateDraftProviderId,
-                    onDraftApiKey = settingsViewModel::updateDraftApiKey,
-                    onSaveApiKey = settingsViewModel::saveApiKey,
-                    onClearApiKey = settingsViewModel::clearApiKey,
+                    onOpenProviderAuth = settingsViewModel::openProviderAuth,
+                    onSelectProviderAuthMethod = settingsViewModel::selectProviderAuthMethod,
+                    onProviderAuthInput = settingsViewModel::updateProviderAuthInput,
+                    onProviderApiKey = settingsViewModel::updateProviderApiKey,
+                    onSubmitProviderAuth = settingsViewModel::submitProviderAuth,
+                    onCompleteProviderOAuth = settingsViewModel::completeProviderOAuth,
+                    onDisconnectProvider = settingsViewModel::disconnectProvider,
                     onAssistantRuntime = settingsViewModel::setAssistantRuntimeId,
                     onAssistantWorkspace = settingsViewModel::setAssistantWorkspacePath,
                     onAssistantModel = settingsViewModel::setAssistantModel,
@@ -728,7 +731,6 @@ fun OpenCodeApp(
                          wakeWordInstalled.value = app.wakeWordPackManager.isInstalled()
                          wakeWordStatusMessage = null
                      },
-                     onStartOAuth = settingsViewModel::startOAuth,
                      onLaunchOAuthBrowser = { url ->
                          runCatching {
                              context.startActivity(
@@ -738,8 +740,7 @@ fun OpenCodeApp(
                              settingsViewModel.reportOAuthError(error.message.orEmpty())
                          }
                      },
-                     onSubmitOAuthCode = settingsViewModel::completeOAuth,
-                     onDismissOAuth = settingsViewModel::dismissOAuth
+                     onDismissProviderAuth = settingsViewModel::dismissProviderAuth
                  )
 
                 if (showWakeWordInstallDialog) {

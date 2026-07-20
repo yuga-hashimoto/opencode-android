@@ -4,13 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeProvider
-import com.opencode.android.core.api.ProviderAuthAuthorization
 import com.opencode.android.core.api.ProviderAuthMethod
 import com.opencode.android.data.connection.SecureSettingsRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
+import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.RuntimeRegistry
 import com.opencode.android.runtime.local.LocalProviderCredentialStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,8 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val providers: List<OpenCodeProvider> = emptyList(),
+    val availableProviders: List<OpenCodeProvider> = emptyList(),
+    val connectedProviderIds: Set<String> = emptySet(),
     val agents: List<OpenCodeAgent> = emptyList(),
     val assistantProviders: List<OpenCodeProvider> = emptyList(),
     val assistantAgents: List<OpenCodeAgent> = emptyList(),
@@ -29,9 +32,6 @@ data class SettingsUiState(
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
     val continuousConversation: Boolean = false,
-    val credentialStatuses: Map<String, Boolean> = emptyMap(),
-    val draftProviderId: String = "",
-    val draftApiKey: String = "",
     val runtimeOptions: List<Pair<String, String>> = emptyList(),
     val assistantRuntimeId: String? = null,
     val assistantWorkspacePath: String? = null,
@@ -41,31 +41,27 @@ data class SettingsUiState(
     val isLoadingAssistantCatalog: Boolean = false,
     val assistantCatalogError: String? = null,
     val openCodeVersion: String? = null,
-    val credentialMessage: String? = null,
     val recentModels: List<Pair<String, String>> = emptyList(),
     val autoAllowReadOnlyTools: Boolean = false,
     val themeMode: String? = null,
     val dynamicColorEnabled: Boolean = false,
     val providerAuthMethods: Map<String, List<ProviderAuthMethod>> = emptyMap(),
-    val oauthProviderId: String? = null,
-    val oauthMethodIndex: Int? = null,
-    val oauthAuthorization: ProviderAuthAuthorization? = null,
-    val oauthMessage: String? = null
+    val oauthMessage: String? = null,
+    val providerAuthDialog: ProviderAuthDialogState? = null,
+    val providerAuthNotice: ProviderAuthNotice? = null
 )
 
 class SettingsViewModel(
-    catalog: RuntimeCatalogRepository,
+    private val catalog: RuntimeCatalogRepository,
     private val preferences: AppPreferencesRepository,
     private val credentials: LocalProviderCredentialStore,
     private val settings: SecureSettingsRepository,
     private val registry: RuntimeRegistry
 ) : ViewModel() {
     private val credentialTick = MutableStateFlow(0)
-    private val draftProviderId = MutableStateFlow("")
-    private val draftApiKey = MutableStateFlow("")
-    private val credentialMessage = MutableStateFlow<String?>(null)
     private val assistantCatalog = MutableStateFlow(AssistantCatalogState())
     private val oauthState = MutableStateFlow(OAuthState())
+    private var providerAuthJob: Job? = null
 
     private data class AssistantCatalogState(
         val runtimeId: String? = null,
@@ -76,18 +72,14 @@ class SettingsViewModel(
     )
 
     private data class DraftState(
-        val providerId: String,
-        val apiKey: String,
-        val message: String?,
         val tick: Int,
         val assistantCatalog: AssistantCatalogState
     )
 
     private data class OAuthState(
         val methods: Map<String, List<ProviderAuthMethod>> = emptyMap(),
-        val providerId: String? = null,
-        val methodIndex: Int? = null,
-        val authorization: ProviderAuthAuthorization? = null,
+        val dialog: ProviderAuthDialogState? = null,
+        val notice: ProviderAuthNotice? = null,
         val message: String? = null
     )
 
@@ -108,14 +100,8 @@ class SettingsViewModel(
         combine(catalog.state, preferences.state, registry.targets, registry.selected) { runtime, prefs, targets, selected ->
             listOf(runtime, prefs, targets, selected)
         },
-        combine(
-            credentialTick,
-            draftProviderId,
-            draftApiKey,
-            credentialMessage,
-            assistantCatalog
-        ) { tick, provider, key, message, assistant ->
-            DraftState(provider, key, message, tick, assistant)
+        combine(credentialTick, assistantCatalog) { tick, assistant ->
+            DraftState(tick, assistant)
         },
         oauthState
     ) { core, draft, oauth ->
@@ -126,9 +112,10 @@ class SettingsViewModel(
         val selected = core[3] as com.opencode.android.runtime.RuntimeTarget?
         val connected = runtime.providers.connected.toSet()
         val providerList = runtime.providers.all.filter { it.id in connected }
-        val keys = credentials.credentials()
         SettingsUiState(
             providers = providerList,
+            availableProviders = runtime.providers.all,
+            connectedProviderIds = connected,
             agents = runtime.agents.filter { it.mode == null || it.mode == "primary" },
             assistantProviders = draft.assistantCatalog.providers,
             assistantAgents = draft.assistantCatalog.agents,
@@ -137,11 +124,6 @@ class SettingsViewModel(
             agentId = prefs.agentId,
             ttsEnabled = prefs.ttsEnabled,
             continuousConversation = prefs.continuousConversation,
-            credentialStatuses = (providerList.map { it.id } + keys.keys)
-                .distinct()
-                .associateWith { credentials.hasCredential(it) },
-            draftProviderId = draft.providerId.ifBlank { prefs.providerId.orEmpty() },
-            draftApiKey = draft.apiKey,
             runtimeOptions = targets.map { it.id to it.displayName },
             assistantRuntimeId = settings.assistantRuntimeId ?: selected?.id,
             assistantWorkspacePath = settings.assistantWorkspacePath,
@@ -151,16 +133,14 @@ class SettingsViewModel(
             isLoadingAssistantCatalog = draft.assistantCatalog.isLoading,
             assistantCatalogError = draft.assistantCatalog.error,
             openCodeVersion = runtime.health?.version,
-            credentialMessage = draft.message,
             recentModels = prefs.recentModels,
             autoAllowReadOnlyTools = settings.autoAllowReadOnlyTools,
             themeMode = prefs.themeMode,
             dynamicColorEnabled = prefs.dynamicColorEnabled,
             providerAuthMethods = oauth.methods,
-            oauthProviderId = oauth.providerId,
-            oauthMethodIndex = oauth.methodIndex,
-            oauthAuthorization = oauth.authorization,
-            oauthMessage = oauth.message
+            oauthMessage = oauth.message,
+            providerAuthDialog = oauth.dialog,
+            providerAuthNotice = oauth.notice
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
@@ -180,117 +160,217 @@ class SettingsViewModel(
     fun setDynamicColorEnabled(enabled: Boolean) = preferences.setDynamicColorEnabled(enabled)
     fun replayOnboarding() = preferences.resetOnboarding()
 
-    fun updateDraftProviderId(value: String) {
-        draftProviderId.value = value
-    }
-
-    fun updateDraftApiKey(value: String) {
-        draftApiKey.value = value
-    }
-
-    fun saveApiKey() {
-        val providerId = draftProviderId.value.ifBlank { state.value.providerId }.orEmpty()
-        val key = draftApiKey.value
-        if (providerId.isBlank() || key.isBlank()) {
-            credentialMessage.value = "Provider id and API key are required"
-            return
-        }
-        runCatching {
-            credentials.setCredential(providerId, key)
-            draftApiKey.value = ""
-            credentialMessage.value = "API key saved for $providerId"
-            credentialTick.update { it + 1 }
-        }.onFailure { error ->
-            credentialMessage.value = error.message ?: "Failed to save API key"
+    fun openProviderAuth(providerId: String) {
+        val methods = oauthState.value.methods[providerId].orEmpty()
+        if (methods.isEmpty()) return
+        val providerName = state.value.availableProviders
+            .firstOrNull { it.id == providerId }
+            ?.name
+            ?: providerId
+        oauthState.update {
+            it.copy(
+                dialog = ProviderAuthDialogState(
+                    providerId = providerId,
+                    providerName = providerName,
+                    methods = methods
+                ),
+                notice = null,
+                message = null
+            )
         }
     }
 
-    fun clearApiKey(providerId: String) {
-        credentials.clearCredential(providerId)
-        credentialMessage.value = "API key cleared for $providerId"
-        credentialTick.update { it + 1 }
+    fun selectProviderAuthMethod(methodIndex: Int) {
+        val current = oauthState.value.dialog ?: return
+        val method = current.methods.getOrNull(methodIndex) ?: return
+        val updated = current.copy(
+            methodIndex = methodIndex,
+            inputs = emptyMap(),
+            apiKey = "",
+            authorization = null,
+            failed = false,
+            error = null
+        )
+        oauthState.update { it.copy(dialog = updated, notice = null, message = null) }
+        if (method.type == "oauth" && method.prompts.isEmpty()) submitProviderAuth()
     }
 
-    fun refreshProviderAuth() {
+    fun updateProviderAuthInput(key: String, value: String) {
+        oauthState.update { current ->
+            val dialog = current.dialog ?: return@update current
+            current.copy(
+                dialog = dialog.copy(
+                    inputs = dialog.inputs + (key to value),
+                    failed = false,
+                    error = null
+                )
+            )
+        }
+    }
+
+    fun updateProviderApiKey(value: String) {
+        oauthState.update { current ->
+            val dialog = current.dialog ?: return@update current
+            current.copy(dialog = dialog.copy(apiKey = value, failed = false, error = null))
+        }
+    }
+
+    fun submitProviderAuth() {
+        val dialog = oauthState.value.dialog ?: return
+        val methodIndex = dialog.methodIndex ?: return
+        val method = dialog.selectedMethod ?: return
+        if (dialog.isSubmitting || providerAuthJob?.isActive == true || !dialog.promptsComplete) return
+        when (method.type) {
+            "api" -> submitProviderApiKey(dialog)
+            "oauth" -> beginProviderOAuth(dialog, methodIndex)
+        }
+    }
+
+    private fun submitProviderApiKey(dialog: ProviderAuthDialogState) {
         val target = registry.selected.value ?: return
-        viewModelScope.launch {
-            runCatching { target.providerAuthMethods() }
-                .onSuccess { methods ->
-                    oauthState.update { it.copy(methods = methods, message = null) }
-                }
-                .onFailure { error ->
-                    oauthState.update {
-                        it.copy(
-                            methods = emptyMap(),
-                            message = error.message?.takeIf(String::isNotBlank)
-                                ?: "Provider authentication methods are unavailable"
-                        )
-                    }
-                }
-        }
-    }
-
-    fun startOAuth(providerId: String, methodIndex: Int) {
-        val target = registry.selected.value ?: run {
-            oauthState.update { it.copy(message = "Select an OpenCode runtime first") }
-            return
-        }
-        viewModelScope.launch {
-            runCatching { target.authorizeProvider(providerId, methodIndex) }
-                .onSuccess { authorization ->
-                    credentials.unmanageProvider(providerId)
-                    oauthState.update {
-                        it.copy(
-                            providerId = providerId,
-                            methodIndex = methodIndex,
-                            authorization = authorization,
-                            message = null
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    oauthState.update {
-                        it.copy(message = error.message?.takeIf(String::isNotBlank) ?: "OAuth authorization failed")
-                    }
-                }
-        }
-    }
-
-    fun completeOAuth(providerId: String, methodIndex: Int, code: String?) {
-        val target = registry.selected.value ?: return
-        viewModelScope.launch {
-            runCatching { target.completeProviderOAuth(providerId, methodIndex, code) }
+        val apiKey = dialog.apiKey.trim()
+        if (apiKey.isEmpty()) return
+        providerAuthJob = viewModelScope.launch {
+            oauthState.update {
+                it.copy(dialog = dialog.copy(isSubmitting = true, failed = false, error = null))
+            }
+            runCatching { target.setProviderApiKey(dialog.providerId, apiKey, dialog.inputs) }
                 .onSuccess { completed ->
                     if (completed) {
-                        oauthState.value = OAuthState(
-                            methods = oauthState.value.methods,
-                            message = "OAuth authentication completed for $providerId"
-                        )
-                        credentialTick.update { it + 1 }
-                        refreshProviderAuth()
+                        credentials.unmanageProvider(dialog.providerId)
+                        finishProviderAuth(ProviderAuthNotice.CONNECTED)
                     } else {
-                        oauthState.update { it.copy(message = "OAuth authentication was not completed") }
+                        updateProviderAuthError(null)
+                    }
+                }
+                .onFailure(::updateProviderAuthError)
+        }
+    }
+
+    private fun beginProviderOAuth(dialog: ProviderAuthDialogState, methodIndex: Int) {
+        val target = registry.selected.value ?: return
+        providerAuthJob = viewModelScope.launch {
+            oauthState.update {
+                it.copy(dialog = dialog.copy(isSubmitting = true, failed = false, error = null))
+            }
+            runCatching { target.authorizeProvider(dialog.providerId, methodIndex, dialog.inputs) }
+                .onSuccess { authorization ->
+                    credentials.unmanageProvider(dialog.providerId)
+                    val authorized = dialog.copy(
+                        authorization = authorization,
+                        isSubmitting = authorization.method == "auto",
+                        failed = false,
+                        error = null
+                    )
+                    oauthState.update { it.copy(dialog = authorized, notice = null, message = null) }
+                    if (authorization.method == "auto") {
+                        runCatching { target.completeProviderOAuth(dialog.providerId, methodIndex, null) }
+                            .onSuccess { completed ->
+                                if (completed) finishProviderAuth(ProviderAuthNotice.CONNECTED)
+                                else updateProviderAuthError(null)
+                            }
+                            .onFailure(::updateProviderAuthError)
+                    }
+                }
+                .onFailure(::updateProviderAuthError)
+        }
+    }
+
+    fun completeProviderOAuth(code: String) {
+        val dialog = oauthState.value.dialog ?: return
+        val methodIndex = dialog.methodIndex ?: return
+        if (dialog.authorization?.method != "code" || code.isBlank()) return
+        val target = registry.selected.value ?: return
+        if (providerAuthJob?.isActive == true) return
+        providerAuthJob = viewModelScope.launch {
+            oauthState.update {
+                it.copy(dialog = dialog.copy(isSubmitting = true, failed = false, error = null))
+            }
+            runCatching { target.completeProviderOAuth(dialog.providerId, methodIndex, code.trim()) }
+                .onSuccess { completed ->
+                    if (completed) finishProviderAuth(ProviderAuthNotice.CONNECTED)
+                    else updateProviderAuthError(null)
+                }
+                .onFailure(::updateProviderAuthError)
+        }
+    }
+
+    fun disconnectProvider(providerId: String) {
+        val target = registry.selected.value ?: return
+        if (providerAuthJob?.isActive == true) return
+        providerAuthJob = viewModelScope.launch {
+            runCatching { target.removeProviderAuth(providerId) }
+                .onSuccess { removed ->
+                    if (removed) {
+                        if (target.kind == BackendKind.LOCAL) credentials.clearCredential(providerId)
+                        finishProviderAuth(ProviderAuthNotice.DISCONNECTED)
                     }
                 }
                 .onFailure { error ->
-                    oauthState.update {
-                        it.copy(message = error.message?.takeIf(String::isNotBlank) ?: "OAuth callback failed")
-                    }
+                    oauthState.update { it.copy(message = error.message?.takeIf(String::isNotBlank)) }
                 }
         }
     }
 
-    fun consumeOAuthAuthorization() {
-        oauthState.update { it.copy(authorization = null) }
+    fun dismissProviderAuth() {
+        providerAuthJob?.cancel()
+        providerAuthJob = null
+        oauthState.update { it.copy(dialog = null, message = null) }
     }
 
-    fun dismissOAuth() {
-        oauthState.update { it.copy(providerId = null, methodIndex = null, authorization = null) }
+    fun consumeProviderAuthNotice() {
+        oauthState.update { it.copy(notice = null) }
     }
 
     fun reportOAuthError(message: String) {
-        oauthState.update {
-            it.copy(message = message.takeIf(String::isNotBlank) ?: "Unable to open the OAuth browser")
+        providerAuthJob?.cancel()
+        updateProviderAuthError(message.takeIf(String::isNotBlank))
+    }
+
+    private fun finishProviderAuth(notice: ProviderAuthNotice) {
+        providerAuthJob = null
+        oauthState.update { it.copy(dialog = null, notice = notice, message = null) }
+        credentialTick.update { it + 1 }
+        catalog.refresh()
+        refreshProviderAuth()
+    }
+
+    private fun updateProviderAuthError(error: Throwable) {
+        updateProviderAuthError(error.message?.takeIf(String::isNotBlank))
+    }
+
+    private fun updateProviderAuthError(message: String?) {
+        providerAuthJob = null
+        oauthState.update { current ->
+            current.copy(
+                dialog = current.dialog?.copy(
+                    isSubmitting = false,
+                    failed = true,
+                    error = message
+                ),
+                message = if (current.dialog == null) message else null
+            )
+        }
+    }
+
+    fun refreshProviderAuth() {
+        val target = registry.selected.value ?: run {
+            oauthState.value = OAuthState()
+            return
+        }
+        viewModelScope.launch {
+            runCatching { target.providerAuthMethods() }
+                .onSuccess { methods ->
+                    oauthState.update { current -> current.copy(methods = methods, message = null) }
+                }
+                .onFailure { error ->
+                    oauthState.update { current ->
+                        current.copy(
+                            methods = emptyMap(),
+                            message = error.message?.takeIf(String::isNotBlank)
+                        )
+                    }
+                }
         }
     }
 

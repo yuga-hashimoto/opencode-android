@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Security
@@ -33,7 +31,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,8 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeAgent
@@ -62,10 +57,13 @@ fun SettingsScreen(
     onThemeModeChange: (String?) -> Unit = {},
     onDynamicColorChange: (Boolean) -> Unit = {},
     onReplayOnboarding: () -> Unit = {},
-    onDraftProviderId: (String) -> Unit = {},
-    onDraftApiKey: (String) -> Unit = {},
-    onSaveApiKey: () -> Unit = {},
-    onClearApiKey: (String) -> Unit = {},
+    onOpenProviderAuth: (String) -> Unit = {},
+    onSelectProviderAuthMethod: (Int) -> Unit = {},
+    onProviderAuthInput: (String, String) -> Unit = { _, _ -> },
+    onProviderApiKey: (String) -> Unit = {},
+    onSubmitProviderAuth: () -> Unit = {},
+    onCompleteProviderOAuth: (String) -> Unit = {},
+    onDisconnectProvider: (String) -> Unit = {},
     onAssistantRuntime: (String?) -> Unit = {},
     onAssistantWorkspace: (String?) -> Unit = {},
     onAssistantModel: (String, String) -> Unit = { _, _ -> },
@@ -80,10 +78,8 @@ fun SettingsScreen(
     onInstallWakeWord: () -> Unit = {},
     onWakeWordListeningChange: (Boolean) -> Unit = {},
     onDeleteWakeWord: () -> Unit = {},
-    onStartOAuth: (String, Int) -> Unit = { _, _ -> },
     onLaunchOAuthBrowser: (String) -> Unit = {},
-    onSubmitOAuthCode: (String, Int, String?) -> Unit = { _, _, _ -> },
-    onDismissOAuth: () -> Unit = {}
+    onDismissProviderAuth: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -340,74 +336,73 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(12.dp))
-                state.credentialStatuses.forEach { (providerId, saved) ->
-                    LabelValueRow(
-                        label = providerId,
-                        value = if (saved) {
-                            stringResource(R.string.key_saved)
-                        } else {
-                            stringResource(R.string.key_missing)
-                        }
+                if (state.providerAuthMethods.isEmpty()) {
+                    Text(
+                        stringResource(R.string.provider_auth_unavailable),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (saved) {
-                        Spacer(Modifier.height(4.dp))
-                        OutlinedButton(
-                            onClick = { onClearApiKey(providerId) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(stringResource(R.string.clear_api_key))
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
                 }
                 state.providerAuthMethods.toSortedMap().forEach { (providerId, methods) ->
-                    Text(
-                        text = providerId,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
+                    val providerName = state.availableProviders
+                        .firstOrNull { it.id == providerId }
+                        ?.name
+                        ?: providerId
+                    val connected = providerId in state.connectedProviderIds
+                    LabelValueRow(
+                        label = providerName,
+                        value = if (connected) {
+                            stringResource(R.string.provider_connected)
+                        } else {
+                            stringResource(R.string.provider_not_connected)
+                        }
                     )
-                    methods.forEachIndexed { methodIndex, method ->
-                        if (method.type == "oauth") {
-                            Spacer(Modifier.height(4.dp))
-                            OutlinedButton(
-                                onClick = { onStartOAuth(providerId, methodIndex) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(method.label)
+                    Text(
+                        text = methods.joinToString(" · ") { it.label },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = { onOpenProviderAuth(providerId) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (connected) {
+                                stringResource(R.string.provider_change_connection)
+                            } else {
+                                stringResource(R.string.provider_connect)
                             }
+                        )
+                    }
+                    if (connected) {
+                        TextButton(
+                            onClick = { onDisconnectProvider(providerId) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.provider_disconnect))
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
                 }
-                OutlinedTextField(
-                    value = state.draftProviderId,
-                    onValueChange = onDraftProviderId,
-                    label = { Text(stringResource(R.string.provider_id_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) }
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = state.draftApiKey,
-                    onValueChange = onDraftApiKey,
-                    label = { Text(stringResource(R.string.api_key_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = onSaveApiKey, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.save_api_key))
+                state.providerAuthNotice?.let { notice ->
+                    Text(
+                        text = stringResource(
+                            when (notice) {
+                                ProviderAuthNotice.CONNECTED -> R.string.provider_connected_success
+                                ProviderAuthNotice.DISCONNECTED -> R.string.provider_disconnected_success
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                state.credentialMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                }
-                state.oauthMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                state.oauthMessage?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
@@ -562,56 +557,19 @@ fun SettingsScreen(
         item { Spacer(Modifier.height(72.dp)) }
     }
 
-    val authorization = state.oauthAuthorization
-    val providerId = state.oauthProviderId
-    if (authorization != null && providerId != null) {
-        var code by remember(authorization.url) { mutableStateOf("") }
-        LaunchedEffect(authorization.url) {
-            onLaunchOAuthBrowser(authorization.url)
-        }
-        AlertDialog(
-            onDismissRequest = onDismissOAuth,
-            title = { Text(stringResource(R.string.oauth_authentication)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(authorization.instructions)
-                    if (authorization.method == "code") {
-                        OutlinedTextField(
-                            value = code,
-                            onValueChange = { code = it },
-                            label = { Text(stringResource(R.string.oauth_code_hint)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text(
-                            stringResource(R.string.oauth_browser_opened),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    enabled = authorization.method != "code" || code.isNotBlank(),
-                    onClick = {
-                        val methodIndex = state.oauthMethodIndex ?: -1
-                        if (methodIndex >= 0) {
-                            onSubmitOAuthCode(providerId, methodIndex, code.takeIf(String::isNotBlank))
-                        }
-                    }
-                ) {
-                    Text(stringResource(R.string.oauth_complete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismissOAuth) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
+    state.providerAuthDialog?.let { dialog ->
+        ProviderAuthDialog(
+            state = dialog,
+            onSelectMethod = onSelectProviderAuthMethod,
+            onInputChange = onProviderAuthInput,
+            onApiKeyChange = onProviderApiKey,
+            onSubmit = onSubmitProviderAuth,
+            onCompleteCode = onCompleteProviderOAuth,
+            onLaunchBrowser = onLaunchOAuthBrowser,
+            onDismiss = onDismissProviderAuth
         )
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

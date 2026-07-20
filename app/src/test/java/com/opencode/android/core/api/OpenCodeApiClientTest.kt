@@ -161,6 +161,81 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `provider auth methods parse prompts and conditional rules`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"custom":[{"type":"oauth","label":"Workspace login","prompts":[{"type":"select","key":"region","message":"Region","options":[{"label":"US","value":"us","hint":"United States"}]},{"type":"text","key":"tenant","message":"Tenant","placeholder":"acme","when":{"key":"region","op":"eq","value":"us"}}]}]}"""
+            )
+        )
+        val client = client()
+
+        val method = client.providerAuthMethods().getValue("custom").single()
+
+        assertEquals("Workspace login", method.label)
+        assertEquals("United States", method.prompts.first().options.single().hint)
+        assertTrue(method.prompts[1].isVisible(mapOf("region" to "us")))
+        assertTrue(!method.prompts[1].isVisible(mapOf("region" to "eu")))
+    }
+
+    @Test
+    fun `oauth authorize sends provider prompt inputs`() = runBlocking {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"url":"https://auth.example/login","method":"auto","instructions":"Enter code: ABCD"}"""
+            )
+        )
+        val client = client()
+
+        client.authorizeProvider("custom/provider", 2, mapOf("tenant" to "acme", "region" to "us"))
+
+        val request = server.takeRequest()
+        assertEquals("/provider/custom%2Fprovider/oauth/authorize", request.path)
+        val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+        assertEquals(2, json["method"].asInt)
+        assertEquals("acme", json.getAsJsonObject("inputs")["tenant"].asString)
+        assertEquals("us", json.getAsJsonObject("inputs")["region"].asString)
+    }
+
+    @Test
+    fun `sets and removes provider auth on selected runtime`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        assertTrue(client.setProviderApiKey("custom", "key-value", mapOf("region" to "us")))
+        assertTrue(client.removeProviderAuth("custom"))
+
+        val put = server.takeRequest()
+        assertEquals("PUT", put.method)
+        assertEquals("/auth/custom", put.path)
+        val auth = JsonParser.parseString(put.body.readUtf8()).asJsonObject
+        assertEquals("api", auth["type"].asString)
+        assertEquals("key-value", auth["key"].asString)
+        assertEquals("us", auth.getAsJsonObject("metadata")["region"].asString)
+        val delete = server.takeRequest()
+        assertEquals("DELETE", delete.method)
+        assertEquals("/auth/custom", delete.path)
+    }
+
+    @Test
+    fun `provider auth errors do not expose response bodies`() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setBody("""{"error":"invalid key sk-super-secret"}""")
+        )
+        val client = client()
+
+        val error = runCatching {
+            client.setProviderApiKey("custom", "sk-super-secret")
+        }.exceptionOrNull() as OpenCodeApiException
+
+        assertEquals(400, error.statusCode)
+        assertTrue(!error.message.orEmpty().contains("sk-super-secret"))
+        assertTrue(!error.message.orEmpty().contains("invalid key"))
+    }
+
+    @Test
     fun `responds to permission request`() = runBlocking {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()

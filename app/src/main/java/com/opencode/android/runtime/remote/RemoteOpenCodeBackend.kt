@@ -45,8 +45,18 @@ class RemoteOpenCodeBackend(
     override suspend fun listProviders(): ProviderCatalog = client.providers()
     override suspend fun listAgents(): List<OpenCodeAgent> = client.agents()
     override suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> = client.providerAuthMethods()
-    override suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
-        client.authorizeProvider(providerId, methodIndex)
+    override suspend fun authorizeProvider(
+        providerId: String,
+        methodIndex: Int,
+        inputs: Map<String, String>
+    ): ProviderAuthAuthorization = client.authorizeProvider(providerId, methodIndex, inputs)
+    override suspend fun setProviderApiKey(
+        providerId: String,
+        apiKey: String,
+        metadata: Map<String, String>
+    ): Boolean = client.setProviderApiKey(providerId, apiKey, metadata)
+    override suspend fun removeProviderAuth(providerId: String): Boolean =
+        client.removeProviderAuth(providerId)
     override suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
         client.completeProviderOAuth(providerId, methodIndex, code)
     override suspend fun listProjects(directory: String?): List<OpenCodeProject> = client.projects(directory)

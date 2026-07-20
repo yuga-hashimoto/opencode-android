@@ -51,8 +51,18 @@ interface OpenCodeBackend {
     suspend fun listAgents(): List<OpenCodeAgent>
     suspend fun providerAuthMethods(): Map<String, List<ProviderAuthMethod>> =
         unsupported("provider auth methods")
-    suspend fun authorizeProvider(providerId: String, methodIndex: Int): ProviderAuthAuthorization =
-        unsupported("provider OAuth authorization")
+    suspend fun authorizeProvider(
+        providerId: String,
+        methodIndex: Int,
+        inputs: Map<String, String> = emptyMap()
+    ): ProviderAuthAuthorization = unsupported("provider OAuth authorization")
+    suspend fun setProviderApiKey(
+        providerId: String,
+        apiKey: String,
+        metadata: Map<String, String> = emptyMap()
+    ): Boolean = unsupported("provider API authentication")
+    suspend fun removeProviderAuth(providerId: String): Boolean =
+        unsupported("provider authentication removal")
     suspend fun completeProviderOAuth(providerId: String, methodIndex: Int, code: String?): Boolean =
         unsupported("provider OAuth callback")
     suspend fun listProjects(directory: String? = null): List<OpenCodeProject> = unsupported("projects")
