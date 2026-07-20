@@ -1,0 +1,35 @@
+name: Apply UI Navigation Patch
+
+on:
+  push:
+    branches:
+      - fix/ui-cleanup-and-setup-guard
+    paths:
+      - 'scripts/apply_ui_navigation_patch.py'
+      - '.github/workflows/apply-ui-navigation-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[ui-nav-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ui-cleanup-and-setup-guard
+          fetch-depth: 0
+      - name: Apply navigation patch
+        run: python3 scripts/apply_ui_navigation_patch.py
+      - name: Commit navigation patch
+        run: |
+          if git diff --quiet; then
+            echo 'No navigation patch needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/java/com/opencode/android/ui/OpenCodeApp.kt
+          git commit -m 'fix: wire direct runtime setup navigation [ui-nav-applied]'
+          git push origin HEAD:fix/ui-cleanup-and-setup-guard
