@@ -68,6 +68,8 @@ class UiScreenshotInstrumentedTest {
                 onMic = {},
                 onNewChat = {},
                 onOpenHistory = {},
+                onOpenLocalSetup = {},
+                onOpenRemoteSetup = {},
                 onOpenDrawer = {}
             )
         }
@@ -100,6 +102,8 @@ class UiScreenshotInstrumentedTest {
                 onMic = {},
                 onNewChat = {},
                 onOpenHistory = {},
+                onOpenLocalSetup = {},
+                onOpenRemoteSetup = {},
                 onOpenDrawer = {}
             )
         }
@@ -152,6 +156,8 @@ class UiScreenshotInstrumentedTest {
                     onMic = {},
                     onNewChat = {},
                     onOpenHistory = {},
+                    onOpenLocalSetup = {},
+                    onOpenRemoteSetup = {},
                     onOpenDrawer = {}
                 )
             }
