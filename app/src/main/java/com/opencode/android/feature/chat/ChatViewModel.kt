@@ -77,6 +77,13 @@ data class PendingQuestionUi(
 }
 
 private const val MAX_TOOL_OUTPUT_CHARS = 4000
+private const val RESPONSE_POLL_INTERVAL_MS = 3000L
+private const val RESPONSE_POLL_TIMEOUT_MS = 120_000L
+private const val TRANSIENT_RECOVERY_DELAY_MS = 5000L
+private const val HEALTH_CHECK_ATTEMPTS = 15
+private const val HEALTH_CHECK_DELAY_MS = 2000L
+private const val SPEECH_RMS_MIN_DB = -60f
+private const val SPEECH_RMS_MAX_DB = 0f
 
 private fun OpenCodePart.toChatPart(): ChatPart? {
     val partId = id ?: return null
@@ -152,9 +159,11 @@ data class ChatUiState(
     val isRunning: Boolean = false,
     val isLoadingHistory: Boolean = false,
     val isListening: Boolean = false,
+    val isSpeechProcessing: Boolean = false,
     val isThinking: Boolean = false,
     val isSpeaking: Boolean = false,
     val partialText: String = "",
+    val voiceLevel: Float = 0f,
     val selectedProviderId: String? = null,
     val selectedModelId: String? = null,
     val selectedAgentId: String? = null,
@@ -569,19 +578,69 @@ class ChatViewModel(
     }
 
     fun startListening() {
-        _uiState.update { it.copy(isListening = true, partialText = "", error = null) }
+        _uiState.update {
+            it.copy(
+                isListening = true,
+                isSpeechProcessing = false,
+                partialText = "",
+                voiceLevel = 0f,
+                error = null
+            )
+        }
+    }
+
+    fun updateSpeechRms(rmsdB: Float) {
+        _uiState.update {
+            it.copy(
+                isListening = true,
+                isSpeechProcessing = false,
+                voiceLevel = normalizeSpeechRms(rmsdB)
+            )
+        }
     }
 
     fun updateSpeechPartial(text: String) {
-        _uiState.update { it.copy(isListening = true, partialText = text) }
+        _uiState.update {
+            it.copy(
+                isListening = true,
+                isSpeechProcessing = false,
+                partialText = text
+            )
+        }
+    }
+
+    fun showSpeechProcessing() {
+        _uiState.update {
+            it.copy(
+                isListening = false,
+                isSpeechProcessing = true,
+                partialText = "",
+                voiceLevel = 0f
+            )
+        }
     }
 
     fun reportSpeechError(message: String) {
-        _uiState.update { it.copy(isListening = false, partialText = "", error = message) }
+        _uiState.update {
+            it.copy(
+                isListening = false,
+                isSpeechProcessing = false,
+                partialText = "",
+                voiceLevel = 0f,
+                error = message
+            )
+        }
     }
 
     fun stopListening() {
-        _uiState.update { it.copy(isListening = false, partialText = "") }
+        _uiState.update {
+            it.copy(
+                isListening = false,
+                isSpeechProcessing = false,
+                partialText = "",
+                voiceLevel = 0f
+            )
+        }
     }
 
     fun stopSpeaking() {
@@ -598,6 +657,47 @@ class ChatViewModel(
 
     private fun Throwable.safeMessage(): String =
         message?.takeIf { it.isNotBlank() } ?: "OpenCode operation failed"
+
+    private fun normalizeSpeechRms(rmsdB: Float): Float =
+        ((rmsdB - SPEECH_RMS_MIN_DB) / (SPEECH_RMS_MAX_DB - SPEECH_RMS_MIN_DB))
+            .coerceIn(0f, 1f)
+
+    private fun reportError(message: String?) {
+        _uiState.update { it.copy(error = message) }
+        if (classifyChatError(message) == ChatErrorKind.TRANSIENT_CONNECTION) {
+            scheduleTransientRecovery()
+        }
+    }
+
+    private fun scheduleTransientRecovery() {
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(TRANSIENT_RECOVERY_DELAY_MS)
+            val currentBackend = backend ?: return@launch
+            if (classifyChatError(_uiState.value.error) != ChatErrorKind.TRANSIENT_CONNECTION) return@launch
+            runCatching { currentBackend.health() }
+                .onSuccess { health ->
+                    if (health.healthy) {
+                        val session = _uiState.value.sessionId
+                        if (session != null) {
+                            runCatching { currentBackend.listMessages(session) }
+                                .onSuccess { messages ->
+                                    streamedParts.clear()
+                                    _uiState.update {
+                                        it.copy(
+                                            messages = messages.mapNotNull(::toUiMessage),
+                                            error = null,
+                                            isConnected = true
+                                        )
+                                    }
+                                }
+                                .onFailure { _uiState.update { s -> s.copy(error = null) } }
+                        } else {
+                            _uiState.update { it.copy(error = null, isConnected = true) }
+                        }
+                    }
+                }
+        }
+    }
 }
 
 private fun updateQuestionAnswerSelection(

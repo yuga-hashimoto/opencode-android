@@ -48,6 +48,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,7 +61,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -212,6 +219,9 @@ fun ChatHomeScreen(
                 },
                 onAbort = onAbort,
                 onMic = onMic,
+                isListening = state.isListening,
+                isSpeechProcessing = state.isSpeechProcessing,
+                voiceLevel = state.voiceLevel,
                 modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
                 onModelChipClick = { showModelPicker = true },
                 agents = agents,
@@ -433,6 +443,9 @@ private fun ChatComposer(
     onSend: () -> Unit,
     onAbort: () -> Unit,
     onMic: () -> Unit,
+    isListening: Boolean,
+    isSpeechProcessing: Boolean,
+    voiceLevel: Float,
     modelLabel: String,
     onModelChipClick: () -> Unit,
     agents: List<OpenCodeAgent>,
@@ -479,6 +492,17 @@ private fun ChatComposer(
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                 )
             }
+            if (isListening || isSpeechProcessing) {
+                Spacer(Modifier.height(8.dp))
+                if (isListening) {
+                    ListeningStatus(
+                        voiceLevel = voiceLevel,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    ProcessingStatus(modifier = Modifier.fillMaxWidth())
+                }
+            }
             Spacer(Modifier.height(6.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -502,12 +526,32 @@ private fun ChatComposer(
                     onSelect = onSelectWorkspace
                 )
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onMic, modifier = Modifier.size(38.dp)) {
+                val micContainerColor = if (isListening) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+                val micContentColor = if (isListening) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Surface(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(19.dp))
+                        .testTag("chat-mic-button"),
+                    shape = RoundedCornerShape(19.dp),
+                    color = micContainerColor
+                ) {
+                    IconButton(onClick = onMic, modifier = Modifier.fillMaxSize()) {
                     Icon(
                         Icons.Default.Mic,
                         contentDescription = stringResource(R.string.voice),
-                        modifier = Modifier.size(21.dp)
+                        modifier = Modifier.size(21.dp),
+                        tint = micContentColor
                     )
+                }
                 }
                 if (isRunning) {
                     FilledIconButton(onClick = onAbort, modifier = Modifier.size(38.dp)) {
@@ -528,6 +572,99 @@ private fun ChatComposer(
                 }
             }
         }
+    }
+}
+
+private val waveformBarMultipliers = listOf(0.42f, 0.7f, 0.94f, 1f, 0.9f, 0.66f, 0.38f)
+
+@Composable
+private fun ListeningStatus(
+    voiceLevel: Float,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.voice_state_listening),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        VoiceWaveform(
+            voiceLevel = voiceLevel,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun VoiceWaveform(
+    voiceLevel: Float,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.testTag("chat-voice-waveform"),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        waveformBarMultipliers.forEachIndexed { index, multiplier ->
+            val transition = rememberInfiniteTransition(label = "voiceBar$index")
+            val pulse by transition.animateFloat(
+                initialValue = 0.2f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = 650 + (index * 35),
+                        delayMillis = index * 45
+                    ),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "voiceBarPulse$index"
+            )
+            val animatedLevel = ((voiceLevel * multiplier) + (0.16f * pulse)).coerceIn(0f, 1f)
+            val barHeight = 8.dp + (18.dp * animatedLevel)
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(barHeight)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .testTag("chat-voice-waveform-bar-$index")
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProcessingStatus(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("chat-voice-processing"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp
+        )
+        Text(
+            text = stringResource(R.string.processing),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

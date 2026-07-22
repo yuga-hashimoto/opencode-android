@@ -191,9 +191,9 @@ fun OpenCodeApp(
                 speechManager.startListening(speechLocaleTag(context)).collect { result ->
                     when (result) {
                         SpeechResult.Ready,
-                        SpeechResult.Listening,
-                        SpeechResult.Processing,
-                        is SpeechResult.RmsChanged -> Unit
+                        SpeechResult.Listening -> Unit
+                        SpeechResult.Processing -> chatViewModel.showSpeechProcessing()
+                        is SpeechResult.RmsChanged -> chatViewModel.updateSpeechRms(result.rmsdB)
                         is SpeechResult.PartialResult -> chatViewModel.updateSpeechPartial(result.text)
                         is SpeechResult.Result -> {
                             chatViewModel.stopListening()
