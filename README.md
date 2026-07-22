@@ -1,143 +1,129 @@
 # OpenCode Android
 
-**OpenCodeをAndroidローカルまたはPCリモートで使う、非公式のオープンソースAndroidクライアントです。**
+<p align="center">
+  <img src="docs/screenshot.png" width="280" alt="OpenCode Android screenshot" />
+</p>
 
-OpenCode本体はフォークせず、同じREST/SSE APIをAndroid内ランタイムとPC上の`opencode serve`の両方で利用します。
+<p align="center">
+  <a href="https://github.com/yuga-hashimoto/opencode-android/actions/workflows/android.yml"><img src="https://github.com/yuga-hashimoto/opencode-android/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/yuga-hashimoto/opencode-android/releases/latest"><img src="https://img.shields.io/github/v/release/yuga-hashimoto/opencode-android" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/yuga-hashimoto/opencode-android" alt="License: MIT" /></a>
+  <a href="https://github.com/yuga-hashimoto/opencode-android/releases/latest"><img src="https://img.shields.io/github/downloads/yuga-hashimoto/opencode-android/total" alt="Downloads" /></a>
+</p>
+
+**An unofficial, open-source Android client for [OpenCode](https://github.com/sst/opencode) — run AI coding agents on your phone or connect to a remote PC.**
+
+OpenCode Android does not fork OpenCode. It uses the same REST/SSE API to talk to either an on-device runtime (Alpine Linux + OpenCode binary via PRoot) or a remote `opencode serve` instance on your PC/Mac/Linux.
 
 > [!IMPORTANT]
-> OpenCode AndroidはOpenCode公式プロジェクトではありません。
+> This is **not** an official OpenCode project.
 
-## 主な機能
+[日本語のREADMEはこちら](README.ja.md)
 
-- Android端末内へのOpenCode、Alpine Linux、Git、bash、curl、ripgrepの自動セットアップ
-- PC・Mac・Linux上のOpenCodeへLANまたはTailscale経由で接続
-- Androidローカル／PCリモートの実行先切り替え
-- OpenCodeのモデル・プロバイダー・エージェントを動的取得
-- 新規セッション作成、既存セッション再開、セッション名の変更・削除
-- QRコードまたはLAN上のmDNS検索によるPC接続先の追加
-- SSEによる回答・実行状況・承認要求のリアルタイム受信
-- reasoning・ツール実行・コマンド出力を折りたたみ表示できる構造化チャットタイムライン
-- チャットヘッダーのメニューから会話をAndroidローカル／PCリモートの別の実行先へ引き継ぎ
-- 危険なツール操作の許可・拒否
-- Android音声認識によるプッシュ・トゥ・トーク
-- Android Text-to-Speechによる回答読み上げ
-- Androidの既定デジタルアシスタントとして起動
-- 接続情報をAndroid Keystoreで暗号化保存
-- 日本語・英語表示
+---
 
-## 画面構成
+## Features
 
-- **ホーム**: 現在の実行先、モデル、エージェント、最近のセッション
-- **チャット**: 会話、reasoning・ツール実行・コマンド出力の折りたたみ表示、音声入力、モデル切り替え、承認操作、別の実行先へのハンドオフ
-- **作業先**: Androidローカルランタイム、PC接続先、作業フォルダ
-- **履歴**: 実行中タスク、承認待ち、セッション、イベントログ
-- **設定**: ホームアシスト、TTS、連続会話、現在の構成
+- **On-device runtime** — Alpine Linux, Git, bash, curl, ripgrep, and OpenCode auto-installed on your Android device via PRoot
+- **Remote connection** — Connect to OpenCode running on your PC/Mac/Linux over LAN or Tailscale
+- **Runtime switching** — Seamlessly switch between local and remote execution, even mid-conversation (handoff)
+- **Dynamic models** — Models, providers, and agents fetched live from your OpenCode instance
+- **Session management** — Create, resume, rename, and delete sessions
+- **Discovery** — Find PCs via QR code or mDNS (zero-config LAN discovery)
+- **Real-time streaming** — SSE-based live responses, tool execution, and approval requests
+- **Structured timeline** — Collapsible reasoning, tool calls, and command output
+- **Approval flow** — Approve or reject dangerous tool operations
+- **Voice input** — Push-to-talk with Android speech recognition + wake word detection
+- **Text-to-speech** — Read responses aloud
+- **Digital assistant** — Register as Android's default assistant (home gesture / corner swipe)
+- **Secure storage** — Connection credentials encrypted with Android Keystore
+- **Bilingual** — English and Japanese UI
 
-## Androidローカル実行
+## Screens
 
-**作業先 → このAndroid端末 → この端末へセットアップ**を押すと、Foreground Serviceで次を実行します。
+| Screen | Description |
+|--------|-------------|
+| Home | Current runtime, model, agent, recent sessions |
+| Chat | Conversation with collapsible reasoning/tools, voice input, model switching, approvals, handoff |
+| Workspaces | Local runtime, PC connections, working folders |
+| History | Running tasks, pending approvals, sessions, event log |
+| Settings | Home assistant, TTS, continuous conversation, configuration |
 
-1. APKに含まれる最小のAndroidネイティブPRootランナーを確認
-2. Alpine Linux minirootfsを公式CDNからダウンロード
-3. OpenCodeの公式muslバイナリをGitHub Releasesからダウンロード
-4. 両方のSHA-256を検証
-5. 一時領域へ安全に展開
-6. Alpine内へGit、bash、curl、ripgrep、CA証明書を導入
-7. `127.0.0.1:4097`でOpenCodeサーバーを起動
-8. Androidアプリをローカル実行先へ切り替え
+## Quick Start
 
-ダウンロードまたは展開に失敗した場合、既存ランタイムは維持されます。セットアップ後は起動、停止、修復・再導入を作業先画面から操作できます。
+### Option A: On-Device (no PC needed)
 
-### 固定バージョン
+1. Install the APK from [Releases](https://github.com/yuga-hashimoto/opencode-android/releases/latest)
+2. Open the app → **Workspaces → This Android device → Set up on this device**
+3. Wait for the runtime to download and install (~2 min on a good connection)
+4. Start chatting with your AI coding agent
 
-初期ランタイムマニフェストは次を固定しています。
+### Option B: Remote PC
+
+1. Start OpenCode on your PC:
+
+```bash
+OPENCODE_SERVER_PASSWORD='your-strong-password' \
+  opencode serve --hostname 0.0.0.0 --port 4096 --mdns
+```
+
+2. Install the APK on your Android device
+3. Open the app → **Workspaces → Add connection**
+4. Enter your PC's IP (or use **LAN search** / **QR code** for auto-discovery)
+
+```text
+Name:     Mac mini
+URL:      http://192.168.1.10:4096
+Username: opencode
+Password: your-strong-password
+```
+
+> Tailscale works too: `http://100.x.y.z:4096` or `http://your-mac.tailnet-name.ts.net:4096`
+
+### QR Code Setup
+
+Generate a QR code on your PC:
+
+```bash
+npx qrcode "opencode://connect?name=Mac%20mini&url=http%3A%2F%2F192.168.1.10%3A4096&username=opencode&password=your-password&insecure=true"
+```
+
+Then scan it from **Workspaces → Add via QR** in the app.
+
+## Security
+
+- **Never** expose port 4096 directly to the internet
+- Use LAN or Tailscale for connectivity
+- Use an HTTPS reverse proxy on public networks
+- The app never auto-approves dangerous operations
+- Plaintext HTTP on LAN requires explicit per-connection opt-in
+
+## On-Device Runtime Details
+
+The setup process (triggered from Workspaces):
+
+1. Verifies the native PRoot runner bundled in the APK
+2. Downloads Alpine Linux minirootfs from the official CDN
+3. Downloads the OpenCode musl binary from GitHub Releases
+4. Validates SHA-256 checksums for both
+5. Extracts to a private app directory
+6. Installs Git, bash, curl, ripgrep, and CA certificates inside Alpine
+7. Starts the OpenCode server on `127.0.0.1:4097`
+8. Switches the app to the local runtime
+
+Pinned versions (updatable via app releases without OpenCode changes):
 
 - Alpine Linux 3.24.1
 - OpenCode 1.18.3
-- arm64-v8a／x86_64
+- Architectures: arm64-v8a, x86_64
 
-ランタイムマニフェストはOpenCode本体から独立しており、将来のアプリリリースで更新できます。
+## Handoff (Runtime Switching Mid-Conversation)
 
-## PCリモート実行
+From the chat header menu → **Continue on another runtime** — the app generates a conversation summary prompt and sends it to the selected runtime, letting you pick up where you left off (e.g., start on-device while commuting, continue on your PC at home).
 
-PC側で強いパスワードを設定してOpenCodeサーバーを起動します。
+## Connecting to OpenCode Desktop
 
-```bash
-OPENCODE_SERVER_PASSWORD='replace-with-a-strong-password' \
-  opencode serve \
-  --hostname 0.0.0.0 \
-  --port 4096 \
-  --mdns
-```
-
-`--mdns`を付けるとLAN上で自動発見できるようになります。
-
-Androidアプリの**作業先**画面で接続先を追加します。
-
-```text
-表示名: Mac mini
-URL: http://192.168.1.10:4096
-ユーザー名: opencode
-パスワード: 上で設定したパスワード
-```
-
-TailscaleではPCのTailscale IPまたはMagicDNS名を利用できます。
-
-```text
-http://100.x.y.z:4096
-http://your-mac.tailnet-name.ts.net:4096
-```
-
-### セキュリティ
-
-- ポート4096をインターネットへ直接公開しないでください。
-- LANまたはTailscaleでの利用を推奨します。
-- 公開ネットワークではHTTPSリバースプロキシを使用してください。
-- Androidアプリは危険操作を自動承認しません。
-- LAN上の平文HTTPは、ユーザーが接続先ごとに明示的に許可した場合だけ利用できます。
-
-### QRコードで接続先を追加
-
-**作業先**画面の**QRで追加**からカメラでQRコードを読み取り、接続先の入力欄へ自動入力できます（保存は手動確認後）。QRコードはPC側で次のような`opencode://connect`形式のURLとして生成します。
-
-```bash
-npx qrcode "opencode://connect?name=Mac%20mini&url=http%3A%2F%2F192.168.1.10%3A4096&username=opencode&password=replace-with-a-strong-password&insecure=true"
-```
-
-パラメーターは`name`（表示名）、`url`（サーバーURL）、`username`、`password`、`insecure`（LAN上の平文HTTPを許可するか）です。省略した項目は空欄または既定値として入力欄に反映されます。単純な`http://`・`https://`のURLだけを含むQRコードも、URL欄のみの入力として読み取れます。
-
-パスワードを含むQRコードは第三者に見せないよう注意してください。
-
-### LAN上のOpenCodeサーバーを検索
-
-**作業先**画面の**LANで検索**を押すと、mDNS（NSD）で約10秒間LAN上のOpenCodeサーバーを検索し、見つかったサーバーを一覧表示します。タップすると接続先の入力欄へURLと名前が自動入力されます。
-
-PC側で`--mdns`フラグを付けて起動するだけで自動発見されます。
-
-```bash
-OPENCODE_SERVER_PASSWORD='replace-with-a-strong-password' \
-  opencode serve --mdns --port 4096
-```
-
-`opencode web --mdns`でも同様に広告されます。
-
-手動で広告したい場合（旧バージョンのOpenCodeなど）:
-
-Linux（avahi）:
-
-```bash
-avahi-publish -s "opencode-4096" _http._tcp 4096
-```
-
-macOS:
-
-```bash
-dns-sd -R "opencode-4096" _http._tcp . 4096
-```
-
-### OpenCodeデスクトップアプリへ接続
-
-OpenCode Desktopは内部的に同じHTTPサーバーを起動しています。`opencode.json`（`~/.config/opencode/opencode.json`）にサーバー設定を追加すると、デスクトップアプリ起動中にAndroidから接続できます。
+Add server config to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -149,80 +135,43 @@ OpenCode Desktopは内部的に同じHTTPサーバーを起動しています。
 }
 ```
 
-設定後、デスクトップアプリを再起動するとLAN上に広告され、Androidアプリの**LANで検索**で見つかります。パスワードは環境変数`OPENCODE_SERVER_PASSWORD`で設定してください。
+Restart the desktop app, then discover it from the Android app via **LAN search**.
 
-### 実行先の引き継ぎ（ハンドオフ）
+## Building from Source
 
-チャット画面のヘッダーメニューから**別の実行先で続ける**を選ぶと、現在の会話の要約を引き継ぎプロンプトとして生成し、選んだAndroidローカル／PCリモートの実行先へ切り替えたうえで新しいメッセージとして送信します。外出先でAndroidローカル実行を使っていた続きを帰宅後にPCリモートで再開する、といった使い方ができます。要約は直近のやり取りを優先し、長い会話は古い部分から自動的に切り詰められます。
-
-## モデルとプロバイダー
-
-モデル一覧はアプリへ固定で埋め込まず、選択中のOpenCode実行先から取得します。OpenCode側で無料モデル、OpenRouter、OpenAI互換プロバイダーなどが追加・変更された場合も、アプリ更新なしで一覧へ反映できます。
-
-Androidローカル実行では、初期状態でOpenCodeが提供する利用可能なモデルを使用します。APIキーやOAuthが必要なプロバイダーのネイティブ設定UIは今後の拡張対象です。
-
-## ホームアシスト
-
-1. **設定 → 既定のデジタルアシスタントに設定**を押します。
-2. Android設定でOpenCode Androidを選択します。
-3. ホームジェスチャー、画面下隅スワイプ、または端末のアシスト操作で起動します。
-
-ホームアシストは最後に選択した実行先、モデル、エージェントを利用します。常時ウェイクワードモデルは標準APKへ同梱していません。音声入力はマイクボタンまたはホームアシスト起動後に使用します。
-
-## ビルド
-
-必要環境:
-
-- JDK 17
-- Android SDK
-- Python 3
-- ネットワーク接続（初回のみTermuxパッケージ生成に使用）
+Requirements: JDK 17, Android SDK, Python 3, network access (first build only)
 
 ```bash
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-初回ビルドでは、固定ロックに記録されたTermuxパッケージからPRoot・bash・必要ライブラリを生成します。各パッケージはSHA-256で検証され、生成物は`build/generated`へキャッシュされます。APKへ含まれるネイティブランナーは全ABI合計で約5MBです。
-
-APK:
+Output APKs:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-実機へインストール:
+Install to device:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## テスト対象
+## Contributing
 
-- URL安全性、LAN・Tailscale判定
-- 接続情報のシリアライズ
-- OpenCode REST API、Basic認証、SSE再接続
-- セッション、ストリーミング、複数text part、承認状態
-- RuntimeRegistryと実行先切り替え
-- セッションの改名・削除API
-- QRコード接続ペイロードの解析・生成
-- LAN discovered serverのURL組み立て
-- ランタイムカタログとイベント共有
-- ローカルランタイム状態診断
-- ランタイムマニフェストとSHA-256形式
-- 実行先ハンドオフ用プロンプトの生成・切り詰め
-- Release R8ビルドとLint
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-## 設計資料
+## Design Documents
 
-- [OpenCode Android v2設計書](docs/superpowers/specs/2026-07-18-opencode-android-v2-design.md)
-- [第一完成版の実装計画](docs/superpowers/plans/2026-07-18-initial-mvp.md)
-- [Androidローカル実行設計](docs/LOCAL_RUNTIME.md)
+- [OpenCode Android v2 Design](docs/superpowers/specs/2026-07-18-opencode-android-v2-design.md)
+- [Initial MVP Plan](docs/superpowers/plans/2026-07-18-initial-mvp.md)
+- [Local Runtime Design](docs/LOCAL_RUNTIME.md)
 
-## 第三者ソフトウェア
+## Third-Party Software
 
-ランタイム生成処理の一部は、MITライセンスのHermes Agent Android実装に含まれる汎用Termuxパッケージ解決・展開処理をOpenCode向けに再設計しています。OpenCode、Alpine Linux、Termuxパッケージを含む詳細は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
+Runtime generation reuses generic Termux package resolution/extraction logic redesigned for OpenCode, inspired by the MIT-licensed Hermes Agent Android implementation. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
 
-## ライセンス
+## License
 
-MIT License
+[MIT](LICENSE)

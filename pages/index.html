@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenCode Android — AI Coding Agent on Your Phone</title>
+  <meta name="description" content="An unofficial, open-source Android client for OpenCode. Run AI coding agents on-device or connect to your PC remotely." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #14141f;
+      --border: #2a2a3a;
+      --text: #e8e8f0;
+      --text-muted: #9898aa;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --green: #34d399;
+      --radius: 12px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 100px 0 60px;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+    .badge span { color: var(--green); }
+    h1 {
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--accent-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 36px;
+    }
+    .cta-group { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+    }
+    .btn-primary:hover { box-shadow: 0 6px 28px rgba(99,102,241,0.45); }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* Screenshot */
+    .screenshot {
+      margin: 60px auto 0;
+      max-width: 320px;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    /* Features */
+    .features { padding: 80px 0; }
+    .features h2 {
+      text-align: center;
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 48px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--accent); }
+    .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .card p { font-size: 0.9rem; color: var(--text-muted); }
+    .card .icon { font-size: 1.5rem; margin-bottom: 12px; }
+
+    /* How it works */
+    .how { padding: 60px 0 80px; }
+    .how h2 { text-align: center; font-size: 1.8rem; font-weight: 700; margin-bottom: 48px; }
+    .steps { max-width: 600px; margin: 0 auto; }
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 32px;
+      align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .step-content h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+    .step-content p { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    footer a { color: var(--accent-light); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <div class="badge"><span>●</span> Open Source · MIT License</div>
+      <h1>OpenCode Android</h1>
+      <p>Run AI coding agents directly on your Android device, or connect remotely to OpenCode on your PC. No cloud lock-in.</p>
+      <div class="cta-group">
+        <a class="btn btn-primary" href="https://github.com/yuga-hashimoto/opencode-android/releases/latest">↓ Download APK</a>
+        <a class="btn btn-secondary" href="https://github.com/yuga-hashimoto/opencode-android">View on GitHub</a>
+      </div>
+      <img class="screenshot" src="screenshot.png" alt="OpenCode Android app screenshot" />
+    </section>
+
+    <section class="features">
+      <h2>Features</h2>
+      <div class="grid">
+        <div class="card">
+          <div class="icon">📱</div>
+          <h3>On-Device Runtime</h3>
+          <p>Full Alpine Linux + OpenCode running on your phone via PRoot. No PC required — code anywhere.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🖥️</div>
+          <h3>Remote PC Connection</h3>
+          <p>Connect to OpenCode on your Mac/PC/Linux over LAN or Tailscale with zero-config mDNS discovery.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🔄</div>
+          <h3>Seamless Handoff</h3>
+          <p>Switch between local and remote execution mid-conversation. Start on the train, finish at your desk.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🎙️</div>
+          <h3>Voice + Wake Word</h3>
+          <p>Push-to-talk voice input with wake word detection. Use it as your Android digital assistant.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🔒</div>
+          <h3>Security First</h3>
+          <p>Credentials in Android Keystore. Dangerous operations require explicit approval. No auto-approve.</p>
+        </div>
+        <div class="card">
+          <div class="icon">⚡</div>
+          <h3>Real-Time Streaming</h3>
+          <p>Live SSE responses with collapsible reasoning, tool calls, and command output in a structured timeline.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>Get Started in Minutes</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Download the APK</h4>
+            <p>Grab the latest release from GitHub. Supports arm64 and x86_64 devices.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Choose your runtime</h4>
+            <p>Set up the on-device runtime (2 min) or connect to your PC's OpenCode server via LAN/Tailscale.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Start coding</h4>
+            <p>Chat with your AI agent, approve tool operations, switch models — all from your phone.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>
+        <a href="https://github.com/yuga-hashimoto/opencode-android">GitHub</a> ·
+        <a href="https://github.com/yuga-hashimoto/opencode-android/releases">Releases</a> ·
+        <a href="https://github.com/yuga-hashimoto/opencode-android/blob/main/CONTRIBUTING.md">Contributing</a> ·
+        <a href="https://github.com/sst/opencode">OpenCode (upstream)</a>
+      </p>
+      <p style="margin-top: 12px;">Unofficial project. Not affiliated with the OpenCode team. MIT Licensed.</p>
+    </div>
+  </footer>
+</body>
+</html>
