@@ -11,7 +11,6 @@ class OnboardingGateTest {
         assertFalse(
             hasUsableRuntimeSetup(
                 localRuntimeStatus = LocalRuntimeStatus.NotInstalled,
-                hasLocalProviderCredential = false,
                 hasRemoteConnection = false
             )
         )
@@ -22,29 +21,26 @@ class OnboardingGateTest {
         assertTrue(
             hasUsableRuntimeSetup(
                 localRuntimeStatus = LocalRuntimeStatus.NotInstalled,
-                hasLocalProviderCredential = false,
                 hasRemoteConnection = true
             )
         )
     }
 
     @Test
-    fun installedLocalRuntimeStillRequiresProviderCredential() {
-        assertFalse(
+    fun installedLocalRuntimeIsUsableWithoutProviderCredential() {
+        assertTrue(
             hasUsableRuntimeSetup(
                 localRuntimeStatus = LocalRuntimeStatus.Stopped("1.0.0", 4097),
-                hasLocalProviderCredential = false,
                 hasRemoteConnection = false
             )
         )
     }
 
     @Test
-    fun installedLocalRuntimeWithCredentialIsUsable() {
+    fun readyLocalRuntimeIsUsable() {
         assertTrue(
             hasUsableRuntimeSetup(
-                localRuntimeStatus = LocalRuntimeStatus.Stopped("1.0.0", 4097),
-                hasLocalProviderCredential = true,
+                localRuntimeStatus = LocalRuntimeStatus.Ready("1.0.0", 4097),
                 hasRemoteConnection = false
             )
         )
@@ -55,7 +51,6 @@ class OnboardingGateTest {
         assertFalse(
             hasUsableRuntimeSetup(
                 localRuntimeStatus = LocalRuntimeStatus.Broken("metadata missing"),
-                hasLocalProviderCredential = true,
                 hasRemoteConnection = false
             )
         )

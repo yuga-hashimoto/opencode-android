@@ -12,13 +12,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -77,7 +81,9 @@ fun WorkspacesScreen(
     onStartLocal: () -> Unit,
     onStopLocal: () -> Unit,
     onReinstallLocal: () -> Unit,
-    onOpenLocalManagement: () -> Unit
+    onOpenLocalManagement: () -> Unit,
+    onImportFolder: () -> Unit = {},
+    onCloneGithub: () -> Unit = {}
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
     var discoveryDialogOpen by remember { mutableStateOf(false) }
@@ -314,6 +320,28 @@ fun WorkspacesScreen(
                         modifier = Modifier.weight(1f)
                     )
                     Text(stringResource(R.string.item_count, state.workspaces.size), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onImportFolder,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.DriveFolderUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.workspace_import_folder))
+                    }
+                    OutlinedButton(
+                        onClick = onCloneGithub,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.workspace_clone_github))
+                    }
                 }
             }
 

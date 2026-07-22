@@ -52,6 +52,31 @@ class RuntimeCatalogRepository(
         scope.launch { load(target) }
     }
 
+    /** Refresh only the session list for surfaces that show recent chats. */
+    fun refreshSessionsOnly() {
+        val target = registry.selected.value ?: return
+        scope.launch {
+            runCatching { target.listSessions() }
+                .onSuccess { sessions ->
+                    if (registry.selected.value?.id == target.id) {
+                        mutableState.update { it.copy(sessions = sessions) }
+                    }
+                }
+        }
+    }
+
+    fun refreshProvidersOnly() {
+        val target = registry.selected.value ?: return
+        scope.launch {
+            runCatching { target.listProviders() }
+                .onSuccess { providers ->
+                    if (registry.selected.value?.id == target.id) {
+                        mutableState.update { it.copy(providers = providers) }
+                    }
+                }
+        }
+    }
+
     private suspend fun load(target: RuntimeTarget) {
         refreshMutex.withLock {
             if (registry.selected.value?.id != target.id) return

@@ -13,7 +13,9 @@ data class AppPreferences(
     val modelId: String? = null,
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
-    val continuousConversation: Boolean = false
+    val continuousConversation: Boolean = false,
+    val autoAcceptPermissions: Boolean = false,
+    val favoriteModelKeys: Set<String> = emptySet()
 )
 
 class AppPreferencesRepository(
@@ -25,7 +27,9 @@ class AppPreferencesRepository(
             modelId = settings.selectedModelId,
             agentId = settings.selectedAgentId,
             ttsEnabled = settings.ttsEnabled,
-            continuousConversation = settings.continuousConversation
+            continuousConversation = settings.continuousConversation,
+            autoAcceptPermissions = settings.autoAcceptPermissions,
+            favoriteModelKeys = settings.favoriteModelKeys
         )
     )
     val state: StateFlow<AppPreferences> = mutableState.asStateFlow()
@@ -75,5 +79,18 @@ class AppPreferencesRepository(
     fun setContinuousConversation(enabled: Boolean) {
         settings.continuousConversation = enabled
         mutableState.update { it.copy(continuousConversation = enabled) }
+    }
+
+    fun setAutoAcceptPermissions(enabled: Boolean) {
+        settings.autoAcceptPermissions = enabled
+        mutableState.update { it.copy(autoAcceptPermissions = enabled) }
+    }
+
+    fun toggleFavoriteModel(providerId: String, modelId: String) {
+        val key = "$providerId/$modelId"
+        val current = mutableState.value.favoriteModelKeys
+        val updated = if (key in current) current - key else current + key
+        settings.favoriteModelKeys = updated
+        mutableState.update { it.copy(favoriteModelKeys = updated) }
     }
 }

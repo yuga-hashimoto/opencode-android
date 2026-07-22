@@ -11,6 +11,7 @@ class LocalRuntimeProcessLauncher(
     private val processSignal: (Long) -> Unit = { pid ->
         android.os.Process.killProcess(pid.toInt())
     },
+    private val githubToken: () -> String? = { null },
     private val beforeStart: (LocalRuntimeInstaller.InstalledRuntime) -> Unit = {}
 ) {
     @Volatile
@@ -66,7 +67,7 @@ class LocalRuntimeProcessLauncher(
             .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
         builder.environment().apply {
             clear()
-            putAll(localRuntimeEnvironment(suite.environment(), prootTmp))
+            putAll(localRuntimeEnvironment(suite.environment(), prootTmp, githubToken()))
         }
         val started = builder.start()
         process = started
@@ -236,7 +237,8 @@ internal fun processId(process: Process): Long? {
 
 internal fun localRuntimeEnvironment(
     suiteEnvironment: Map<String, String>,
-    prootTmp: File
+    prootTmp: File,
+    githubToken: String? = null
 ): Map<String, String> = buildMap {
     putAll(suiteEnvironment)
     put("PROOT_TMP_DIR", prootTmp.absolutePath)
@@ -252,4 +254,5 @@ internal fun localRuntimeEnvironment(
     put("XDG_STATE_HOME", "/root/.local/state")
     put("OPENCODE_CONFIG_DIR", "/root/.config/opencode")
     put("OPENCODE_DISABLE_AUTOUPDATE", "true")
+    githubToken?.takeIf(String::isNotBlank)?.let { put("OPENCODE_GITHUB_TOKEN", it) }
 }

@@ -61,9 +61,7 @@ class SpeechRecognizerManager(private val context: Context) {
                 trySend(SpeechResult.Listening)
             }
 
-            override fun onRmsChanged(rmsdB: Float) {
-                trySend(SpeechResult.RmsChanged(rmsdB))
-            }
+            override fun onRmsChanged(rmsdB: Float) = Unit
 
             override fun onBufferReceived(buffer: ByteArray?) {}
 
@@ -182,7 +180,6 @@ sealed class SpeechResult {
     object Ready : SpeechResult()
     object Listening : SpeechResult()
     object Processing : SpeechResult()
-    data class RmsChanged(val rmsdB: Float) : SpeechResult()
     data class PartialResult(val text: String) : SpeechResult()
     data class Result(
         val text: String,

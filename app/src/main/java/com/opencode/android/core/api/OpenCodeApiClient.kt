@@ -42,6 +42,9 @@ class OpenCodeApiClient(
     suspend fun sessions(directory: String? = null): List<OpenCodeSession> =
         getList("session", query("directory" to directory))
 
+    suspend fun session(sessionId: String): OpenCodeSession =
+        get("session/${encodePath(sessionId)}", OpenCodeSession::class.java)
+
     suspend fun createSession(
         title: String? = null,
         directory: String? = null
@@ -210,12 +213,21 @@ class OpenCodeApiClient(
                     addProperty("modelID", request.modelId)
                 })
             }
+            request.variant?.takeIf { it.isNotBlank() }?.let { addProperty("variant", it) }
             if (request.noReply) addProperty("noReply", true)
             add("parts", JsonArray().apply {
                 add(JsonObject().apply {
                     addProperty("type", "text")
                     addProperty("text", request.text)
                 })
+                request.attachments.forEach { attachment ->
+                    add(JsonObject().apply {
+                        addProperty("type", "file")
+                        addProperty("mime", attachment.mime)
+                        addProperty("filename", attachment.filename)
+                        addProperty("url", attachment.url)
+                    })
+                }
             })
         }
         postWithoutResponse("session/${encodePath(sessionId)}/prompt_async", json)

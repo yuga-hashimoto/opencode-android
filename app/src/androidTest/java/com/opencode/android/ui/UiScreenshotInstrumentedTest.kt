@@ -33,6 +33,7 @@ import com.opencode.android.feature.chat.ModelAndRuntimePickerSheet
 import com.opencode.android.feature.onboarding.AndroidSetupScreen
 import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
 import com.opencode.android.feature.settings.ProviderSettingsScreen
+import com.opencode.android.feature.settings.SettingsUiState
 import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.workspace.RemoteConnectionScreen
@@ -179,7 +180,17 @@ class UiScreenshotInstrumentedTest {
                     step = "ランタイムをダウンロード中"
                 ),
                 onStartRuntimeSetup = {},
-                onSaveApiKey = { _, _ -> },
+                settingsState = com.opencode.android.feature.settings.SettingsUiState(),
+                onOpenProviderAuth = {},
+                onSelectProviderAuthMethod = {},
+                onProviderAuthInput = { _, _ -> },
+                onProviderApiKey = {},
+                onSubmitProviderAuth = {},
+                onCompleteProviderOAuth = {},
+                onDisconnectProvider = {},
+                onDismissProviderAuth = {},
+                onRefreshProviderAuth = {},
+                onRefreshCatalog = {},
                 onBack = {},
                 onFinish = {}
             )
@@ -227,14 +238,19 @@ class UiScreenshotInstrumentedTest {
             composeRule.onNodeWithText("APIキーを追加・更新").assertIsDisplayed()
         }) {
             ProviderSettingsScreen(
-                credentialStatuses = linkedMapOf("openai" to true, "anthropic" to false),
-                draftProviderId = "",
-                draftApiKey = "",
-                credentialMessage = null,
-                onDraftProviderId = {},
-                onDraftApiKey = {},
-                onSaveApiKey = {},
-                onClearApiKey = {},
+                state = SettingsUiState(
+                    availableProviders = previewProviders,
+                    credentialStatuses = linkedMapOf("openai" to true, "anthropic" to false)
+                ),
+                onOpenProviderAuth = {},
+                onSelectProviderAuthMethod = {},
+                onProviderAuthInput = { _, _ -> },
+                onProviderApiKey = {},
+                onSubmitProviderAuth = {},
+                onCompleteProviderOAuth = {},
+                onDisconnectProvider = {},
+                onLaunchOAuthBrowser = {},
+                onDismissProviderAuth = {},
                 onBack = {}
             )
         }
@@ -275,6 +291,8 @@ class UiScreenshotInstrumentedTest {
             onSelectModel = { _, _ -> },
             onSelectAgent = {},
             onSelectWorkspace = {},
+            onSelectQuestionAnswer = { _, _, _ -> },
+            onSubmitQuestion = {},
             onSendMessage = {},
             onPermission = { _, _, _ -> },
             onAbort = {},

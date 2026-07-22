@@ -1,7 +1,7 @@
 package com.opencode.android.feature.onboarding
 
+import android.content.Intent
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,23 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.NetworkCheck
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -50,56 +45,63 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
+import com.opencode.android.core.api.OpenCodeProvider
+import com.opencode.android.core.api.ProviderAuthMethod
+import com.opencode.android.feature.settings.ProviderAuthDialog
+import com.opencode.android.feature.settings.ProviderAuthDialogState
+import com.opencode.android.feature.settings.SettingsUiState
 import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-private data class SetupProvider(val id: String, val labelRes: Int)
+private const val TOTAL_STEPS = 3
 
-private val SETUP_PROVIDERS = listOf(
-    SetupProvider("openai", R.string.provider_openai),
-    SetupProvider("google", R.string.provider_google),
-    SetupProvider("anthropic", R.string.provider_anthropic),
-    SetupProvider("ollama", R.string.provider_ollama),
-    SetupProvider("other", R.string.provider_other)
-)
-
-private enum class LocalTestState { UNTESTED, TESTING, SUCCESS, FAILURE }
-
-/** Guided four-step setup. Only the current step is expanded. */
+/** Guided two-step setup: runtime download, then optional provider connection. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AndroidSetupScreen(
     runtimeStatus: LocalRuntimeStatus,
     onStartRuntimeSetup: () -> Unit,
-    onSaveApiKey: (providerId: String, apiKey: String) -> Unit,
+    settingsState: SettingsUiState,
+    onOpenProviderAuth: (String) -> Unit,
+    onSelectProviderAuthMethod: (Int) -> Unit,
+    onProviderAuthInput: (String, String) -> Unit,
+    onProviderApiKey: (String) -> Unit,
+    onSubmitProviderAuth: () -> Unit,
+    onCompleteProviderOAuth: (String) -> Unit,
+    onDisconnectProvider: (String) -> Unit,
+    onDismissProviderAuth: () -> Unit,
+    onRefreshProviderAuth: () -> Unit,
+    onRefreshCatalog: () -> Unit,
+    onConnectGitHub: () -> Unit = {},
+    onOpenGitHubVerification: (String) -> Unit = {},
+    onDisconnectGitHub: () -> Unit = {},
     onBack: () -> Unit,
     onFinish: () -> Unit
 ) {
+    val context = LocalContext.current
     val runtimeReady = runtimeStatus is LocalRuntimeStatus.Ready || runtimeStatus is LocalRuntimeStatus.Stopped
     var currentStep by remember { mutableIntStateOf(if (runtimeReady) 2 else 1) }
-    var selectedProviderId by remember { mutableStateOf(SETUP_PROVIDERS.first().id) }
-    var apiKey by remember { mutableStateOf("") }
-    var apiKeyVisible by remember { mutableStateOf(false) }
-    var testState by remember { mutableStateOf(LocalTestState.UNTESTED) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(runtimeReady) {
         if (runtimeReady && currentStep == 1) currentStep = 2
+    }
+
+    LaunchedEffect(runtimeReady, settingsState.availableProviders, settingsState.providerAuthMethods) {
+        if (!runtimeReady) return@LaunchedEffect
+        if (settingsState.availableProviders.isNotEmpty() && settingsState.providerAuthMethods.isNotEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(2000)
+        onRefreshCatalog()
+        onRefreshProviderAuth()
     }
 
     val primaryAction: SetupPrimaryAction? = when (currentStep) {
@@ -126,38 +128,11 @@ fun AndroidSetupScreen(
             enabled = true,
             onClick = { currentStep = 3 }
         )
-        3 -> SetupPrimaryAction(
-            label = stringResource(R.string.setup_save_and_continue_action),
-            enabled = apiKey.isNotBlank(),
-            onClick = {
-                onSaveApiKey(selectedProviderId, apiKey)
-                testState = LocalTestState.UNTESTED
-                currentStep = 4
-            }
+        else -> SetupPrimaryAction(
+            label = stringResource(R.string.setup_complete_button),
+            enabled = true,
+            onClick = onFinish
         )
-        else -> if (testState == LocalTestState.SUCCESS) {
-            SetupPrimaryAction(
-                label = stringResource(R.string.setup_complete_button),
-                enabled = true,
-                onClick = onFinish
-            )
-        } else {
-            SetupPrimaryAction(
-                label = stringResource(R.string.run_connection_test_button),
-                enabled = runtimeReady && apiKey.isNotBlank() && testState != LocalTestState.TESTING,
-                onClick = {
-                    scope.launch {
-                        testState = LocalTestState.TESTING
-                        delay(500)
-                        testState = if (runtimeReady && apiKey.isNotBlank()) {
-                            LocalTestState.SUCCESS
-                        } else {
-                            LocalTestState.FAILURE
-                        }
-                    }
-                }
-            )
-        }
     }
 
     Scaffold(
@@ -190,13 +165,12 @@ fun AndroidSetupScreen(
             )
         },
         bottomBar = {
-            if (primaryAction != null) {
-                SetupBottomBar(
-                    currentStep = currentStep,
-                    primaryAction = primaryAction,
-                    onBackStep = { currentStep -= 1 }
-                )
-            }
+            SetupBottomBar(
+                currentStep = currentStep,
+                primaryAction = primaryAction,
+                onSkip = if (currentStep >= 2) onFinish else null,
+                onBackStep = { currentStep -= 1 }
+            )
         }
     ) { paddingValues ->
         Column(
@@ -210,20 +184,72 @@ fun AndroidSetupScreen(
             SetupProgress(currentStep = currentStep)
             when (currentStep) {
                 1 -> RuntimeDownloadStep(runtimeStatus)
-                2 -> ProviderStep(
-                    selectedProviderId = selectedProviderId,
-                    onSelect = { selectedProviderId = it }
+                2 -> ProviderConnectionStep(
+                    settingsState = settingsState,
+                    onOpenProviderAuth = onOpenProviderAuth,
+                    onDisconnectProvider = onDisconnectProvider
                 )
-                3 -> ApiKeyStep(
-                    apiKey = apiKey,
-                    apiKeyVisible = apiKeyVisible,
-                    onApiKeyChange = {
-                        apiKey = it
-                        testState = LocalTestState.UNTESTED
-                    },
-                    onToggleVisibility = { apiKeyVisible = !apiKeyVisible }
+                else -> GitHubConnectionStep(
+                    settingsState = settingsState,
+                    onConnect = onConnectGitHub,
+                    onDisconnect = onDisconnectGitHub,
+                    onOpenVerification = onOpenGitHubVerification
                 )
-                else -> ConnectionTestStep(testState = testState)
+            }
+        }
+    }
+
+    settingsState.providerAuthDialog?.let { dialog ->
+        ProviderAuthDialog(
+            state = dialog,
+            onSelectMethod = onSelectProviderAuthMethod,
+            onInputChange = onProviderAuthInput,
+            onApiKeyChange = onProviderApiKey,
+            onSubmit = onSubmitProviderAuth,
+            onCompleteCode = onCompleteProviderOAuth,
+            onLaunchBrowser = { url ->
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                }
+            },
+            onDismiss = onDismissProviderAuth
+        )
+    }
+}
+
+@Composable
+private fun GitHubConnectionStep(
+    settingsState: SettingsUiState,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onOpenVerification: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        StepHeader(
+            title = stringResource(R.string.github_git_operations),
+            description = stringResource(R.string.setup_github_optional_description)
+        )
+        Text(settingsState.githubLogin ?: stringResource(R.string.github_not_connected))
+        settingsState.githubUserCode?.let { code ->
+            Text(stringResource(R.string.github_verification_code, code), fontWeight = FontWeight.SemiBold)
+        }
+        settingsState.githubMessage?.let { message ->
+            Text(message, color = MaterialTheme.colorScheme.error)
+        }
+        Button(
+            onClick = if (settingsState.githubLogin == null) onConnect else onDisconnect,
+            enabled = settingsState.githubConfigured && !settingsState.githubPolling,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                if (settingsState.githubPolling) stringResource(R.string.github_waiting_for_authorization)
+                else if (settingsState.githubLogin == null) stringResource(R.string.github_connect)
+                else stringResource(R.string.github_disconnect)
+            )
+        }
+        settingsState.githubVerificationUrl?.let { url ->
+            OutlinedButton(onClick = { onOpenVerification(url) }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.github_open_verification))
             }
         }
     }
@@ -239,7 +265,7 @@ private data class SetupPrimaryAction(
 private fun SetupProgress(currentStep: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = stringResource(R.string.setup_step_counter, currentStep, 4),
+            text = stringResource(R.string.setup_step_counter, currentStep, TOTAL_STEPS),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -247,7 +273,7 @@ private fun SetupProgress(currentStep: Int) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            (1..4).forEach { step ->
+            (1..TOTAL_STEPS).forEach { step ->
                 val completed = step < currentStep
                 val active = step == currentStep
                 Surface(
@@ -272,7 +298,7 @@ private fun SetupProgress(currentStep: Int) {
                         }
                     }
                 }
-                if (step < 4) {
+                if (step < TOTAL_STEPS) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -404,151 +430,163 @@ private fun ReadyRuntimeRow(version: String) {
 }
 
 @Composable
-private fun ProviderStep(selectedProviderId: String, onSelect: (String) -> Unit) {
+private fun ProviderConnectionStep(
+    settingsState: SettingsUiState,
+    onOpenProviderAuth: (String) -> Unit,
+    onDisconnectProvider: (String) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         StepHeader(
             title = stringResource(R.string.setup_step_provider),
-            description = stringResource(R.string.setup_provider_description)
+            description = stringResource(R.string.setup_provider_optional_description)
         )
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.height(190.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            userScrollEnabled = false
-        ) {
-            items(SETUP_PROVIDERS, key = { it.id }) { provider ->
-                ProviderTile(
-                    label = stringResource(provider.labelRes),
-                    selected = provider.id == selectedProviderId,
-                    onClick = { onSelect(provider.id) }
+
+        if (settingsState.availableProviders.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(
+                    stringResource(R.string.setup_provider_loading),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ProviderTile(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         } else {
-            MaterialTheme.colorScheme.surface
-        },
-        border = BorderStroke(
-            1.dp,
-            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-        )
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(label, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
-        }
-    }
-}
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.setup_provider_search_hint)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = null)
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(14.dp)
+            )
 
-@Composable
-private fun ApiKeyStep(
-    apiKey: String,
-    apiKeyVisible: Boolean,
-    onApiKeyChange: (String) -> Unit,
-    onToggleVisibility: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        StepHeader(
-            title = stringResource(R.string.setup_step_apikey),
-            description = stringResource(R.string.setup_api_key_description)
-        )
-        OutlinedTextField(
-            value = apiKey,
-            onValueChange = onApiKeyChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text(stringResource(R.string.api_key_hint)) },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-            trailingIcon = {
-                IconButton(onClick = onToggleVisibility) {
-                    Icon(
-                        if (apiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = null
+            val filtered = settingsState.availableProviders
+                .sortedBy { it.name.lowercase() }
+                .filter { provider ->
+                    searchQuery.isBlank() ||
+                        provider.name.contains(searchQuery, ignoreCase = true) ||
+                        provider.id.contains(searchQuery, ignoreCase = true)
+                }
+
+            if (filtered.isEmpty()) {
+                Text(
+                    stringResource(R.string.setup_provider_no_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                filtered.forEach { provider ->
+                    val methods = settingsState.providerAuthMethods[provider.id].orEmpty()
+                    val connected = provider.id in settingsState.connectedProviderIds
+
+                    ProviderConnectionRow(
+                        providerName = provider.name,
+                        methodSummary = if (methods.isNotEmpty()) {
+                            methods.joinToString(" · ") { it.label }
+                        } else {
+                            stringResource(R.string.setup_provider_api_key_only)
+                        },
+                        connected = connected,
+                        onConnect = { onOpenProviderAuth(provider.id) },
+                        onDisconnect = { onDisconnectProvider(provider.id) }
                     )
                 }
-            },
-            visualTransformation = if (apiKeyVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            shape = RoundedCornerShape(14.dp)
-        )
-        Text(
-            stringResource(R.string.apikey_caption),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            }
+        }
+
+        settingsState.providerAuthNotice?.let {
+            Text(
+                text = stringResource(R.string.provider_connected_success),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        settingsState.oauthMessage?.let { message ->
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
     }
 }
 
 @Composable
-private fun ConnectionTestStep(testState: LocalTestState) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        StepHeader(
-            title = stringResource(R.string.setup_step_test),
-            description = stringResource(R.string.setup_test_description)
-        )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f))
+private fun ProviderConnectionRow(
+    providerName: String,
+    methodSummary: String,
+    connected: Boolean,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                modifier = Modifier.padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                when (testState) {
-                    LocalTestState.TESTING -> CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
-                    LocalTestState.SUCCESS -> Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    LocalTestState.FAILURE -> Icon(
-                        Icons.Default.Error,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    LocalTestState.UNTESTED -> Icon(
-                        Icons.Default.NetworkCheck,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Text(
+                    text = providerName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                if (connected) {
+                    Surface(
+                        shape = RoundedCornerShape(100.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Text(
+                            text = stringResource(R.string.provider_connected),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
-                Column {
-                    Text(
-                        text = when (testState) {
-                            LocalTestState.UNTESTED -> stringResource(R.string.test_status_untested)
-                            LocalTestState.TESTING -> stringResource(R.string.test_status_testing)
-                            LocalTestState.SUCCESS -> stringResource(R.string.test_status_success)
-                            LocalTestState.FAILURE -> stringResource(R.string.test_status_failure)
-                        },
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = stringResource(R.string.setup_test_caption),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            }
+            Text(
+                text = methodSummary,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (connected) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onConnect, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.provider_change_connection))
+                    }
+                    TextButton(onClick = onDisconnect) {
+                        Text(stringResource(R.string.provider_disconnect))
+                    }
+                }
+            } else {
+                OutlinedButton(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.provider_connect))
                 }
             }
         }
@@ -559,6 +597,7 @@ private fun ConnectionTestStep(testState: LocalTestState) {
 private fun SetupBottomBar(
     currentStep: Int,
     primaryAction: SetupPrimaryAction?,
+    onSkip: (() -> Unit)?,
     onBackStep: () -> Unit
 ) {
     Surface(
@@ -582,6 +621,11 @@ private fun SetupBottomBar(
                     Text(stringResource(R.string.setup_back_action))
                 }
             }
+            if (onSkip != null) {
+                TextButton(onClick = onSkip) {
+                    Text(stringResource(R.string.setup_skip_action))
+                }
+            }
             if (primaryAction != null) {
                 Button(
                     onClick = primaryAction.onClick,
@@ -602,9 +646,62 @@ private fun SetupBottomBar(
 private fun AndroidSetupScreenPreview() {
     OpenCodeAndroidTheme {
         AndroidSetupScreen(
-            runtimeStatus = LocalRuntimeStatus.Installing(0.68f, "ランタイムをダウンロード中"),
+            runtimeStatus = LocalRuntimeStatus.Installing(0.68f, "Downloading runtime"),
             onStartRuntimeSetup = {},
-            onSaveApiKey = { _, _ -> },
+            settingsState = SettingsUiState(),
+            onOpenProviderAuth = {},
+            onSelectProviderAuthMethod = {},
+            onProviderAuthInput = { _, _ -> },
+            onProviderApiKey = {},
+            onSubmitProviderAuth = {},
+            onCompleteProviderOAuth = {},
+            onDisconnectProvider = {},
+            onDismissProviderAuth = {},
+            onRefreshProviderAuth = {},
+            onRefreshCatalog = {},
+            onBack = {},
+            onFinish = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun AndroidSetupProviderStepPreview() {
+    OpenCodeAndroidTheme {
+        AndroidSetupScreen(
+            runtimeStatus = LocalRuntimeStatus.Ready("1.0.0", 4097),
+            onStartRuntimeSetup = {},
+            settingsState = SettingsUiState(
+                availableProviders = listOf(
+                    OpenCodeProvider(id = "openai", name = "OpenAI"),
+                    OpenCodeProvider(id = "anthropic", name = "Anthropic"),
+                    OpenCodeProvider(id = "ollama", name = "Ollama")
+                ),
+                providerAuthMethods = mapOf(
+                    "openai" to listOf(
+                        ProviderAuthMethod(type = "oauth", label = "ChatGPT Plus/Pro"),
+                        ProviderAuthMethod(type = "api", label = "API key")
+                    ),
+                    "anthropic" to listOf(
+                        ProviderAuthMethod(type = "api", label = "API key")
+                    ),
+                    "ollama" to listOf(
+                        ProviderAuthMethod(type = "api", label = "No key needed")
+                    )
+                ),
+                connectedProviderIds = setOf("ollama")
+            ),
+            onOpenProviderAuth = {},
+            onSelectProviderAuthMethod = {},
+            onProviderAuthInput = { _, _ -> },
+            onProviderApiKey = {},
+            onSubmitProviderAuth = {},
+            onCompleteProviderOAuth = {},
+            onDisconnectProvider = {},
+            onDismissProviderAuth = {},
+            onRefreshProviderAuth = {},
+            onRefreshCatalog = {},
             onBack = {},
             onFinish = {}
         )

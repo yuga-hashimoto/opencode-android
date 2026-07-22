@@ -4,6 +4,9 @@ plugins {
 }
 
 val repoRoot = rootProject.projectDir
+val githubClientId = (System.getenv("GITHUB_CLIENT_ID")
+    ?: findProperty("GITHUB_CLIENT_ID")?.toString()
+    ?: "Ov23liTw50EzjFhS9ESg").trim()
 val generatedRuntimeAssets = rootProject.layout.buildDirectory.dir("generated/runtime-assets")
 val generatedRuntimeJni = rootProject.layout.buildDirectory.dir("generated/runtime-jni")
 
@@ -74,6 +77,7 @@ android {
         targetSdk = 34
         versionCode = 3
         versionName = "0.2.1"
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -121,6 +125,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

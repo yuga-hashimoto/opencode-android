@@ -8,19 +8,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Button
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,8 +59,11 @@ fun ModelAndRuntimePickerSheet(
     selectedProviderId: String?,
     selectedModelId: String?,
     onSelectModel: (String, String) -> Unit,
+    favoriteModelKeys: Set<String> = emptySet(),
+    onToggleFavorite: (String, String) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
+    var query by remember { mutableStateOf("") }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
@@ -74,6 +87,15 @@ fun ModelAndRuntimePickerSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+            item {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.picker_search)) }
+                )
             }
 
             item {
@@ -105,14 +127,49 @@ fun ModelAndRuntimePickerSheet(
                     )
                 }
             } else {
+                data class FavoriteEntry(
+                    val provider: OpenCodeProvider,
+                    val model: OpenCodeModel
+                )
+
+                val favoriteEntries = providers.flatMap { provider ->
+                    provider.models.values
+                        .filter { "$provider.id/${it.id}" in favoriteModelKeys }
+                        .map { FavoriteEntry(provider, it) }
+                }
+
+                if (favoriteEntries.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.section_favorites),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(favoriteEntries, key = { "fav-${it.provider.id}-${it.model.id}" }) { entry ->
+                        ModelRow(
+                            model = entry.model,
+                            selected = entry.provider.id == selectedProviderId && entry.model.id == selectedModelId,
+                            isFavorite = true,
+                            onClick = { onSelectModel(entry.provider.id, entry.model.id) },
+                            onToggleFavorite = { onToggleFavorite(entry.provider.id, entry.model.id) }
+                        )
+                    }
+                    item {
+                        HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+
                 providers.forEach { provider ->
                     val models = provider.models.values
                         .filter { it.status == null || it.status == "active" }
+                        .filter { query.isBlank() || it.name.contains(query, true) || it.id.contains(query, true) }
                         .sortedBy { it.name.lowercase() }
                     if (models.isNotEmpty()) {
                         item {
                             Text(
-                                text = provider.name,
+                                text = "${provider.name} (${models.size})",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -122,7 +179,9 @@ fun ModelAndRuntimePickerSheet(
                             ModelRow(
                                 model = model,
                                 selected = provider.id == selectedProviderId && model.id == selectedModelId,
-                                onClick = { onSelectModel(provider.id, model.id) }
+                                isFavorite = "${provider.id}/${model.id}" in favoriteModelKeys,
+                                onClick = { onSelectModel(provider.id, model.id) },
+                                onToggleFavorite = { onToggleFavorite(provider.id, model.id) }
                             )
                         }
                     }
@@ -183,7 +242,9 @@ private fun RuntimeRow(
 private fun ModelRow(
     model: OpenCodeModel,
     selected: Boolean,
-    onClick: () -> Unit
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -193,6 +254,18 @@ private fun ModelRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = null,
+                tint = if (isFavorite) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(18.dp)
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(model.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
             Text(

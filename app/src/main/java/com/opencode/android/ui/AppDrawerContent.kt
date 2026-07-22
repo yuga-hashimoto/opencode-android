@@ -38,8 +38,15 @@ import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 data class DrawerRecentSession(
     val id: String,
     val title: String,
-    val relativeTime: String
+    val relativeTime: String,
+    val directory: String? = null
 )
+
+private fun DrawerRecentSession.projectKey(): String =
+    directory?.trimEnd('/')?.takeIf { it.isNotBlank() && it != "/root" }.orEmpty()
+
+private fun DrawerRecentSession.projectLabel(defaultLabel: String): String =
+    projectKey().substringAfterLast('/').takeIf { it.isNotBlank() } ?: defaultLabel
 
 /** Drawer focused on real chat history and the two stable destinations. */
 @Composable
@@ -69,12 +76,23 @@ fun AppDrawerContent(
                 NewChatRow(onClick = onNewChat)
 
                 if (recentSessions.isNotEmpty()) {
-                    DrawerSectionHeader(stringResource(R.string.drawer_recent_chats))
-                    recentSessions.forEach { session ->
-                        DrawerChatRow(
-                            title = session.title.ifBlank { session.id },
-                            onClick = { onOpenSession(session.id, session.title) }
+                    val defaultLabel = stringResource(R.string.drawer_project_default)
+                    val grouped = recentSessions
+                        .groupBy { it.projectKey() }
+                        .toList()
+                        .sortedByDescending { (_, sessions) ->
+                            sessions.firstOrNull()?.let { recentSessions.indexOf(it) } ?: Int.MAX_VALUE
+                        }
+                    grouped.forEach { (_, sessions) ->
+                        DrawerProjectHeader(
+                            label = sessions.first().projectLabel(defaultLabel)
                         )
+                        sessions.forEach { session ->
+                            DrawerChatRow(
+                                title = session.title.ifBlank { session.id },
+                                onClick = { onOpenSession(session.id, session.title) }
+                            )
+                        }
                     }
                 }
             }
@@ -151,14 +169,29 @@ private fun NewChatRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DrawerSectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp)
-    )
+private fun DrawerProjectHeader(label: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Icon(
+            Icons.Default.Folder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable
@@ -208,11 +241,11 @@ private fun AppDrawerContentPreview() {
     OpenCodeAndroidTheme {
         AppDrawerContent(
             recentSessions = listOf(
-                DrawerRecentSession("1", "認証バグの調査", "3時間前"),
-                DrawerRecentSession("2", "READMEの更新", "昨日"),
-                DrawerRecentSession("3", "テスト失敗を修正", "2日前"),
-                DrawerRecentSession("4", "APIレスポンスを整理", "4日前"),
-                DrawerRecentSession("5", "依存関係を更新", "1週間前")
+                DrawerRecentSession("1", "認証バグの調査", "3時間前", "/workspace/opencode-android"),
+                DrawerRecentSession("2", "READMEの更新", "昨日", "/workspace/opencode-android"),
+                DrawerRecentSession("3", "テスト失敗を修正", "2日前", "/workspace/api-server"),
+                DrawerRecentSession("4", "APIレスポンスを整理", "4日前", "/workspace/api-server"),
+                DrawerRecentSession("5", "依存関係を更新", "1週間前", null)
             ),
             onNewChat = {},
             onOpenSession = { _, _ -> },

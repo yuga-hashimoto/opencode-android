@@ -37,6 +37,9 @@ interface OpenCodeBackend {
 
     suspend fun health(): OpenCodeHealth
     suspend fun listSessions(directory: String? = null): List<OpenCodeSession>
+    suspend fun session(sessionId: String): OpenCodeSession =
+        listSessions().firstOrNull { it.id == sessionId }
+            ?: error("Session not found: $sessionId")
     suspend fun createSession(
         title: String? = null,
         directory: String? = null

@@ -22,9 +22,9 @@ class ChatErrorPresentationTest {
     }
 
     @Test
-    fun `keeps unrelated failures as generic errors`() {
+    fun `classifies timeouts as transient connection failures`() {
         assertEquals(
-            ChatErrorKind.GENERIC,
+            ChatErrorKind.TRANSIENT_CONNECTION,
             classifyChatError("Request timed out")
         )
     }

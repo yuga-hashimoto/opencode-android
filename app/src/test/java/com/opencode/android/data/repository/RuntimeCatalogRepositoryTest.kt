@@ -106,6 +106,25 @@ class RuntimeCatalogRepositoryTest {
         assertFalse(state.isRefreshing)
     }
 
+    @Test
+    fun `refreshing sessions only keeps the existing catalog and updates recent chats`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget("mac")
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = "mac"),
+            localTarget = FakeTarget("local-android", RuntimeType.LOCAL),
+            remoteFactory = { target }
+        )
+        val repository = RuntimeCatalogRepository(registry, TestScope(dispatcher))
+        advanceUntilIdle()
+
+        repository.refreshSessionsOnly()
+        advanceUntilIdle()
+
+        assertEquals(listOf("s1"), repository.state.value.sessions.map { it.id })
+        assertEquals(listOf("opencode"), repository.state.value.providers.connected)
+    }
+
     private fun profile(id: String) = ConnectionProfile(
         id = id,
         name = id,

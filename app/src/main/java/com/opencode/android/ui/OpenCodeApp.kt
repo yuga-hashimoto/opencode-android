@@ -5,9 +5,33 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -18,7 +42,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -43,6 +72,7 @@ import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
 import com.opencode.android.feature.schedule.ScheduleScreen
 import com.opencode.android.feature.schedule.ScheduleViewModel
 import com.opencode.android.feature.settings.ProviderSettingsScreen
+import com.opencode.android.feature.settings.GitHubRepo
 import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
 import com.opencode.android.feature.settings.VoiceSettingsScreen
@@ -54,6 +84,7 @@ import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
 import com.opencode.android.feature.workspace.WorkspacesScreen
 import com.opencode.android.runtime.WorkspaceRef
+import com.opencode.android.runtime.local.GitCloneResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -113,6 +144,7 @@ fun OpenCodeApp(
     var selectedWorkspace by remember { mutableStateOf<WorkspaceRef?>(null) }
     var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
     var notificationsEnabled by remember { mutableStateOf(true) }
+    var showCloneDialog by remember { mutableStateOf(false) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
     val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
@@ -164,7 +196,8 @@ fun OpenCodeApp(
             ChatViewModel(
                 backend = selectedRuntime,
                 eventFlow = app.activityRepository.events,
-                onPermissionResolved = app.activityRepository::resolvePermission
+                onPermissionResolved = app.activityRepository::resolvePermission,
+                onSessionCreated = app.catalogRepository::refreshSessionsOnly
             )
         }
     )
@@ -172,6 +205,13 @@ fun OpenCodeApp(
 
     val speechManager = remember { SpeechRecognizerManager(context.applicationContext) }
     val voiceScope = rememberCoroutineScope()
+    settingsViewModel.onLocalRuntimeRestartNeeded = {
+        voiceScope.launch {
+            workspaceViewModel.stopLocalRuntime()
+            kotlinx.coroutines.delay(2000)
+            workspaceViewModel.startLocalRuntime()
+        }
+    }
     var voiceJob by remember { mutableStateOf<Job?>(null) }
     var startVoiceAfterPermission by remember { mutableStateOf(false) }
 
@@ -193,11 +233,10 @@ fun OpenCodeApp(
                         SpeechResult.Ready,
                         SpeechResult.Listening -> Unit
                         SpeechResult.Processing -> chatViewModel.showSpeechProcessing()
-                        is SpeechResult.RmsChanged -> chatViewModel.updateSpeechRms(result.rmsdB)
                         is SpeechResult.PartialResult -> chatViewModel.updateSpeechPartial(result.text)
                         is SpeechResult.Result -> {
+                            chatViewModel.updateSpeechPartial(result.text)
                             chatViewModel.stopListening()
-                            chatViewModel.sendMessage(result.text)
                         }
                         is SpeechResult.Error -> chatViewModel.reportSpeechError(result.message)
                     }
@@ -245,6 +284,22 @@ fun OpenCodeApp(
                 }
                 settingsViewModel.setAssistantWorkspacePath(imported.absolutePath)
                 workspaceViewModel.refresh()
+                chatViewModel.selectWorkspace("/workspace/${imported.name}")
+            }
+        }
+    }
+
+    val attachmentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        voiceScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    com.opencode.android.runtime.local.AttachmentImporter(context).import(uri)
+                }
+            }.onSuccess { attachment ->
+                chatViewModel.addAttachment(attachment)
             }
         }
     }
@@ -285,6 +340,10 @@ fun OpenCodeApp(
         )
     }
 
+    LaunchedEffect(preferences.autoAcceptPermissions) {
+        chatViewModel.setAutoAcceptPermissions(preferences.autoAcceptPermissions)
+    }
+
     LaunchedEffect(selectedRuntime?.id, workspaceState.workspaces, chatState.sessionId) {
         if (chatState.sessionId != null) return@LaunchedEffect
         val currentPath = chatState.selectedWorkspacePath
@@ -317,11 +376,12 @@ fun OpenCodeApp(
     }
 
     val recentSessions = remember(activityState.sessions) {
-        activityState.sessions.take(8).map { session ->
+        activityState.sessions.take(25).map { session ->
             DrawerRecentSession(
                 id = session.id,
                 title = session.title.ifBlank { session.slug ?: session.id },
-                relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created)
+                relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created),
+                directory = session.directory
             )
         }
     }
@@ -377,7 +437,22 @@ fun OpenCodeApp(
                 AndroidSetupScreen(
                     runtimeStatus = localRuntimeStatus,
                     onStartRuntimeSetup = workspaceViewModel::setupLocalRuntime,
-                    onSaveApiKey = settingsViewModel::saveLocalBootstrapApiKey,
+                    settingsState = settingsState,
+                    onOpenProviderAuth = settingsViewModel::openProviderAuth,
+                    onSelectProviderAuthMethod = settingsViewModel::selectProviderAuthMethod,
+                    onProviderAuthInput = settingsViewModel::updateProviderAuthInput,
+                    onProviderApiKey = settingsViewModel::updateProviderApiKey,
+                    onSubmitProviderAuth = settingsViewModel::submitProviderAuth,
+                    onCompleteProviderOAuth = settingsViewModel::completeProviderOAuth,
+                    onDisconnectProvider = settingsViewModel::disconnectProvider,
+                    onDismissProviderAuth = settingsViewModel::dismissProviderAuth,
+                    onRefreshProviderAuth = settingsViewModel::refreshProviderAuth,
+                    onRefreshCatalog = app.catalogRepository::refreshProvidersOnly,
+                    onConnectGitHub = { settingsViewModel.beginGitHubDeviceFlow() },
+                    onOpenGitHubVerification = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    },
+                    onDisconnectGitHub = settingsViewModel::disconnectGitHub,
                     onBack = { navController.popBackStack() },
                     onFinish = completeOnboardingAndGoToChat
                 )
@@ -428,8 +503,16 @@ fun OpenCodeApp(
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
+                    selectedVariant = chatState.selectedVariant,
+                    onSelectVariant = chatViewModel::selectVariant,
+                    onAttach = { attachmentLauncher.launch("*/*") },
+                    onRemoveAttachment = chatViewModel::removeAttachment,
+                    favoriteModelKeys = settingsState.favoriteModelKeys,
+                    onToggleFavorite = settingsViewModel::toggleFavoriteModel,
                     onSelectQuestionAnswer = chatViewModel::selectQuestionAnswer,
                     onSubmitQuestion = chatViewModel::submitQuestion,
+                    autoAcceptPermissions = settingsState.autoAcceptPermissions,
+                    onToggleAutoAccept = settingsViewModel::setAutoAcceptPermissions,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
@@ -447,7 +530,13 @@ fun OpenCodeApp(
                     onOpenRemoteSetup = {
                         navController.navigate(ROUTE_REMOTE_CONNECTION) { launchSingleTop = true }
                     },
-                    onOpenDrawer = { drawerScope.launch { drawerState.open() } }
+                    onRefreshCatalog = app.catalogRepository::refreshProvidersOnly,
+                    onOpenDrawer = {
+                        // Refresh sessions when the drawer is opened so a chat
+                        // created during this run is visible immediately.
+                        app.catalogRepository.refreshSessionsOnly()
+                        drawerScope.launch { drawerState.open() }
+                    }
                 )
             }
 
@@ -521,6 +610,13 @@ fun OpenCodeApp(
                         }
                     },
                     onDismissProviderAuth = settingsViewModel::dismissProviderAuth,
+                    onConnectGitHub = { settingsViewModel.beginGitHubDeviceFlow() },
+                    onDisconnectGitHub = settingsViewModel::disconnectGitHub,
+                    onOpenGitHubVerification = { url ->
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        }.onFailure { error -> settingsViewModel.reportOAuthError(error.message.orEmpty()) }
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -543,7 +639,9 @@ fun OpenCodeApp(
                     onReinstallLocal = workspaceViewModel::reinstallLocalRuntime,
                     onOpenLocalManagement = {
                         navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE)
-                    }
+                    },
+                    onImportFolder = { workspaceImportLauncher.launch(null) },
+                    onCloneGithub = { showCloneDialog = true }
                 )
             }
 
@@ -662,6 +760,218 @@ fun OpenCodeApp(
                     )
                 }
             }
+        }
+    }
+
+    if (showCloneDialog) {
+        GithubCloneDialog(
+            githubConfigured = !app.settings.githubToken.isNullOrBlank(),
+            onClone = { url ->
+                val name = url.trim().removeSuffix("/").removeSuffix(".git").substringAfterLast('/')
+                withContext(Dispatchers.IO) { app.gitCloneRepository.clone(url, name) }
+            },
+            onListRepos = { settingsViewModel.listGitHubRepos() },
+            onCloned = { serverPath ->
+                workspaceViewModel.refresh()
+                chatViewModel.selectWorkspace(serverPath)
+            },
+            onDismiss = { showCloneDialog = false }
+        )
+    }
+}
+
+private enum class CloneSource { REPOS, URL }
+
+@Composable
+private fun GithubCloneDialog(
+    githubConfigured: Boolean,
+    onClone: suspend (String) -> GitCloneResult,
+    onListRepos: suspend () -> List<GitHubRepo>,
+    onCloned: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var source by remember { mutableStateOf(if (githubConfigured) CloneSource.REPOS else CloneSource.URL) }
+    var url by remember { mutableStateOf("") }
+    var repos by remember { mutableStateOf<List<GitHubRepo>>(emptyList()) }
+    var isLoadingRepos by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
+    var isCloning by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(githubConfigured) {
+        if (githubConfigured) {
+            isLoadingRepos = true
+            repos = onListRepos()
+            isLoadingRepos = false
+        }
+    }
+
+    fun startClone(cloneUrl: String) {
+        isCloning = true
+        error = null
+        scope.launch {
+            val result = onClone(cloneUrl)
+            if (result.exitCode == 0) {
+                onCloned(result.serverPath)
+                onDismiss()
+            } else {
+                error = result.output.lineSequence().lastOrNull { it.isNotBlank() }
+                    ?: "Clone failed (${result.exitCode})"
+                isCloning = false
+            }
+        }
+    }
+
+    val filteredRepos = remember(repos, search) {
+        if (search.isBlank()) repos else repos.filter {
+            it.fullName.contains(search, ignoreCase = true)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isCloning) onDismiss() },
+        title = { Text(stringResource(R.string.workspace_clone_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (!githubConfigured) {
+                    Text(
+                        text = stringResource(R.string.workspace_clone_requires_auth),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = source == CloneSource.REPOS,
+                            onClick = { source = CloneSource.REPOS },
+                            label = { Text(stringResource(R.string.workspace_clone_my_repos)) }
+                        )
+                        FilterChip(
+                            selected = source == CloneSource.URL,
+                            onClick = { source = CloneSource.URL },
+                            label = { Text(stringResource(R.string.workspace_clone_url_tab)) }
+                        )
+                    }
+                }
+
+                if (source == CloneSource.REPOS && githubConfigured) {
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        placeholder = { Text(stringResource(R.string.workspace_clone_search)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (isLoadingRepos) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.workspace_clone_loading_repos), style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 280.dp)
+                        ) {
+                            items(filteredRepos, key = { it.fullName }) { repo ->
+                                RepoRow(
+                                    repo = repo,
+                                    enabled = !isCloning,
+                                    onClick = { startClone(repo.cloneUrl) }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = {
+                            url = it
+                            error = null
+                        },
+                        label = { Text(stringResource(R.string.workspace_clone_url_label)) },
+                        placeholder = { Text(stringResource(R.string.workspace_clone_url_placeholder)) },
+                        singleLine = true,
+                        enabled = !isCloning,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                error?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (isCloning) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            stringResource(R.string.workspace_clone_running),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (source == CloneSource.URL || !githubConfigured) {
+                Button(
+                    enabled = url.isNotBlank() && !isCloning,
+                    onClick = { startClone(url.trim()) }
+                ) {
+                    Text(stringResource(R.string.workspace_clone_action))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isCloning) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun RepoRow(
+    repo: GitHubRepo,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                if (repo.isPrivate) Icons.Default.Lock else Icons.Default.Folder,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                repo.fullName,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

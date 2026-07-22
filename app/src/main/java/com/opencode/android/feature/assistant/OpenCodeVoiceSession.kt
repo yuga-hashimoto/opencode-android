@@ -246,7 +246,6 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                         sendToOpenCode(result.text)
                     }
                     is SpeechResult.Error -> showError(result.message)
-                    is SpeechResult.RmsChanged -> Unit
                 }
             }
         }

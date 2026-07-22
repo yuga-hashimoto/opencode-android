@@ -73,6 +73,18 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `creating a session refreshes the shell catalog`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        var refreshes = 0
+        val viewModel = ChatViewModel(backend, onSessionCreated = { refreshes++ })
+
+        viewModel.sendMessage("Hello")
+        advanceUntilIdle()
+
+        assertEquals(1, refreshes)
+    }
+
+    @Test
     fun `selected workspace is used when creating a new session`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)
@@ -83,6 +95,30 @@ class ChatViewModelTest {
 
         assertEquals("/root/demo", backend.lastCreateDirectory)
         assertEquals("/root/demo", viewModel.uiState.value.selectedWorkspacePath)
+    }
+
+    @Test
+    fun `auto accept approves permissions without showing card`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+        viewModel.setAutoAcceptPermissions(true)
+        viewModel.sendMessage("Check git")
+        advanceUntilIdle()
+
+        backend.events.emit(
+            OpenCodeEvent.PermissionAsked(
+                PermissionRequest(
+                    id = "perm1",
+                    sessionId = "s1",
+                    permission = "bash",
+                    patterns = listOf("git status")
+                )
+            )
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.permissions.isEmpty())
+        assertEquals(PermissionResponse.ONCE, backend.permissionResponses.single().third)
     }
 
     @Test

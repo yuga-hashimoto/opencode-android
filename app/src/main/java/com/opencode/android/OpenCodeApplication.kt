@@ -8,6 +8,7 @@ import com.opencode.android.data.repository.RuntimeActivityRepository
 import com.opencode.android.data.repository.RuntimeCatalogRepository
 import com.opencode.android.data.settings.AppPreferencesRepository
 import com.opencode.android.runtime.RuntimeRegistry
+import com.opencode.android.runtime.LocalRuntimeStatus
 import com.opencode.android.runtime.local.DefaultLocalRuntimeUpdateEngine
 import com.opencode.android.runtime.local.LocalRuntimeAccessCoordinator
 import com.opencode.android.runtime.local.LocalRuntimeCommandRunner
@@ -20,6 +21,8 @@ import com.opencode.android.runtime.local.LocalRuntimeServiceController
 import com.opencode.android.runtime.local.LocalRuntimeTarget
 import com.opencode.android.runtime.local.LocalRuntimeUpdater
 import com.opencode.android.runtime.local.LocalProviderCredentialStore
+import com.opencode.android.runtime.local.GitCredentialHelper
+import com.opencode.android.runtime.local.GitCloneRepository
 import com.opencode.android.runtime.local.VerifiedRuntimeDownloader
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +65,9 @@ class OpenCodeApplication : Application() {
     lateinit var providerCredentials: LocalProviderCredentialStore
         private set
 
+    lateinit var gitCloneRepository: GitCloneRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
         settings = SecureSettingsRepository(this)
@@ -80,14 +86,26 @@ class OpenCodeApplication : Application() {
         val launcher = LocalRuntimeProcessLauncher(
             runtimeDirectory = runtimeDirectory,
             portProbe = LocalRuntimeManager::defaultPortProbe,
+            githubToken = { settings.githubToken },
             beforeStart = { installed ->
                 runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
+                runCatching {
+                    GitCredentialHelper(installed.rootfs).let { helper ->
+                        if (settings.githubToken.isNullOrBlank()) helper.remove() else helper.install()
+                    }
+                }
             }
         )
         val commandRunner = LocalRuntimeCommandRunner(
             runtimeDirectory = runtimeDirectory,
             installedRuntimeProvider = installer::installedRuntime,
             accessCoordinator = accessCoordinator
+        )
+        gitCloneRepository = GitCloneRepository(
+            runtimeDirectory = runtimeDirectory,
+            installedRuntimeProvider = installer::installedRuntime,
+            accessCoordinator = accessCoordinator,
+            githubToken = { settings.githubToken }
         )
         val httpClient = OkHttpClient()
         val verifiedDownloader = VerifiedRuntimeDownloader(httpClient)
@@ -141,7 +159,6 @@ class OpenCodeApplication : Application() {
         )
         val setupConfigured = hasUsableRuntimeSetup(
             localRuntimeStatus = localRuntimeManager.status(),
-            hasLocalProviderCredential = providerCredentials.credentials().isNotEmpty(),
             hasRemoteConnection = settings.connections().isNotEmpty()
         )
         if (settings.onboardingCompleted != setupConfigured) {
@@ -162,5 +179,42 @@ class OpenCodeApplication : Application() {
                 }
             }
         }
+        autoStartLocalRuntimeIfNeeded()
+    }
+
+    private var catalogWarmupJob: kotlinx.coroutines.Job? = null
+
+    private fun autoStartLocalRuntimeIfNeeded() {
+        if (!settings.onboardingCompleted) return
+        if (localRuntimeManager.status() is LocalRuntimeStatus.NotInstalled) return
+        val selectedId = settings.selectedRuntimeId
+        if (selectedId != null && selectedId != LOCAL_RUNTIME_ID) return
+        // The runtime is already installed at this point. Starting through the
+        // install path recreates the environment on every cold launch, delaying
+        // catalog synchronization and making the model picker look unavailable.
+        localRuntimeController.start()
+        applicationScope.launch {
+            localRuntimeManager.state.collect { status ->
+                if (status is LocalRuntimeStatus.Ready) {
+                    if (runtimeRegistry.selected.value?.id != LOCAL_RUNTIME_ID) {
+                        runtimeRegistry.select(LOCAL_RUNTIME_ID)
+                    }
+                    catalogWarmupJob?.cancel()
+                    catalogWarmupJob = applicationScope.launch catalogWarmup@{
+                        repeat(CATALOG_WARMUP_ATTEMPTS) {
+                            catalogRepository.refresh()
+                            kotlinx.coroutines.delay(CATALOG_WARMUP_DELAY_MS)
+                            if (catalogRepository.state.value.providers.all.isNotEmpty()) return@catalogWarmup
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val LOCAL_RUNTIME_ID = "local-android"
+        const val CATALOG_WARMUP_ATTEMPTS = 4
+        const val CATALOG_WARMUP_DELAY_MS = 2500L
     }
 }

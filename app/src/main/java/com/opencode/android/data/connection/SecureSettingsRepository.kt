@@ -59,6 +59,10 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getBoolean(KEY_CONTINUOUS_CONVERSATION, false)
         set(value) = preferences.edit().putBoolean(KEY_CONTINUOUS_CONVERSATION, value).apply()
 
+    var autoAcceptPermissions: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_ACCEPT_PERMISSIONS, false)
+        set(value) = preferences.edit().putBoolean(KEY_AUTO_ACCEPT_PERMISSIONS, value).apply()
+
     var assistantSessionId: String?
         get() = preferences.getString(KEY_ASSISTANT_SESSION_ID, null)
         set(value) = preferences.edit().putString(KEY_ASSISTANT_SESSION_ID, value).apply()
@@ -74,6 +78,10 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
     var selectedAgentId: String?
         get() = preferences.getString(KEY_AGENT_ID, null)
         set(value) = preferences.edit().putString(KEY_AGENT_ID, value).apply()
+
+    var favoriteModelKeys: Set<String>
+        get() = preferences.getStringSet(KEY_FAVORITE_MODELS, emptySet()).orEmpty()
+        set(value) = preferences.edit().putStringSet(KEY_FAVORITE_MODELS, value).apply()
 
     var providerApiKeys: Map<String, String>
         get() = providerApiKeys()
@@ -134,21 +142,33 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
 
+    var githubToken: String?
+        get() = preferences.getString(KEY_GITHUB_TOKEN, null)
+        set(value) = preferences.edit().putString(KEY_GITHUB_TOKEN, value).apply()
+
+    var githubLogin: String?
+        get() = preferences.getString(KEY_GITHUB_LOGIN, null)
+        set(value) = preferences.edit().putString(KEY_GITHUB_LOGIN, value).apply()
+
     companion object {
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
         private const val KEY_SELECTED_CONNECTION = "selected_connection"
         private const val KEY_TTS_ENABLED = "tts_enabled"
         private const val KEY_CONTINUOUS_CONVERSATION = "continuous_conversation"
+        private const val KEY_AUTO_ACCEPT_PERMISSIONS = "auto_accept_permissions"
         private const val KEY_ASSISTANT_SESSION_ID = "assistant_session_id"
         private const val KEY_PROVIDER_ID = "provider_id"
         private const val KEY_MODEL_ID = "model_id"
         private const val KEY_AGENT_ID = "agent_id"
+        private const val KEY_FAVORITE_MODELS = "favorite_models"
         private const val KEY_PROVIDER_API_KEYS = "provider_api_keys"
         private const val KEY_MANAGED_PROVIDER_API_KEY_IDS = "managed_provider_api_key_ids"
         private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"
         private const val KEY_ASSISTANT_WORKSPACE_PATH = "assistant_workspace_path"
         private const val KEY_SAF_WORKSPACE_URIS = "saf_workspace_uris"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_GITHUB_TOKEN = "github_token"
+        private const val KEY_GITHUB_LOGIN = "github_login"
     }
 }

@@ -2,9 +2,11 @@ package com.opencode.android.feature.chat
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.runtime.mutableStateOf
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.opencode.android.R
@@ -18,15 +20,18 @@ class ChatVoiceInstrumentedTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun listeningComposerShowsWaveformAndProcessingFallback() {
+    fun listeningComposerShowsTranscriptWithoutWaveform() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val screenState = mutableStateOf(
+            ChatUiState(
+                isListening = true,
+                partialText = "こんにちは"
+            )
+        )
 
         composeRule.setContent {
             ChatHomeScreen(
-                state = ChatUiState(
-                    isListening = true,
-                    voiceLevel = 0.64f
-                ),
+                state = screenState.value,
                 providers = emptyList(),
                 agents = emptyList(),
                 workspaces = emptyList(),
@@ -54,39 +59,10 @@ class ChatVoiceInstrumentedTest {
         }
 
         composeRule.onNodeWithText(context.getString(R.string.voice_state_listening)).assertIsDisplayed()
-        composeRule.onNodeWithTag("chat-voice-waveform").assertIsDisplayed()
-        repeat(7) { index ->
-            composeRule.onNodeWithTag("chat-voice-waveform-bar-$index").assertIsDisplayed()
-        }
+        composeRule.onNodeWithTag("chat-message-input").assertTextContains("こんにちは")
+        composeRule.onNodeWithTag("chat-voice-waveform").assertDoesNotExist()
 
-        composeRule.setContent {
-            ChatHomeScreen(
-                state = ChatUiState(isSpeechProcessing = true),
-                providers = emptyList(),
-                agents = emptyList(),
-                workspaces = emptyList(),
-                selectedProviderId = null,
-                selectedModelId = null,
-                selectedAgentId = null,
-                runtimeTargets = emptyList(),
-                selectedRuntimeId = null,
-                onSelectRuntime = {},
-                onSelectModel = { _, _ -> },
-                onSelectAgent = {},
-                onSelectWorkspace = {},
-                onSelectQuestionAnswer = { _, _, _ -> },
-                onSubmitQuestion = {},
-                onSendMessage = {},
-                onPermission = { _, _, _ -> },
-                onAbort = {},
-                onMic = {},
-                onNewChat = {},
-                onOpenHistory = {},
-                onOpenLocalSetup = {},
-                onOpenRemoteSetup = {},
-                onOpenDrawer = {}
-            )
-        }
+        screenState.value = ChatUiState(isSpeechProcessing = true)
 
         composeRule.onNodeWithTag("chat-voice-processing").assertIsDisplayed()
         composeRule.onNodeWithText(context.getString(R.string.processing)).assertIsDisplayed()

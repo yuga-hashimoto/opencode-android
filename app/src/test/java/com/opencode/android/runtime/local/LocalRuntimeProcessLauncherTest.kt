@@ -35,6 +35,17 @@ class LocalRuntimeProcessLauncherTest {
     }
 
     @Test
+    fun `guest environment passes GitHub token only to the running local process`() {
+        val environment = localRuntimeEnvironment(
+            suiteEnvironment = emptyMap(),
+            prootTmp = File("/android/proot-tmp"),
+            githubToken = "token-from-encrypted-store"
+        )
+
+        assertEquals("token-from-encrypted-store", environment["OPENCODE_GITHUB_TOKEN"])
+    }
+
+    @Test
     fun `process tree termination order is children before parent`() {
         val children = mapOf(
             10L to listOf(11L, 12L),

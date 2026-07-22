@@ -35,6 +35,8 @@ class RemoteOpenCodeBackend(
     override suspend fun health(): OpenCodeHealth = client.health()
     override suspend fun listSessions(directory: String?): List<OpenCodeSession> =
         client.sessions(directory)
+    override suspend fun session(sessionId: String): OpenCodeSession =
+        client.session(sessionId)
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         client.createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = client.messages(sessionId)

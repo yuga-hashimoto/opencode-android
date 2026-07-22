@@ -35,6 +35,7 @@
     <string name="send_description">メッセージを送信</string>
     <string name="stop_run">停止</string>
     <string name="thinking">考え中…</string>
+    <string name="chat_reconnecting">OpenCodeとの接続が切れました。再接続中…</string>
     <string name="processing">処理中…</string>
     <string name="no_connection_chat">チャットを始める前にPC接続先を追加して選択してください。</string>
     <string name="model">モデル</string>
@@ -58,6 +59,18 @@
     <string name="workspace_folder_label">作業フォルダ</string>
     <string name="default_folder">既定のフォルダ</string>
     <string name="default_folder_description">OpenCodeサーバーの現在位置を使用</string>
+    <string name="workspace_import_folder">フォルダをインポート…</string>
+    <string name="workspace_clone_github">GitHubからClone…</string>
+    <string name="workspace_clone_title">GitHubリポジトリをClone</string>
+    <string name="workspace_clone_url_label">リポジトリURL</string>
+    <string name="workspace_clone_url_placeholder">https://github.com/owner/repo</string>
+    <string name="workspace_clone_action">Clone</string>
+    <string name="workspace_clone_running">リポジトリをClone中…</string>
+    <string name="workspace_clone_requires_auth">プライベートリポジトリをCloneするには設定でGitHubを接続してください。</string>
+    <string name="workspace_clone_my_repos">マイリポジトリ</string>
+    <string name="workspace_clone_url_tab">URL</string>
+    <string name="workspace_clone_search">リポジトリを検索</string>
+    <string name="workspace_clone_loading_repos">リポジトリを読み込み中…</string>
     <string name="chat_options_description">チャット操作</string>
     <string name="continue_on_other_runtime">別の実行先で続ける</string>
     <string name="handoff_dialog_title">実行先を選択</string>
@@ -344,6 +357,7 @@
     <string name="menu_description">メニュー</string>
     <string name="drawer_search_description">検索</string>
     <string name="drawer_recent_chats">最近のチャット</string>
+    <string name="drawer_project_default">デフォルト</string>
     <string name="drawer_pinned">ピン留め</string>
     <string name="drawer_pinned_sample_1">重要な会話</string>
     <string name="drawer_pinned_sample_2">プロジェクトのメモ</string>
@@ -360,6 +374,25 @@
     <string name="chat_build_headline">OpenCodeで開発を進める</string>
     <string name="chat_build_subtitle">コードの実装、修正、レビューまで、何でも聞いてください。</string>
     <string name="chat_message_placeholder">OpenCodeにメッセージを送る…</string>
+    <string name="chat_attach">ファイルを添付</string>
+    <string name="chat_remove_attachment">添付を削除</string>
+    <string name="chat_thinking_default">思考</string>
+    <string name="chat_mode_build">ビルド</string>
+    <string name="chat_mode_plan">計画</string>
+    <string name="chat_mode_auto_accept">自動承認</string>
+    <string name="chat_auto_accept_short">自動</string>
+    <string name="github_git_operations">GitHub Git 操作</string>
+    <string name="github_not_connected">未接続</string>
+    <string name="github_connect">GitHubに接続</string>
+    <string name="github_disconnect">GitHubの接続を解除</string>
+    <string name="github_verification_code">認証コード: %1$s</string>
+    <string name="github_waiting_for_authorization">認証を待機中…</string>
+    <string name="github_open_verification">GitHubを開く</string>
+    <string name="github_device_flow_instructions">GitHubを開いて、このワンタイムコードを入力すると接続されます:</string>
+    <string name="github_copy_code">コピー</string>
+    <string name="github_code_copied">コードをクリップボードにコピーしました</string>
+    <string name="setup_github_optional_description">ローカルGitで非公開リポジトリを使うにはGitHubへ接続します。スキップして後で設定から接続することもできます。</string>
+    <string name="picker_search">モデルを検索</string>
     <string name="suggestion_implement_title">関数の実装を手伝って</string>
     <string name="suggestion_implement_subtitle">コードを書いて実装する</string>
     <string name="suggestion_debug_title">バグの原因を調べて</string>
@@ -375,6 +408,7 @@
     <string name="picker_caption">使用するモデルと実行先を選びます。</string>
     <string name="section_runtime">実行先</string>
     <string name="section_model">モデル</string>
+    <string name="section_favorites">お気に入り</string>
     <string name="this_android">このAndroid</string>
     <string name="picker_no_providers">接続済みのプロバイダがありません</string>
 
@@ -394,7 +428,7 @@
     <!-- Redesign: Android local setup -->
     <string name="android_setup_title">このAndroidをセットアップ</string>
     <string name="setup_step_download">ランタイムをダウンロード</string>
-    <string name="setup_step_provider">プロバイダを選択</string>
+    <string name="setup_step_provider">プロバイダを接続</string>
     <string name="setup_step_apikey">APIキーを設定</string>
     <string name="setup_step_test">接続テスト</string>
     <string name="apikey_caption">APIキーはこの端末に安全に保存されます</string>

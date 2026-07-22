@@ -116,6 +116,8 @@ class LocalRuntimeTarget(
     }
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         backend.createSession(title, directory)
+    override suspend fun session(sessionId: String): OpenCodeSession =
+        backend.session(sessionId)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = backend.listMessages(sessionId)
     override suspend fun listProviders(): ProviderCatalog = backend.listProviders()
     override suspend fun listAgents(): List<OpenCodeAgent> = backend.listAgents()

@@ -10,18 +10,8 @@ class ChatViewModelVoiceTest {
     private val viewModel = ChatViewModel(eventFlow = emptyFlow())
 
     @Test
-    fun `rms values become bounded voice levels`() {
-        viewModel.updateSpeechRms(-30f)
-        assertEquals(0.5f, viewModel.uiState.value.voiceLevel, 0.01f)
-
-        viewModel.updateSpeechRms(20f)
-        assertEquals(1f, viewModel.uiState.value.voiceLevel, 0f)
-    }
-
-    @Test
-    fun `voice state resets across listen process stop and error`() {
+    fun `voice transcript remains available after listening stops`() {
         viewModel.startListening()
-        viewModel.updateSpeechRms(-15f)
         viewModel.updateSpeechPartial("hello")
 
         assertTrue(viewModel.uiState.value.isListening)
@@ -31,19 +21,35 @@ class ChatViewModelVoiceTest {
         viewModel.showSpeechProcessing()
         assertFalse(viewModel.uiState.value.isListening)
         assertTrue(viewModel.uiState.value.isSpeechProcessing)
-        assertEquals(0f, viewModel.uiState.value.voiceLevel, 0f)
-        assertEquals("", viewModel.uiState.value.partialText)
+        assertEquals("hello", viewModel.uiState.value.partialText)
 
         viewModel.stopListening()
         assertFalse(viewModel.uiState.value.isSpeechProcessing)
-        assertEquals(0f, viewModel.uiState.value.voiceLevel, 0f)
+        assertEquals("hello", viewModel.uiState.value.partialText)
+    }
 
+    @Test
+    fun `voice error stops listening without discarding transcript`() {
         viewModel.startListening()
-        viewModel.updateSpeechRms(-5f)
+        viewModel.updateSpeechPartial("hello")
+
         viewModel.reportSpeechError("mic failed")
+
         assertFalse(viewModel.uiState.value.isListening)
         assertFalse(viewModel.uiState.value.isSpeechProcessing)
-        assertEquals(0f, viewModel.uiState.value.voiceLevel, 0f)
+        assertEquals("hello", viewModel.uiState.value.partialText)
         assertEquals("mic failed", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `new session resets voice state`() {
+        viewModel.startListening()
+        viewModel.showSpeechProcessing()
+
+        viewModel.newSession()
+
+        assertFalse(viewModel.uiState.value.isListening)
+        assertFalse(viewModel.uiState.value.isSpeechProcessing)
+        assertEquals("", viewModel.uiState.value.partialText)
     }
 }

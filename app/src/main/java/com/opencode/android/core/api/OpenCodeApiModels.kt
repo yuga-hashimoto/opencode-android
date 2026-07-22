@@ -22,7 +22,23 @@ data class OpenCodeSession(
     val path: String? = null,
     val title: String = "",
     val version: String? = null,
-    val time: OpenCodeTime = OpenCodeTime()
+    val time: OpenCodeTime = OpenCodeTime(),
+    val tokens: OpenCodeSessionTokens? = null
+)
+
+data class OpenCodeSessionTokens(
+    val input: Long = 0L,
+    val output: Long = 0L,
+    val reasoning: Long = 0L,
+    val cache: OpenCodeCacheTokens? = null
+) {
+    val contextUsed: Long
+        get() = input + (cache?.read ?: 0L)
+}
+
+data class OpenCodeCacheTokens(
+    val read: Long = 0L,
+    val write: Long = 0L
 )
 
 data class OpenCodeModelReference(
@@ -62,7 +78,14 @@ data class OpenCodeModel(
     val id: String,
     @SerializedName("providerID") val providerId: String? = null,
     val name: String = id,
-    val status: String? = null
+    val status: String? = null,
+    val limit: OpenCodeModelLimit? = null,
+    val variants: Map<String, com.google.gson.JsonElement> = emptyMap()
+)
+
+data class OpenCodeModelLimit(
+    val context: Long = 0L,
+    val output: Long = 0L
 )
 
 data class OpenCodeProvider(
@@ -180,7 +203,15 @@ data class PromptRequest(
     val providerId: String? = null,
     val modelId: String? = null,
     val agent: String? = null,
+    val variant: String? = null,
+    val attachments: List<PromptAttachment> = emptyList(),
     val noReply: Boolean = false
+)
+
+data class PromptAttachment(
+    val filename: String,
+    val mime: String,
+    val url: String
 )
 
 data class PermissionRequest(

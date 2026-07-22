@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,19 +21,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,19 +48,16 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,15 +70,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeProvider
+import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.runtime.PermissionResponse
 import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
@@ -98,8 +106,18 @@ fun ChatHomeScreen(
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
     onSelectWorkspace: (String?) -> Unit,
+    thinkingOptions: List<String> = emptyList(),
+    selectedVariant: String? = null,
+    onSelectVariant: (String?) -> Unit = {},
+    attachments: List<PromptAttachment> = emptyList(),
+    onAttach: () -> Unit = {},
+    onRemoveAttachment: (Int) -> Unit = {},
+    favoriteModelKeys: Set<String> = emptySet(),
+    onToggleFavorite: (String, String) -> Unit = { _, _ -> },
     onSelectQuestionAnswer: (String, Int, String) -> Unit,
     onSubmitQuestion: (String) -> Unit,
+    autoAcceptPermissions: Boolean = false,
+    onToggleAutoAccept: (Boolean) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
@@ -108,6 +126,7 @@ fun ChatHomeScreen(
     onOpenHistory: () -> Unit,
     onOpenLocalSetup: () -> Unit,
     onOpenRemoteSetup: () -> Unit,
+    onRefreshCatalog: () -> Unit = {},
     onOpenDrawer: () -> Unit
 ) {
     var input by remember { mutableStateOf("") }
@@ -120,6 +139,10 @@ fun ChatHomeScreen(
     LaunchedEffect(state.messages.size, state.permissions.size, state.pendingQuestions.size) {
         val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
         if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+    }
+
+    LaunchedEffect(state.partialText) {
+        if (state.partialText.isNotBlank()) input = state.partialText
     }
 
     Column(
@@ -221,16 +244,33 @@ fun ChatHomeScreen(
                 onMic = onMic,
                 isListening = state.isListening,
                 isSpeechProcessing = state.isSpeechProcessing,
-                voiceLevel = state.voiceLevel,
                 modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
-                onModelChipClick = { showModelPicker = true },
+                onModelChipClick = {
+                    // Startup synchronization can race the first user interaction.
+                    // Refresh the selected runtime when the picker opens so a
+                    // transient empty catalog never becomes a sticky empty sheet.
+                    onRefreshCatalog()
+                    showModelPicker = true
+                },
                 agents = agents,
                 selectedAgentId = selectedAgentId,
                 onSelectAgent = onSelectAgent,
-                workspaces = workspaces,
-                selectedWorkspacePath = state.selectedWorkspacePath,
-                workspaceSelectable = state.sessionId == null,
-                onSelectWorkspace = onSelectWorkspace
+                thinkingOptions = providers
+                    .firstOrNull { it.id == selectedProviderId }
+                    ?.models?.get(selectedModelId)
+                    ?.variants?.keys?.toList() ?: emptyList(),
+                selectedVariant = state.selectedVariant,
+                onSelectVariant = onSelectVariant,
+                attachments = state.attachments,
+                onAttach = onAttach,
+                onRemoveAttachment = onRemoveAttachment,
+                autoAcceptPermissions = autoAcceptPermissions,
+                onToggleAutoAccept = onToggleAutoAccept,
+                contextTokensUsed = state.contextTokensUsed,
+                contextLimit = providers
+                    .firstOrNull { it.id == selectedProviderId }
+                    ?.models?.get(selectedModelId)
+                    ?.limit?.context ?: 0L
             )
         }
     }
@@ -244,7 +284,12 @@ fun ChatHomeScreen(
             providers = providers,
             selectedProviderId = selectedProviderId,
             selectedModelId = selectedModelId,
-            onSelectModel = onSelectModel,
+            onSelectModel = { providerId, modelId ->
+                onSelectModel(providerId, modelId)
+                showModelPicker = false
+            },
+            favoriteModelKeys = favoriteModelKeys,
+            onToggleFavorite = onToggleFavorite,
             onDismiss = { showModelPicker = false }
         )
     }
@@ -333,6 +378,17 @@ private fun ChatErrorCard(
                     OutlinedButton(onClick = onOpenRemoteSetup) {
                         Text(stringResource(R.string.connect_short_action))
                     }
+                }
+            } else if (kind == ChatErrorKind.TRANSIENT_CONNECTION) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(R.string.chat_reconnecting),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 Text(text = error, color = MaterialTheme.colorScheme.error)
@@ -445,141 +501,397 @@ private fun ChatComposer(
     onMic: () -> Unit,
     isListening: Boolean,
     isSpeechProcessing: Boolean,
-    voiceLevel: Float,
     modelLabel: String,
     onModelChipClick: () -> Unit,
     agents: List<OpenCodeAgent>,
     selectedAgentId: String?,
     onSelectAgent: (String) -> Unit,
-    workspaces: List<WorkspaceRef>,
-    selectedWorkspacePath: String?,
-    workspaceSelectable: Boolean,
-    onSelectWorkspace: (String?) -> Unit
+    thinkingOptions: List<String>,
+    selectedVariant: String?,
+    onSelectVariant: (String?) -> Unit,
+    attachments: List<PromptAttachment>,
+    onAttach: () -> Unit,
+    onRemoveAttachment: (Int) -> Unit,
+    autoAcceptPermissions: Boolean,
+    onToggleAutoAccept: (Boolean) -> Unit,
+    contextTokensUsed: Long,
+    contextLimit: Long
 ) {
-    Surface(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            .imePadding()
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-            ) {
-                if (input.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.chat_message_placeholder),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                if (attachments.isNotEmpty()) {
+                    AttachmentTray(attachments = attachments, onRemove = onRemoveAttachment)
+                    Spacer(Modifier.height(6.dp))
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                ) {
+                    if (input.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.chat_message_placeholder),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    BasicTextField(
+                        value = input,
+                        onValueChange = onInputChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("chat-message-input"),
+                        minLines = 1,
+                        maxLines = 4,
+                        textStyle = TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { onSend() }),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
                     )
                 }
-                BasicTextField(
-                    value = input,
-                    onValueChange = onInputChange,
+                if (isListening || isSpeechProcessing) {
+                    Spacer(Modifier.height(8.dp))
+                    if (isListening) {
+                        ListeningStatus(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        ProcessingStatus(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 1,
-                    maxLines = 4,
-                    textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AttachButton(onClick = onAttach)
+                    CompactContextButton(
+                        label = modelLabel,
+                        maxWidth = 84.dp,
+                        onClick = onModelChipClick
+                    )
+                    if (thinkingOptions.isNotEmpty()) {
+                        ThinkingChip(
+                            options = thinkingOptions,
+                            selected = selectedVariant,
+                            onSelect = onSelectVariant
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    val micContainerColor = if (isListening) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    val micContentColor = if (isListening) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(19.dp))
+                            .testTag("chat-mic-button"),
+                        shape = RoundedCornerShape(19.dp),
+                        color = micContainerColor
+                    ) {
+                        IconButton(onClick = onMic, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Default.Mic,
+                                contentDescription = stringResource(R.string.voice),
+                                modifier = Modifier.size(21.dp),
+                                tint = micContentColor
+                            )
+                        }
+                    }
+                    if (isRunning) {
+                        FilledIconButton(onClick = onAbort, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
+                        }
+                    } else {
+                        FilledIconButton(
+                            onClick = onSend,
+                            enabled = input.isNotBlank(),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.send_description),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ModeChip(
+                agents = agents,
+                selectedAgentId = selectedAgentId,
+                onSelect = onSelectAgent
+            )
+            AutoAcceptChip(
+                enabled = autoAcceptPermissions,
+                onToggle = onToggleAutoAccept
+            )
+            if (contextLimit > 0L) {
+                CompactContextMeter(
+                    tokensUsed = contextTokensUsed,
+                    contextLimit = contextLimit
                 )
             }
-            if (isListening || isSpeechProcessing) {
-                Spacer(Modifier.height(8.dp))
-                if (isListening) {
-                    ListeningStatus(
-                        voiceLevel = voiceLevel,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    ProcessingStatus(modifier = Modifier.fillMaxWidth())
-                }
+        }
+    }
+}
+
+@Composable
+private fun AttachButton(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(17.dp))
+            .testTag("chat-attach-button"),
+        shape = RoundedCornerShape(17.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = stringResource(R.string.chat_attach),
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThinkingChip(
+    options: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Surface(
+            modifier = Modifier
+                .clip(RoundedCornerShape(100.dp))
+                .clickable(onClick = { expanded = true }),
+            shape = RoundedCornerShape(100.dp),
+            color = if (selected != null) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+            contentColor = if (selected != null) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
             }
-            Spacer(Modifier.height(6.dp))
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                CompactContextButton(
-                    label = modelLabel,
-                    maxWidth = 84.dp,
-                    onClick = onModelChipClick
+                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(14.dp))
+                Text(
+                    selected ?: stringResource(R.string.chat_thinking_default),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
                 )
-                CompactAgentButton(
-                    agents = agents,
-                    selectedAgentId = selectedAgentId,
-                    onSelect = onSelectAgent
-                )
-                CompactWorkspaceButton(
-                    workspaces = workspaces,
-                    selectedPath = selectedWorkspacePath,
-                    enabled = workspaceSelectable,
-                    onSelect = onSelectWorkspace
-                )
-                Spacer(Modifier.weight(1f))
-                val micContainerColor = if (isListening) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_thinking_default)) },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
                 }
-                val micContentColor = if (isListening) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                Surface(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(19.dp))
-                        .testTag("chat-mic-button"),
-                    shape = RoundedCornerShape(19.dp),
-                    color = micContainerColor
+            )
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.replaceFirstChar { it.uppercase() }) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentTray(
+    attachments: List<PromptAttachment>,
+    onRemove: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        attachments.forEachIndexed { index, attachment ->
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    IconButton(onClick = onMic, modifier = Modifier.fillMaxSize()) {
                     Icon(
-                        Icons.Default.Mic,
-                        contentDescription = stringResource(R.string.voice),
-                        modifier = Modifier.size(21.dp),
-                        tint = micContentColor
+                        Icons.Default.InsertDriveFile,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                }
-                if (isRunning) {
-                    FilledIconButton(onClick = onAbort, modifier = Modifier.size(38.dp)) {
-                        Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
-                    }
-                } else {
-                    FilledIconButton(
-                        onClick = onSend,
-                        enabled = input.isNotBlank(),
-                        modifier = Modifier.size(38.dp)
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.send_description),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Text(
+                        attachment.filename,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 120.dp)
+                    )
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.chat_remove_attachment),
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clickable { onRemove(index) },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
     }
 }
 
-private val waveformBarMultipliers = listOf(0.42f, 0.7f, 0.94f, 1f, 0.9f, 0.66f, 0.38f)
+@Composable
+private fun ModeChip(
+    agents: List<OpenCodeAgent>,
+    selectedAgentId: String?,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = selectedAgentId ?: "build"
+    Box {
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 92.dp)
+                .clickable(onClick = { expanded = true }),
+            shape = RoundedCornerShape(100.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Shield,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            agents.forEach { agent ->
+                DropdownMenuItem(
+                    text = { Text(agent.name) },
+                    onClick = {
+                        onSelect(agent.name)
+                        expanded = false
+                    },
+                    modifier = Modifier.testTag("chat-mode-${agent.name}")
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoAcceptChip(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val containerColor = if (enabled) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = Modifier
+            .clip(RoundedCornerShape(100.dp))
+            .clickable(onClick = { onToggle(!enabled) })
+            .testTag("chat-auto-accept"),
+        shape = RoundedCornerShape(100.dp),
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                if (enabled) Icons.Filled.VerifiedUser else Icons.Outlined.VerifiedUser,
+                contentDescription = stringResource(R.string.chat_mode_auto_accept),
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                stringResource(R.string.chat_auto_accept_short),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
+        }
+    }
+}
 
 @Composable
 private fun ListeningStatus(
-    voiceLevel: Float,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -598,48 +910,6 @@ private fun ListeningStatus(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
         )
-        VoiceWaveform(
-            voiceLevel = voiceLevel,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun VoiceWaveform(
-    voiceLevel: Float,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.testTag("chat-voice-waveform"),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        waveformBarMultipliers.forEachIndexed { index, multiplier ->
-            val transition = rememberInfiniteTransition(label = "voiceBar$index")
-            val pulse by transition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(
-                        durationMillis = 650 + (index * 35),
-                        delayMillis = index * 45
-                    ),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "voiceBarPulse$index"
-            )
-            val animatedLevel = ((voiceLevel * multiplier) + (0.16f * pulse)).coerceIn(0f, 1f)
-            val barHeight = 8.dp + (18.dp * animatedLevel)
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(barHeight)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .testTag("chat-voice-waveform-bar-$index")
-            )
-        }
     }
 }
 
@@ -701,30 +971,43 @@ private fun CompactContextButton(
 }
 
 @Composable
-private fun CompactAgentButton(
-    agents: List<OpenCodeAgent>,
-    selectedAgentId: String?,
-    onSelect: (String) -> Unit
+private fun CompactContextMeter(
+    tokensUsed: Long,
+    contextLimit: Long
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        CompactContextButton(
-            label = selectedAgentId ?: "build",
-            maxWidth = 66.dp,
-            onClick = { expanded = true }
-        )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            agents.forEach { agent ->
-                DropdownMenuItem(
-                    text = { Text(agent.name) },
-                    onClick = {
-                        onSelect(agent.name)
-                        expanded = false
-                    }
-                )
-            }
-        }
+    val fraction = (tokensUsed.toFloat() / contextLimit.toFloat()).coerceIn(0f, 1f)
+    val barColor = when {
+        fraction >= 0.9f -> MaterialTheme.colorScheme.error
+        fraction >= 0.7f -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
     }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.padding(horizontal = 2.dp)
+    ) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier
+                .width(34.dp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = barColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        Text(
+            text = "${formatTokenCount(tokensUsed)}/${formatTokenCount(contextLimit)}",
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun formatTokenCount(tokens: Long): String = when {
+    tokens >= 1_000_000 -> "%.1fM".format(tokens / 1_000_000.0)
+    tokens >= 1_000 -> "%.0fk".format(tokens / 1_000.0)
+    else -> tokens.toString()
 }
 
 @Composable

@@ -66,6 +66,8 @@ class LocalOpenCodeBackend(
     override suspend fun health(): OpenCodeHealth = delegate().health()
     override suspend fun listSessions(directory: String?): List<OpenCodeSession> =
         delegate().listSessions(directory)
+    override suspend fun session(sessionId: String): OpenCodeSession =
+        delegate().session(sessionId)
     override suspend fun createSession(title: String?, directory: String?): OpenCodeSession =
         delegate().createSession(title, directory)
     override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = delegate().listMessages(sessionId)
