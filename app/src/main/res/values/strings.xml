@@ -446,13 +446,16 @@
 
     <!-- Redesign: remote connection -->
     <string name="remote_connection_title">Connect to PC/Mac</string>
-    <string name="remote_step1_title">Start OpenCode on your PC</string>
-    <string name="remote_step1_desc">Launch opencode serve on your computer.</string>
-    <string name="remote_step2_title">Enter URL or scan QR</string>
-    <string name="remote_step2_desc">Type in the server address, or scan its QR code.</string>
-    <string name="remote_step3_title">Verify connection</string>
-    <string name="remote_step3_desc">Run a quick health check before saving.</string>
-    <string name="remote_hint">Make sure \"Allow connections\" is enabled in OpenCode on your PC.</string>
+    <string name="remote_step1_title">Run this command on your PC</string>
+    <string name="remote_step1_desc">Just paste it into a terminal and press Enter.</string>
+    <string name="remote_step2_title">Tap Discover on LAN</string>
+    <string name="remote_step2_desc">Servers on the same Wi-Fi are found automatically. If not found, enter the URL manually or scan a QR code.</string>
+    <string name="remote_step3_title">Enter password and connect</string>
+    <string name="remote_step3_desc">Type the password you set in the command, test the connection, then save.</string>
+    <string name="remote_serve_command">OPENCODE_SERVER_PASSWORD=your-password opencode serve --mdns</string>
+    <string name="remote_copy_command">Copy command</string>
+    <string name="remote_command_copied">Copied</string>
+    <string name="remote_hint">For the desktop app, add {\"server\":{\"hostname\":\"0.0.0.0\",\"mdns\":true}} to ~/.config/opencode/opencode.json and restart the app.</string>
     <string name="remote_test_connection_button">Test connection</string>
     <string name="remote_save_connection_button">Save this connection</string>
 

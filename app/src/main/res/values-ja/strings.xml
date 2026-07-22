@@ -446,13 +446,16 @@
 
     <!-- Redesign: remote connection -->
     <string name="remote_connection_title">PC・Macに接続</string>
-    <string name="remote_step1_title">PCでOpenCodeを起動</string>
-    <string name="remote_step1_desc">PCでopencode serveを起動します。</string>
-    <string name="remote_step2_title">URLを入力またはQRで読み取り</string>
-    <string name="remote_step2_desc">サーバーのアドレスを入力するか、QRコードを読み取ります。</string>
-    <string name="remote_step3_title">接続を確認</string>
-    <string name="remote_step3_desc">保存する前に接続を確認します。</string>
-    <string name="remote_hint">PCのOpenCodeで「接続を許可」が有効になっていることを確認してください。</string>
+    <string name="remote_step1_title">PCでこのコマンドを実行</string>
+    <string name="remote_step1_desc">ターミナルに貼り付けてEnterを押すだけです。</string>
+    <string name="remote_step2_title">LANで検索をタップ</string>
+    <string name="remote_step2_desc">同じWi-Fi上のサーバーが自動で見つかります。見つからない場合はURLを手動入力するかQRコードを読み取ります。</string>
+    <string name="remote_step3_title">パスワードを入れて接続</string>
+    <string name="remote_step3_desc">コマンドで設定したパスワードを入力し、接続テストして保存します。</string>
+    <string name="remote_serve_command">OPENCODE_SERVER_PASSWORD=好きなパスワード opencode serve --mdns</string>
+    <string name="remote_copy_command">コマンドをコピー</string>
+    <string name="remote_command_copied">コピーしました</string>
+    <string name="remote_hint">デスクトップアプリを使う場合は、~/.config/opencode/opencode.json に {\"server\":{\"hostname\":\"0.0.0.0\",\"mdns\":true}} を追加してアプリを再起動してください。</string>
     <string name="remote_test_connection_button">接続をテスト</string>
     <string name="remote_save_connection_button">この接続を保存</string>
 

@@ -1,7 +1,10 @@
 package com.opencode.android.feature.workspace
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.nsd.NsdManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Visibility
@@ -201,6 +205,37 @@ fun RemoteConnectionScreen(
                     title = stringResource(R.string.remote_step1_title),
                     description = stringResource(R.string.remote_step1_desc)
                 )
+                val serveCommand = stringResource(R.string.remote_serve_command)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("opencode serve", serveCommand))
+                            Toast.makeText(context, R.string.remote_command_copied, Toast.LENGTH_SHORT).show()
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            stringResource(R.string.remote_serve_command),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.remote_copy_command),
+                            tint = MaterialTheme.colorScheme.inverseOnSurface,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
                 CompactStepRow(
                     number = 2,
                     title = stringResource(R.string.remote_step2_title),
