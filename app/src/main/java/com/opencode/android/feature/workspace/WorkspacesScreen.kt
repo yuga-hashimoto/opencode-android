@@ -5,6 +5,7 @@ import android.net.nsd.NsdManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
@@ -34,6 +36,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -88,6 +92,8 @@ fun WorkspacesScreen(
     onOpenLocalManagement: () -> Unit,
     onImportFolder: () -> Unit = {},
     onCloneGithub: () -> Unit = {},
+    onRemoveProject: (String) -> Unit = {},
+    onDeleteProjectFiles: (String) -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
@@ -378,23 +384,12 @@ fun WorkspacesScreen(
                 }
             } else {
                 items(state.workspaces, key = { it.id }) { workspace ->
-                    SectionCard(modifier = Modifier.clickable { onOpenWorkspace(workspace) }) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(workspace.name, fontWeight = FontWeight.Medium)
-                                Text(
-                                    workspace.path,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2
-                                )
-                            }
-                        }
-                    }
+                    WorkspaceProjectRow(
+                        workspace = workspace,
+                        onOpen = { onOpenWorkspace(workspace) },
+                        onRemove = { onRemoveProject(workspace.path) },
+                        onDeleteFiles = { onDeleteProjectFiles(workspace.path) }
+                    )
                 }
             }
 
@@ -478,6 +473,81 @@ fun WorkspacesScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { discoveryDialogOpen = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun WorkspaceProjectRow(
+    workspace: WorkspaceRef,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit,
+    onDeleteFiles: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    SectionCard(modifier = Modifier.clickable { onOpen() }) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(workspace.name, fontWeight = FontWeight.Medium)
+                Text(
+                    workspace.path,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+            }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.workspace_more_options),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.workspace_remove_from_list)) },
+                        onClick = {
+                            menuOpen = false
+                            onRemove()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.workspace_delete_files)) },
+                        onClick = {
+                            menuOpen = false
+                            confirmDelete = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.workspace_delete_files)) },
+            text = { Text(stringResource(R.string.workspace_delete_files_confirm, workspace.name)) },
+            confirmButton = {
+                Button(onClick = {
+                    confirmDelete = false
+                    onDeleteFiles()
+                }) {
+                    Text(stringResource(R.string.delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             }

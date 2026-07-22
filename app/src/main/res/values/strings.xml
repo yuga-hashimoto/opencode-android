@@ -71,6 +71,10 @@
     <string name="workspace_clone_url_tab">URL</string>
     <string name="workspace_clone_search">Search repositories</string>
     <string name="workspace_clone_loading_repos">Loading repositories…</string>
+    <string name="workspace_more_options">More options</string>
+    <string name="workspace_remove_from_list">Remove from list</string>
+    <string name="workspace_delete_files">Delete files</string>
+    <string name="workspace_delete_files_confirm">Delete \"%1$s\" and all its files? This cannot be undone.</string>
     <string name="chat_options_description">Chat options</string>
     <string name="continue_on_other_runtime">Continue on another runtime</string>
     <string name="handoff_dialog_title">Choose a runtime</string>

@@ -157,7 +157,9 @@ fun OpenCodeApp(
                 app.runtimeRegistry,
                 app.catalogRepository,
                 app.localRuntimeManager,
-                app.localRuntimeController
+                app.localRuntimeController,
+                app.settings,
+                java.io.File(context.filesDir, "runtime/workspace")
             )
         }
     )
@@ -288,6 +290,7 @@ fun OpenCodeApp(
                     app.settings.safWorkspaceUris = existing
                 }
                 settingsViewModel.setAssistantWorkspacePath(imported.absolutePath)
+                workspaceViewModel.addProject("/workspace/${imported.name}")
                 workspaceViewModel.refresh()
                 chatViewModel.selectWorkspace("/workspace/${imported.name}")
             }
@@ -421,15 +424,15 @@ fun OpenCodeApp(
                     onNewChat = {
                         closeDrawer()
                         pendingSession = null
-                        chatViewModel.selectWorkspace(null)
                         chatViewModel.newSession()
+                        chatViewModel.selectWorkspace(null)
                         navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
                     onSelectProject = { workspace ->
                         closeDrawer()
                         pendingSession = null
-                        chatViewModel.selectWorkspace(workspace.path)
                         chatViewModel.newSession()
+                        chatViewModel.selectWorkspace(workspace.path)
                         navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
                     onOpenSession = { id, title ->
@@ -681,6 +684,8 @@ fun OpenCodeApp(
                     },
                     onImportFolder = { workspaceImportLauncher.launch(null) },
                     onCloneGithub = { showCloneDialog = true },
+                    onRemoveProject = workspaceViewModel::removeProject,
+                    onDeleteProjectFiles = workspaceViewModel::deleteProjectFiles,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -812,7 +817,9 @@ fun OpenCodeApp(
             },
             onListRepos = { settingsViewModel.listGitHubRepos() },
             onCloned = { serverPath ->
+                workspaceViewModel.addProject(serverPath)
                 workspaceViewModel.refresh()
+                chatViewModel.newSession()
                 chatViewModel.selectWorkspace(serverPath)
             },
             onDismiss = { showCloneDialog = false }

@@ -71,6 +71,10 @@
     <string name="workspace_clone_url_tab">URL</string>
     <string name="workspace_clone_search">リポジトリを検索</string>
     <string name="workspace_clone_loading_repos">リポジトリを読み込み中…</string>
+    <string name="workspace_more_options">その他のオプション</string>
+    <string name="workspace_remove_from_list">一覧から削除</string>
+    <string name="workspace_delete_files">ファイルを削除</string>
+    <string name="workspace_delete_files_confirm">「%1$s」とすべてのファイルを削除しますか？元に戻せません。</string>
     <string name="chat_options_description">チャット操作</string>
     <string name="continue_on_other_runtime">別の実行先で続ける</string>
     <string name="handoff_dialog_title">実行先を選択</string>
