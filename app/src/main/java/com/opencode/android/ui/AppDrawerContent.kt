@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
@@ -26,12 +27,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
+import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
 /** A recent chat entry rendered in the drawer's recent-chat section. */
@@ -43,16 +46,19 @@ data class DrawerRecentSession(
 )
 
 private fun DrawerRecentSession.projectKey(): String =
-    directory?.trimEnd('/')?.takeIf { it.isNotBlank() && it != "/root" }.orEmpty()
+    directory?.trimEnd('/')?.takeIf { it.isNotBlank() && it != "/root" && it != "/workspace" }.orEmpty()
 
 private fun DrawerRecentSession.projectLabel(defaultLabel: String): String =
     projectKey().substringAfterLast('/').takeIf { it.isNotBlank() } ?: defaultLabel
 
-/** Drawer focused on real chat history and the two stable destinations. */
+/** Project-centric drawer: pick a project to chat in, then browse recent chats. */
 @Composable
 fun AppDrawerContent(
     recentSessions: List<DrawerRecentSession>,
+    workspaces: List<WorkspaceRef>,
+    selectedWorkspacePath: String?,
     onNewChat: () -> Unit,
+    onSelectProject: (WorkspaceRef) -> Unit,
     onOpenSession: (String, String) -> Unit,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -75,6 +81,23 @@ fun AppDrawerContent(
                 DrawerHeader()
                 NewChatRow(onClick = onNewChat)
 
+                DrawerSectionHeader(stringResource(R.string.drawer_projects_title))
+                DrawerProjectRow(
+                    label = stringResource(R.string.drawer_project_default),
+                    path = null,
+                    selected = selectedWorkspacePath == null,
+                    onClick = onNewChat
+                )
+                workspaces.forEach { workspace ->
+                    DrawerProjectRow(
+                        label = workspace.name,
+                        path = workspace.path,
+                        selected = workspace.path == selectedWorkspacePath,
+                        onClick = { onSelectProject(workspace) }
+                    )
+                }
+                DrawerAddProjectRow(onClick = { onNavigate("workspaces") })
+
                 if (recentSessions.isNotEmpty()) {
                     val defaultLabel = stringResource(R.string.drawer_project_default)
                     val grouped = recentSessions
@@ -83,8 +106,9 @@ fun AppDrawerContent(
                         .sortedByDescending { (_, sessions) ->
                             sessions.firstOrNull()?.let { recentSessions.indexOf(it) } ?: Int.MAX_VALUE
                         }
+                    DrawerSectionHeader(stringResource(R.string.drawer_recent_chats))
                     grouped.forEach { (_, sessions) ->
-                        DrawerProjectHeader(
+                        DrawerRecentProjectHeader(
                             label = sessions.first().projectLabel(defaultLabel)
                         )
                         sessions.forEach { session ->
@@ -98,11 +122,6 @@ fun AppDrawerContent(
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f))
-            DrawerDestinationRow(
-                icon = Icons.Default.Folder,
-                label = stringResource(R.string.settings_workspace_row),
-                onClick = { onNavigate("workspaces") }
-            )
             DrawerDestinationRow(
                 icon = Icons.Default.Settings,
                 label = stringResource(R.string.nav_settings),
@@ -169,11 +188,103 @@ private fun NewChatRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DrawerProjectHeader(label: String) {
+private fun DrawerSectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp)
+    )
+}
+
+@Composable
+private fun DrawerProjectRow(
+    label: String,
+    path: String?,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 2.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        } else {
+            Color.Transparent
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                Icons.Default.Folder,
+                contentDescription = null,
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(18.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (path != null) {
+                    Text(
+                        text = path,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerAddProjectRow(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            Icons.Default.Add,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = stringResource(R.string.drawer_add_project),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun DrawerRecentProjectHeader(label: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
@@ -181,11 +292,11 @@ private fun DrawerProjectHeader(label: String) {
             Icons.Default.Folder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(15.dp)
+            modifier = Modifier.size(14.dp)
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
@@ -247,7 +358,13 @@ private fun AppDrawerContentPreview() {
                 DrawerRecentSession("4", "APIレスポンスを整理", "4日前", "/workspace/api-server"),
                 DrawerRecentSession("5", "依存関係を更新", "1週間前", null)
             ),
+            workspaces = listOf(
+                WorkspaceRef("/workspace/opencode-android", "opencode-android", "/workspace/opencode-android"),
+                WorkspaceRef("/workspace/api-server", "api-server", "/workspace/api-server")
+            ),
+            selectedWorkspacePath = "/workspace/opencode-android",
             onNewChat = {},
+            onSelectProject = {},
             onOpenSession = { _, _ -> },
             onNavigate = {}
         )
