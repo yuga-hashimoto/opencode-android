@@ -8,6 +8,8 @@ import com.opencode.android.core.api.OpenCodeMessage
 import com.opencode.android.core.api.OpenCodePart
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
+import com.opencode.android.core.api.QuestionPrompt
+import com.opencode.android.core.api.QuestionRequest
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
 import kotlinx.coroutines.Job
@@ -49,6 +51,29 @@ data class ChatMessage(
 ) {
     val text: String
         get() = parts.filterIsInstance<ChatPart.Text>().joinToString("") { it.text }
+}
+
+data class PendingQuestionUi(
+    val request: QuestionRequest,
+    val selectedAnswers: List<List<String>>,
+    val isSubmitting: Boolean = false,
+    val error: String? = null
+) {
+    val canSubmit: Boolean
+        get() = request.questions.indices.all { index ->
+            sanitizeQuestionAnswer(
+                prompt = request.questions[index],
+                answers = selectedAnswers.getOrElse(index) { emptyList() },
+                multiple = request.multiple
+            ).isNotEmpty()
+        }
+
+    companion object {
+        fun from(request: QuestionRequest) = PendingQuestionUi(
+            request = request,
+            selectedAnswers = request.questions.map { emptyList() }
+        )
+    }
 }
 
 private const val MAX_TOOL_OUTPUT_CHARS = 4000
@@ -122,6 +147,7 @@ data class ChatUiState(
     val sessionTitle: String = "",
     val messages: List<ChatMessage> = emptyList(),
     val permissions: List<PermissionRequest> = emptyList(),
+    val pendingQuestions: List<PendingQuestionUi> = emptyList(),
     val isConnected: Boolean = false,
     val isRunning: Boolean = false,
     val isLoadingHistory: Boolean = false,
@@ -201,6 +227,7 @@ class ChatViewModel(
                 isLoadingHistory = true,
                 messages = emptyList(),
                 permissions = emptyList(),
+                pendingQuestions = emptyList(),
                 error = null
             )
         }
@@ -230,6 +257,7 @@ class ChatViewModel(
                 sessionTitle = "",
                 messages = emptyList(),
                 permissions = emptyList(),
+                pendingQuestions = emptyList(),
                 isRunning = false,
                 isThinking = false,
                 isListening = false,
@@ -328,6 +356,89 @@ class ChatViewModel(
         }
     }
 
+    fun selectQuestionAnswer(questionId: String, questionIndex: Int, answer: String) {
+        _uiState.update { state ->
+            state.copy(
+                pendingQuestions = state.pendingQuestions.map { pending ->
+                    if (pending.request.id != questionId) return@map pending
+                    val prompt = pending.request.questions.getOrNull(questionIndex) ?: return@map pending
+                    val updatedAnswers = pending.selectedAnswers.toMutableList()
+                    updatedAnswers[questionIndex] = updateQuestionAnswerSelection(
+                        prompt = prompt,
+                        current = pending.selectedAnswers.getOrElse(questionIndex) { emptyList() },
+                        answer = answer,
+                        multiple = pending.request.multiple
+                    )
+                    pending.copy(selectedAnswers = updatedAnswers, error = null)
+                }
+            )
+        }
+    }
+
+    fun submitQuestion(questionId: String) {
+        val currentBackend = backend ?: return
+        val sessionId = _uiState.value.sessionId ?: return
+        val pendingQuestion = _uiState.value.pendingQuestions.firstOrNull { it.request.id == questionId } ?: return
+        val answers = pendingQuestion.request.questions.indices.map { index ->
+            sanitizeQuestionAnswer(
+                prompt = pendingQuestion.request.questions[index],
+                answers = pendingQuestion.selectedAnswers.getOrElse(index) { emptyList() },
+                multiple = pendingQuestion.request.multiple
+            )
+        }
+        if (answers.any { it.isEmpty() }) {
+            _uiState.update { state ->
+                state.copy(
+                    pendingQuestions = state.pendingQuestions.map { pending ->
+                        if (pending.request.id == questionId) pending.copy(error = "Answer required") else pending
+                    }
+                )
+            }
+            return
+        }
+
+        _uiState.update { state ->
+            state.copy(
+                pendingQuestions = state.pendingQuestions.map { pending ->
+                    if (pending.request.id == questionId) pending.copy(isSubmitting = true, error = null) else pending
+                }
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                currentBackend.answerQuestion(sessionId, questionId, answers)
+            }.onSuccess { accepted ->
+                _uiState.update { state ->
+                    if (accepted) {
+                        state.copy(pendingQuestions = state.pendingQuestions.filterNot { it.request.id == questionId })
+                    } else {
+                        state.copy(
+                            pendingQuestions = state.pendingQuestions.map { pending ->
+                                if (pending.request.id == questionId) {
+                                    pending.copy(isSubmitting = false, error = "OpenCode question failed")
+                                } else {
+                                    pending
+                                }
+                            }
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                _uiState.update { state ->
+                    state.copy(
+                        pendingQuestions = state.pendingQuestions.map { pending ->
+                            if (pending.request.id == questionId) {
+                                pending.copy(isSubmitting = false, error = error.safeMessage())
+                            } else {
+                                pending
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     fun abort() {
         val currentBackend = backend ?: return
         val sessionId = _uiState.value.sessionId ?: return
@@ -381,6 +492,16 @@ class ChatViewModel(
                     )
                 }
             }
+            is OpenCodeEvent.QuestionAsked -> {
+                if (event.request.sessionId != activeSession) return
+                _uiState.update { state ->
+                    state.copy(
+                        pendingQuestions = state.pendingQuestions
+                            .filterNot { it.request.id == event.request.id } + PendingQuestionUi.from(event.request),
+                        isThinking = false
+                    )
+                }
+            }
             is OpenCodeEvent.SessionIdle -> {
                 if (event.sessionId != activeSession) return
                 streamedParts.clear()
@@ -404,7 +525,6 @@ class ChatViewModel(
                     )
                 }
             }
-            is OpenCodeEvent.QuestionAsked -> Unit
             is OpenCodeEvent.Unknown -> Unit
         }
     }
@@ -478,4 +598,61 @@ class ChatViewModel(
 
     private fun Throwable.safeMessage(): String =
         message?.takeIf { it.isNotBlank() } ?: "OpenCode operation failed"
+}
+
+private fun updateQuestionAnswerSelection(
+    prompt: QuestionPrompt,
+    current: List<String>,
+    answer: String,
+    multiple: Boolean
+): List<String> {
+    val normalized = answer.trim()
+    val optionLabels = prompt.options.map { it.label }.toSet()
+    if (prompt.options.isEmpty()) {
+        return normalized.takeIf { it.isNotEmpty() }?.let(::listOf).orEmpty()
+    }
+
+    val optionAnswers = current.filter { it in optionLabels }
+    val fallback = current.lastOrNull { it !in optionLabels }
+    if (normalized in optionLabels) {
+        return if (multiple) {
+            val toggled = if (normalized in optionAnswers) {
+                optionAnswers.filterNot { it == normalized }
+            } else {
+                optionAnswers + normalized
+            }
+            toggled + listOfNotNull(fallback?.takeIf { it.isNotBlank() })
+        } else {
+            listOf(normalized)
+        }
+    }
+
+    val nextFallback = normalized.takeIf { it.isNotEmpty() }
+    return if (multiple) {
+        optionAnswers + listOfNotNull(nextFallback)
+    } else {
+        listOfNotNull(nextFallback)
+    }
+}
+
+private fun sanitizeQuestionAnswer(
+    prompt: QuestionPrompt,
+    answers: List<String>,
+    multiple: Boolean
+): List<String> {
+    val normalizedAnswers = answers.map(String::trim).filter { it.isNotEmpty() }
+    if (prompt.options.isEmpty()) {
+        return normalizedAnswers.take(1)
+    }
+
+    val optionLabels = prompt.options.map { it.label }.toSet()
+    val selectedOptions = normalizedAnswers.filter { it in optionLabels }.distinct()
+    val fallback = normalizedAnswers.lastOrNull { it !in optionLabels }
+    return if (multiple) {
+        selectedOptions + listOfNotNull(fallback)
+    } else {
+        selectedOptions.firstOrNull()?.let(::listOf)
+            ?: fallback?.let(::listOf)
+            ?: emptyList()
+    }
 }

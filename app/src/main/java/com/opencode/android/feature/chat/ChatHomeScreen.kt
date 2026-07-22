@@ -91,6 +91,8 @@ fun ChatHomeScreen(
     onSelectModel: (String, String) -> Unit,
     onSelectAgent: (String) -> Unit,
     onSelectWorkspace: (String?) -> Unit,
+    onSelectQuestionAnswer: (String, Int, String) -> Unit,
+    onSubmitQuestion: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
@@ -108,8 +110,8 @@ fun ChatHomeScreen(
     val errorKind = classifyChatError(state.error)
     val runtimeNotReady = errorKind == ChatErrorKind.RUNTIME_NOT_READY && state.messages.isEmpty()
 
-    LaunchedEffect(state.messages.size, state.permissions.size) {
-        val totalItems = state.messages.size + state.permissions.size
+    LaunchedEffect(state.messages.size, state.permissions.size, state.pendingQuestions.size) {
+        val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
         if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
     }
 
@@ -153,7 +155,10 @@ fun ChatHomeScreen(
                     onOpenLocalSetup = onOpenLocalSetup,
                     onOpenRemoteSetup = onOpenRemoteSetup
                 )
-                state.messages.isEmpty() && state.permissions.isEmpty() && state.error == null -> {
+                state.messages.isEmpty() &&
+                    state.permissions.isEmpty() &&
+                    state.pendingQuestions.isEmpty() &&
+                    state.error == null -> {
                     EmptyChatState(onSuggestionClick = { text -> input = text })
                 }
                 else -> {
@@ -168,6 +173,13 @@ fun ChatHomeScreen(
                         }
                         items(state.permissions, key = { "permission-${it.id}" }) { permission ->
                             PermissionCard(permission, onPermission)
+                        }
+                        items(state.pendingQuestions, key = { "question-${it.request.id}" }) { question ->
+                            QuestionCard(
+                                question = question,
+                                onAnswerSelected = onSelectQuestionAnswer,
+                                onSubmit = onSubmitQuestion
+                            )
                         }
                         if (state.isThinking) {
                             item { StatusChip(text = stringResource(R.string.thinking), active = true) }
@@ -633,6 +645,8 @@ private fun ChatHomeScreenEmptyPreview() {
             onSelectModel = { _, _ -> },
             onSelectAgent = {},
             onSelectWorkspace = {},
+            onSelectQuestionAnswer = { _, _, _ -> },
+            onSubmitQuestion = {},
             onSendMessage = {},
             onPermission = { _, _, _ -> },
             onAbort = {},

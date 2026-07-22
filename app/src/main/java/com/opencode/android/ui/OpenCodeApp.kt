@@ -428,6 +428,8 @@ fun OpenCodeApp(
                     onSelectModel = settingsViewModel::selectModel,
                     onSelectAgent = settingsViewModel::selectAgent,
                     onSelectWorkspace = chatViewModel::selectWorkspace,
+                    onSelectQuestionAnswer = chatViewModel::selectQuestionAnswer,
+                    onSubmitQuestion = chatViewModel::submitQuestion,
                     onSendMessage = chatViewModel::sendMessage,
                     onPermission = chatViewModel::respondToPermission,
                     onAbort = chatViewModel::abort,
