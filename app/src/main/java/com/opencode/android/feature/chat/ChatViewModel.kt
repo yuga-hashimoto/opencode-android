@@ -404,6 +404,7 @@ class ChatViewModel(
                     )
                 }
             }
+            is OpenCodeEvent.QuestionAsked -> Unit
             is OpenCodeEvent.Unknown -> Unit
         }
     }

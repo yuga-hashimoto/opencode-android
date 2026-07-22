@@ -144,6 +144,12 @@ class RuntimeActivityRepository(
                 appendLog("実行エラー", event.message, event.sessionId)
                 onSessionError?.invoke(event.sessionId, event.message)
             }
+            is OpenCodeEvent.QuestionAsked -> {
+                mutableState.update { current ->
+                    current.copy(activeSessionIds = current.activeSessionIds + event.request.sessionId)
+                }
+                appendLog("質問", event.request.questions.firstOrNull()?.question, event.request.sessionId)
+            }
             is OpenCodeEvent.Unknown -> appendLog("未対応イベント", event.type)
         }
     }

@@ -103,6 +103,11 @@ interface OpenCodeBackend {
         response: PermissionResponse,
         remember: Boolean
     ): Boolean
+    suspend fun answerQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>
+    ): Boolean = unsupported("question answers")
     fun events(): Flow<OpenCodeEvent>
 
     private fun unsupported(capability: String): Nothing =

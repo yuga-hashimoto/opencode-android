@@ -214,6 +214,7 @@ class OpenCodeVoiceSession(context: Context) : VoiceInteractionSession(context),
                             }
                         }
                         OpenCodeEvent.ServerConnected,
+                        is OpenCodeEvent.QuestionAsked,
                         is OpenCodeEvent.Unknown -> Unit
                     }
                 }

@@ -76,4 +76,39 @@ class OpenCodeEventParserTest {
         assertTrue(event is OpenCodeEvent.Unknown)
         assertEquals("future.event", (event as OpenCodeEvent.Unknown).type)
     }
+
+    @Test
+    fun `parses question asked with options`() {
+        val event = parser.parse(
+            """{"type":"question.asked","properties":{"id":"q-1","sessionID":"s1","multiple":true,"questions":[{"question":"Pick a folder","header":"Folder","options":[{"label":"src","description":"Source code"},{"label":"docs"}],"placeholder":"Type a path"}]}}"""
+        ) as OpenCodeEvent.QuestionAsked
+
+        val request = event.request
+        assertEquals("q-1", request.id)
+        assertEquals("s1", request.sessionId)
+        assertTrue(request.multiple)
+        assertEquals("Pick a folder", request.questions.single().question)
+        assertEquals("Folder", request.questions.single().header)
+        assertEquals("Type a path", request.questions.single().placeholder)
+        assertEquals(listOf("src", "docs"), request.questions.single().options.map { it.label })
+        assertEquals("Source code", request.questions.single().options.first().description)
+    }
+
+    @Test
+    fun `parses question asked with primitive string prompts`() {
+        val event = parser.parse(
+            """{"type":"question.asked","properties":{"id":"q-2","sessionID":"s1","questions":["Continue?"]}}"""
+        ) as OpenCodeEvent.QuestionAsked
+
+        assertEquals("Continue?", event.request.questions.single().question)
+        assertTrue(event.request.questions.single().options.isEmpty())
+        assertTrue(!event.request.multiple)
+    }
+
+    @Test
+    fun `malformed question event becomes unknown instead of throwing`() {
+        val event = parser.parse("""{"type":"question.asked","properties":{}}""")
+        assertTrue(event is OpenCodeEvent.Unknown)
+        assertEquals("question.asked", (event as OpenCodeEvent.Unknown).type)
+    }
 }

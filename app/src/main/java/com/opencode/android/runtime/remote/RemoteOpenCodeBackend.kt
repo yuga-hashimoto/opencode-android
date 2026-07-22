@@ -104,5 +104,10 @@ class RemoteOpenCodeBackend(
         response = response.apiValue,
         remember = remember
     )
+    override suspend fun answerQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>
+    ): Boolean = client.answerQuestion(sessionId, requestId, answers)
     override fun events(): Flow<OpenCodeEvent> = client.events()
 }

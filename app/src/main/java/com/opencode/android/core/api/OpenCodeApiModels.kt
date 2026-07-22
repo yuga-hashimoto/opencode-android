@@ -191,6 +191,25 @@ data class PermissionRequest(
     val metadata: Map<String, JsonElement> = emptyMap()
 )
 
+data class QuestionOption(
+    val label: String,
+    val description: String? = null
+)
+
+data class QuestionPrompt(
+    val question: String,
+    val header: String? = null,
+    val options: List<QuestionOption> = emptyList(),
+    val placeholder: String? = null
+)
+
+data class QuestionRequest(
+    val id: String,
+    val sessionId: String,
+    val questions: List<QuestionPrompt>,
+    val multiple: Boolean = false
+)
+
 sealed interface OpenCodeEvent {
     data object ServerConnected : OpenCodeEvent
     data class MessagePartUpdated(val part: OpenCodePart) : OpenCodeEvent
@@ -202,6 +221,7 @@ sealed interface OpenCodeEvent {
         val delta: String
     ) : OpenCodeEvent
     data class PermissionAsked(val request: PermissionRequest) : OpenCodeEvent
+    data class QuestionAsked(val request: QuestionRequest) : OpenCodeEvent
     data class SessionIdle(val sessionId: String) : OpenCodeEvent
     data class SessionError(val sessionId: String?, val message: String?) : OpenCodeEvent
     data class Unknown(val type: String, val rawJson: String) : OpenCodeEvent

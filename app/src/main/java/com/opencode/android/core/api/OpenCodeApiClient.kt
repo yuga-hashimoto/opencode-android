@@ -263,6 +263,28 @@ class OpenCodeApiClient(
         )
     }
 
+    suspend fun answerQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>
+    ): Boolean {
+        val json = JsonObject().apply {
+            add(
+                "answers",
+                JsonArray().apply {
+                    answers.forEach { answerGroup ->
+                        add(JsonArray().apply { answerGroup.forEach { add(it) } })
+                    }
+                }
+            )
+        }
+        return post(
+            "session/${encodePath(sessionId)}/question/${encodePath(requestId)}",
+            json,
+            Boolean::class.java
+        )
+    }
+
     fun events(): Flow<OpenCodeEvent> = singleEventStream().retryWhen { cause, attempt ->
         val retryable = cause !is OpenCodeApiException || cause.statusCode >= 500
         if (!retryable) return@retryWhen false

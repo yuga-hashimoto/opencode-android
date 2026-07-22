@@ -1,6 +1,7 @@
 package com.opencode.android.core.api
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 
 class OpenCodeEventParser(
@@ -40,6 +41,16 @@ class OpenCodeEventParser(
                             .orEmpty()
                     )
                 )
+                "question.asked" -> OpenCodeEvent.QuestionAsked(
+                    QuestionRequest(
+                        id = properties.get("id").asString,
+                        sessionId = properties.get("sessionID").asString,
+                        questions = properties.getAsJsonArray("questions")
+                            ?.mapNotNull { element -> parseQuestionPrompt(element) }
+                            .orEmpty(),
+                        multiple = properties.get("multiple")?.takeUnless { it.isJsonNull }?.asBoolean ?: false
+                    )
+                )
                 "session.idle" -> OpenCodeEvent.SessionIdle(properties.get("sessionID").asString)
                 "session.error" -> OpenCodeEvent.SessionError(
                     sessionId = properties.get("sessionID")?.takeUnless { it.isJsonNull }?.asString,
@@ -48,5 +59,39 @@ class OpenCodeEventParser(
                 else -> OpenCodeEvent.Unknown(type, json)
             }
         }.getOrElse { OpenCodeEvent.Unknown(type, json) }
+    }
+
+    private fun parseQuestionPrompt(element: JsonElement): QuestionPrompt? = when {
+        element.isJsonPrimitive && element.asJsonPrimitive.isString -> QuestionPrompt(question = element.asString)
+        element.isJsonObject -> {
+            val prompt = element.asJsonObject
+            val question = prompt.get("question")?.takeUnless { it.isJsonNull }?.asString
+            question?.let {
+                QuestionPrompt(
+                    question = it,
+                    header = prompt.get("header")?.takeUnless { field -> field.isJsonNull }?.asString,
+                    options = prompt.getAsJsonArray("options")
+                        ?.mapNotNull { option -> parseQuestionOption(option) }
+                        .orEmpty(),
+                    placeholder = prompt.get("placeholder")?.takeUnless { field -> field.isJsonNull }?.asString
+                )
+            }
+        }
+        else -> null
+    }
+
+    private fun parseQuestionOption(element: JsonElement): QuestionOption? = when {
+        element.isJsonPrimitive && element.asJsonPrimitive.isString -> QuestionOption(label = element.asString)
+        element.isJsonObject -> {
+            val option = element.asJsonObject
+            val label = option.get("label")?.takeUnless { it.isJsonNull }?.asString
+            label?.let {
+                QuestionOption(
+                    label = it,
+                    description = option.get("description")?.takeUnless { field -> field.isJsonNull }?.asString
+                )
+            }
+        }
+        else -> null
     }
 }

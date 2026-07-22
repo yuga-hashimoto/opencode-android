@@ -133,6 +133,11 @@ class LocalOpenCodeBackend(
         response: PermissionResponse,
         remember: Boolean
     ): Boolean = delegate().respondToPermission(sessionId, permissionId, response, remember)
+    override suspend fun answerQuestion(
+        sessionId: String,
+        requestId: String,
+        answers: List<List<String>>
+    ): Boolean = delegate().answerQuestion(sessionId, requestId, answers)
     override fun events(): Flow<OpenCodeEvent> = delegate().events()
 
     private data class CachedDelegate(

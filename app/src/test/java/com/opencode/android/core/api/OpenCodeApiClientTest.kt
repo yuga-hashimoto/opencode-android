@@ -114,6 +114,22 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `answers question request`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        val result = client.answerQuestion("s1", "q-1", listOf(listOf("src"), listOf("docs", "tests")))
+
+        assertTrue(result)
+        val request = server.takeRequest()
+        assertEquals("/session/s1/question/q-1", request.path)
+        val answers = JsonParser.parseString(request.body.readUtf8()).asJsonObject.getAsJsonArray("answers")
+        assertEquals("src", answers[0].asJsonArray[0].asString)
+        assertEquals("docs", answers[1].asJsonArray[0].asString)
+        assertEquals("tests", answers[1].asJsonArray[1].asString)
+    }
+
+    @Test
     fun `renames session using PATCH with title body`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"id":"s1","title":"Renamed","directory":"/repo","time":{"created":1,"updated":2}}"""))
         val client = client()
