@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
@@ -36,6 +37,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +72,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun WorkspacesScreen(
     state: WorkspaceUiState,
     onSelectRuntime: (String) -> Unit,
@@ -83,7 +87,8 @@ fun WorkspacesScreen(
     onReinstallLocal: () -> Unit,
     onOpenLocalManagement: () -> Unit,
     onImportFolder: () -> Unit = {},
-    onCloneGithub: () -> Unit = {}
+    onCloneGithub: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     var editing by remember { mutableStateOf<ConnectionFormState?>(null) }
     var discoveryDialogOpen by remember { mutableStateOf(false) }
@@ -123,6 +128,19 @@ fun WorkspacesScreen(
     }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.workspaces_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.nav_back)
+                        )
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { editing = ConnectionFormState() }) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_pc_connection_description))

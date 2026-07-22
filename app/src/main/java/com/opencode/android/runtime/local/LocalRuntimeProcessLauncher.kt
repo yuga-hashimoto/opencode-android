@@ -52,7 +52,7 @@ class LocalRuntimeProcessLauncher(
             add("-b")
             add("${workspace.absolutePath}:/workspace")
             add("-w")
-            add("/root")
+            add("/workspace")
             add("/usr/local/bin/opencode")
             add("serve")
             add("--hostname")

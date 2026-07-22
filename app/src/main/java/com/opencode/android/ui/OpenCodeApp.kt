@@ -641,7 +641,8 @@ fun OpenCodeApp(
                         navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE)
                     },
                     onImportFolder = { workspaceImportLauncher.launch(null) },
-                    onCloneGithub = { showCloneDialog = true }
+                    onCloneGithub = { showCloneDialog = true },
+                    onBack = { navController.popBackStack() }
                 )
             }
 

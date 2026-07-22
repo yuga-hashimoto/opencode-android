@@ -90,7 +90,7 @@ class OpenCodeApplication : Application() {
             beforeStart = { installed ->
                 runCatching { providerCredentials.syncToRuntime(installed.rootfs) }
                 runCatching {
-                    GitCredentialHelper(installed.rootfs).let { helper ->
+                    GitCredentialHelper(installed.rootfs) { settings.githubToken }.let { helper ->
                         if (settings.githubToken.isNullOrBlank()) helper.remove() else helper.install()
                     }
                 }
