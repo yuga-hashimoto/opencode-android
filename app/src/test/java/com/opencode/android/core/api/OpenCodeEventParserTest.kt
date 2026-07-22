@@ -111,4 +111,14 @@ class OpenCodeEventParserTest {
         assertTrue(event is OpenCodeEvent.Unknown)
         assertEquals("question.asked", (event as OpenCodeEvent.Unknown).type)
     }
+
+    @Test
+    fun `question event with no valid nested prompts becomes unknown`() {
+        val event = parser.parse(
+            """{"type":"question.asked","properties":{"id":"q-3","sessionID":"s1","questions":[{},{"options":[{"description":"Missing label"}]},42]}}"""
+        )
+
+        assertTrue(event is OpenCodeEvent.Unknown)
+        assertEquals("question.asked", (event as OpenCodeEvent.Unknown).type)
+    }
 }

@@ -41,16 +41,21 @@ class OpenCodeEventParser(
                             .orEmpty()
                     )
                 )
-                "question.asked" -> OpenCodeEvent.QuestionAsked(
-                    QuestionRequest(
+                "question.asked" -> {
+                    val questions = properties.getAsJsonArray("questions")
+                        ?.mapNotNull { element -> parseQuestionPrompt(element) }
+                        .orEmpty()
+                    require(questions.isNotEmpty()) { "question.asked requires at least one valid prompt" }
+
+                    OpenCodeEvent.QuestionAsked(
+                        QuestionRequest(
                         id = properties.get("id").asString,
                         sessionId = properties.get("sessionID").asString,
-                        questions = properties.getAsJsonArray("questions")
-                            ?.mapNotNull { element -> parseQuestionPrompt(element) }
-                            .orEmpty(),
+                        questions = questions,
                         multiple = properties.get("multiple")?.takeUnless { it.isJsonNull }?.asBoolean ?: false
                     )
-                )
+                    )
+                }
                 "session.idle" -> OpenCodeEvent.SessionIdle(properties.get("sessionID").asString)
                 "session.error" -> OpenCodeEvent.SessionError(
                     sessionId = properties.get("sessionID")?.takeUnless { it.isJsonNull }?.asString,
