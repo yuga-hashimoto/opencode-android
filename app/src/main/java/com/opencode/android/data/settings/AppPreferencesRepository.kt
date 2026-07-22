@@ -14,6 +14,7 @@ data class AppPreferences(
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
     val continuousConversation: Boolean = false,
+    val wakeWordEnabled: Boolean = false,
     val autoAcceptPermissions: Boolean = false,
     val favoriteModelKeys: Set<String> = emptySet()
 )
@@ -28,6 +29,7 @@ class AppPreferencesRepository(
             agentId = settings.selectedAgentId,
             ttsEnabled = settings.ttsEnabled,
             continuousConversation = settings.continuousConversation,
+            wakeWordEnabled = settings.wakeWordEnabled,
             autoAcceptPermissions = settings.autoAcceptPermissions,
             favoriteModelKeys = settings.favoriteModelKeys
         )
@@ -79,6 +81,11 @@ class AppPreferencesRepository(
     fun setContinuousConversation(enabled: Boolean) {
         settings.continuousConversation = enabled
         mutableState.update { it.copy(continuousConversation = enabled) }
+    }
+
+    fun setWakeWordEnabled(enabled: Boolean) {
+        settings.wakeWordEnabled = enabled
+        mutableState.update { it.copy(wakeWordEnabled = enabled) }
     }
 
     fun setAutoAcceptPermissions(enabled: Boolean) {

@@ -38,8 +38,10 @@ import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 fun VoiceSettingsScreen(
     ttsEnabled: Boolean,
     continuousConversation: Boolean,
+    wakeWordEnabled: Boolean,
     onTtsChange: (Boolean) -> Unit,
     onContinuousChange: (Boolean) -> Unit,
+    onWakeWordChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -103,10 +105,9 @@ fun VoiceSettingsScreen(
                     VoiceToggleRow(
                         icon = Icons.Default.VoiceChat,
                         title = stringResource(R.string.settings_wake_word_row),
-                        description = stringResource(R.string.wake_word_pack_required),
-                        checked = false,
-                        enabled = false,
-                        onCheckedChange = {}
+                        description = stringResource(R.string.wake_word_description),
+                        checked = wakeWordEnabled,
+                        onCheckedChange = onWakeWordChange
                     )
                 }
             }
@@ -192,8 +193,10 @@ private fun VoiceSettingsScreenPreview() {
         VoiceSettingsScreen(
             ttsEnabled = true,
             continuousConversation = false,
+            wakeWordEnabled = false,
             onTtsChange = {},
             onContinuousChange = {},
+            onWakeWordChange = {},
             onBack = {}
         )
     }

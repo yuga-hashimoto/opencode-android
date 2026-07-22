@@ -214,6 +214,7 @@ fun OpenCodeApp(
     }
     var voiceJob by remember { mutableStateOf<Job?>(null) }
     var startVoiceAfterPermission by remember { mutableStateOf(false) }
+    var startWakeWordAfterPermission by remember { mutableStateOf(false) }
 
     fun hasMicrophonePermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -253,8 +254,12 @@ fun OpenCodeApp(
         if (granted && startVoiceAfterPermission) {
             startVoiceAfterPermission = false
             startOrStopVoiceInput()
+        } else if (granted && startWakeWordAfterPermission) {
+            startWakeWordAfterPermission = false
+            com.opencode.android.feature.wakeword.WakeWordService.start(context)
         } else if (!granted) {
             startVoiceAfterPermission = false
+            startWakeWordAfterPermission = false
             chatViewModel.reportSpeechError(context.getString(R.string.mic_permission_required))
         }
     }
@@ -313,6 +318,16 @@ fun OpenCodeApp(
             if (!granted) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    LaunchedEffect(preferences.wakeWordEnabled) {
+        if (preferences.wakeWordEnabled && hasMicrophonePermission()) {
+            if (!com.opencode.android.feature.wakeword.WakeWordService.isRunning(context)) {
+                com.opencode.android.feature.wakeword.WakeWordService.start(context)
+            }
+        } else if (!preferences.wakeWordEnabled) {
+            com.opencode.android.feature.wakeword.WakeWordService.stop(context)
         }
     }
 
@@ -401,9 +416,19 @@ fun OpenCodeApp(
             ModalDrawerSheet {
                 AppDrawerContent(
                     recentSessions = recentSessions,
+                    workspaces = workspaceState.workspaces,
+                    selectedWorkspacePath = chatState.selectedWorkspacePath,
                     onNewChat = {
                         closeDrawer()
                         pendingSession = null
+                        chatViewModel.selectWorkspace(null)
+                        chatViewModel.newSession()
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
+                    },
+                    onSelectProject = { workspace ->
+                        closeDrawer()
+                        pendingSession = null
+                        chatViewModel.selectWorkspace(workspace.path)
                         chatViewModel.newSession()
                         navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
@@ -584,8 +609,22 @@ fun OpenCodeApp(
                 VoiceSettingsScreen(
                     ttsEnabled = settingsState.ttsEnabled,
                     continuousConversation = settingsState.continuousConversation,
+                    wakeWordEnabled = settingsState.wakeWordEnabled,
                     onTtsChange = settingsViewModel::setTtsEnabled,
                     onContinuousChange = settingsViewModel::setContinuousConversation,
+                    onWakeWordChange = { enabled ->
+                        settingsViewModel.setWakeWordEnabled(enabled)
+                        if (enabled) {
+                            if (hasMicrophonePermission()) {
+                                com.opencode.android.feature.wakeword.WakeWordService.start(context)
+                            } else {
+                                startWakeWordAfterPermission = true
+                                microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        } else {
+                            com.opencode.android.feature.wakeword.WakeWordService.stop(context)
+                        }
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }

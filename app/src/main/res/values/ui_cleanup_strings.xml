@@ -35,4 +35,9 @@
     <string name="voice_response_description">Read OpenCode responses aloud.</string>
     <string name="wake_word_section_title">Invocation</string>
     <string name="wake_word_pack_required">The optional wake-word pack is not installed yet.</string>
+    <string name="wake_word_description">Listen for \"Hey Mycroft\" to start the assistant hands-free.</string>
+    <string name="wake_word_notification_channel">Wake word detection</string>
+    <string name="wake_word_notification_title">Wake word active</string>
+    <string name="wake_word_notification_text">Listening for \"Hey Mycroft\"…</string>
+    <string name="wake_word_notification_stop">Stop</string>
 </resources>

@@ -33,6 +33,7 @@ data class SettingsUiState(
     val agentId: String? = null,
     val ttsEnabled: Boolean = true,
     val continuousConversation: Boolean = false,
+    val wakeWordEnabled: Boolean = false,
     val autoAcceptPermissions: Boolean = false,
     val credentialStatuses: Map<String, Boolean> = emptyMap(),
     val draftProviderId: String = "",
@@ -121,6 +122,7 @@ class SettingsViewModel(
             agentId = core.preferences.agentId,
             ttsEnabled = core.preferences.ttsEnabled,
             continuousConversation = core.preferences.continuousConversation,
+            wakeWordEnabled = core.preferences.wakeWordEnabled,
             autoAcceptPermissions = core.preferences.autoAcceptPermissions,
             runtimeOptions = core.targets.map { it.id to it.displayName },
             assistantRuntimeId = settings.assistantRuntimeId ?: core.selected?.id,
@@ -146,6 +148,7 @@ class SettingsViewModel(
     fun selectAgent(agentId: String) = preferences.selectAgent(agentId)
     fun setTtsEnabled(enabled: Boolean) = preferences.setTtsEnabled(enabled)
     fun setContinuousConversation(enabled: Boolean) = preferences.setContinuousConversation(enabled)
+    fun setWakeWordEnabled(enabled: Boolean) = preferences.setWakeWordEnabled(enabled)
     fun setAutoAcceptPermissions(enabled: Boolean) = preferences.setAutoAcceptPermissions(enabled)
     fun toggleFavoriteModel(providerId: String, modelId: String) =
         preferences.toggleFavoriteModel(providerId, modelId)

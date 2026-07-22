@@ -59,6 +59,10 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getBoolean(KEY_CONTINUOUS_CONVERSATION, false)
         set(value) = preferences.edit().putBoolean(KEY_CONTINUOUS_CONVERSATION, value).apply()
 
+    var wakeWordEnabled: Boolean
+        get() = preferences.getBoolean(KEY_WAKE_WORD_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_WAKE_WORD_ENABLED, value).apply()
+
     var autoAcceptPermissions: Boolean
         get() = preferences.getBoolean(KEY_AUTO_ACCEPT_PERMISSIONS, false)
         set(value) = preferences.edit().putBoolean(KEY_AUTO_ACCEPT_PERMISSIONS, value).apply()
@@ -156,6 +160,7 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_SELECTED_CONNECTION = "selected_connection"
         private const val KEY_TTS_ENABLED = "tts_enabled"
         private const val KEY_CONTINUOUS_CONVERSATION = "continuous_conversation"
+        private const val KEY_WAKE_WORD_ENABLED = "wake_word_enabled"
         private const val KEY_AUTO_ACCEPT_PERMISSIONS = "auto_accept_permissions"
         private const val KEY_ASSISTANT_SESSION_ID = "assistant_session_id"
         private const val KEY_PROVIDER_ID = "provider_id"

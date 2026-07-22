@@ -35,4 +35,9 @@
     <string name="voice_response_description">OpenCodeの回答を音声で読み上げます。</string>
     <string name="wake_word_section_title">呼びかけ</string>
     <string name="wake_word_pack_required">ウェイクワード用の追加パックはまだ導入されていません。</string>
+    <string name="wake_word_description">「Hey Mycroft」でハンズフリーでアシスタントを起動します。</string>
+    <string name="wake_word_notification_channel">ウェイクワード検出</string>
+    <string name="wake_word_notification_title">ウェイクワード有効</string>
+    <string name="wake_word_notification_text">「Hey Mycroft」を待機中…</string>
+    <string name="wake_word_notification_stop">停止</string>
 </resources>
