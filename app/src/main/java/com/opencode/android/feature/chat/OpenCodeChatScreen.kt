@@ -585,10 +585,27 @@ fun MessageBubble(message: ChatMessage) {
             shape = RoundedCornerShape(20.dp, 20.dp, 5.dp, 20.dp),
             color = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Text(text = message.text)
-            }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    message.attachments.forEach { attachment ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Description, contentDescription = null)
+                            Text(
+                                text = attachment.filename,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (message.text.isNotBlank()) {
+                        Text(text = message.text)
+                    }
+                }
         }
     }
 }

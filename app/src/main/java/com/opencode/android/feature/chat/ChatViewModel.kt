@@ -50,6 +50,7 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val isUser: Boolean,
     val parts: List<ChatPart> = emptyList(),
+    val attachments: List<PromptAttachment> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
     val isStreaming: Boolean = false
 ) {
@@ -378,7 +379,10 @@ class ChatViewModel(
 
         val userMessage = ChatMessage(
             isUser = true,
-            parts = listOf(ChatPart.Text(id = UUID.randomUUID().toString(), text = normalized))
+            parts = normalized.takeIf { it.isNotEmpty() }?.let {
+                listOf(ChatPart.Text(id = UUID.randomUUID().toString(), text = it))
+            }.orEmpty(),
+            attachments = pendingAttachments
         )
         _uiState.update {
             it.copy(
@@ -418,7 +422,6 @@ class ChatViewModel(
                     }
                     refreshContextUsage(targetSessionId)
                 }
-                val assistantCountBefore = _uiState.value.messages.count { !it.isUser }
                 currentBackend.sendMessage(
                     targetSessionId,
                     PromptRequest(
@@ -435,44 +438,32 @@ class ChatViewModel(
                 withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
                     while (_uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
-                        if (_uiState.value.messages.count { !it.isUser } > assistantCountBefore) break
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
                                 val uiMessages = serverMessages.mapNotNull(::toUiMessage)
                                 if (uiMessages.isNotEmpty() && uiMessages != _uiState.value.messages) {
                                     _uiState.update { it.copy(messages = uiMessages) }
                                 }
-                                if (uiMessages.count { !it.isUser } > assistantCountBefore) {
-                                    streamedParts.clear()
-                                    _uiState.update {
-                                        it.copy(
-                                            messages = uiMessages,
-                                            isRunning = false,
-                                            isThinking = false
-                                        )
-                                    }
+                            }
+                        runCatching { currentBackend.session(targetSessionId) }
+                            .onSuccess { sessionInfo ->
+                                if (sessionInfo.time.completed != null) {
+                                    _uiState.update { it.copy(isRunning = false, isThinking = false) }
                                 }
                             }
                     }
                 }
-                if (_uiState.value.isRunning) {
-                    runCatching { currentBackend.session(targetSessionId) }
-                        .onSuccess { sessionInfo ->
-                            if (sessionInfo.time.completed != null) {
-                                runCatching { currentBackend.listMessages(targetSessionId) }
-                                    .onSuccess { serverMessages ->
-                                        streamedParts.clear()
-                                        _uiState.update {
-                                            it.copy(
-                                                messages = serverMessages.mapNotNull(::toUiMessage),
-                                                isRunning = false,
-                                                isThinking = false
-                                            )
-                                        }
-                                    }
-                            }
+                runCatching { currentBackend.listMessages(targetSessionId) }
+                    .onSuccess { serverMessages ->
+                        streamedParts.clear()
+                        _uiState.update {
+                            it.copy(
+                                messages = serverMessages.mapNotNull(::toUiMessage),
+                                isRunning = false,
+                                isThinking = false
+                            )
                         }
-                }
+                    }
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -723,6 +714,7 @@ class ChatViewModel(
                     )
                 }
                 refreshContextUsage(event.sessionId)
+                refreshMessages(event.sessionId)
                 onSessionCreated()
                 drainQueue()
             }
@@ -737,6 +729,16 @@ class ChatViewModel(
                 }
             }
             is OpenCodeEvent.Unknown -> Unit
+        }
+    }
+
+    private fun refreshMessages(sessionId: String) {
+        val currentBackend = backend ?: return
+        viewModelScope.launch {
+            runCatching { currentBackend.listMessages(sessionId) }
+                .onSuccess { messages ->
+                    _uiState.update { it.copy(messages = messages.mapNotNull(::toUiMessage)) }
+                }
         }
     }
 
@@ -778,11 +780,20 @@ class ChatViewModel(
 
     private fun toUiMessage(message: OpenCodeMessage): ChatMessage? {
         val parts = message.parts.mapNotNull { it.toChatPart() }
-        if (parts.isEmpty()) return null
+        val attachments = message.parts.mapNotNull { part ->
+            if (part.type != "file") return@mapNotNull null
+            PromptAttachment(
+                filename = part.filename ?: "attachment",
+                mime = part.mime ?: "application/octet-stream",
+                url = part.url ?: ""
+            )
+        }
+        if (parts.isEmpty() && attachments.isEmpty()) return null
         return ChatMessage(
             id = message.info.id,
             isUser = message.info.role == "user",
             parts = parts,
+            attachments = attachments,
             timestamp = message.info.time.created,
             isStreaming = false
         )

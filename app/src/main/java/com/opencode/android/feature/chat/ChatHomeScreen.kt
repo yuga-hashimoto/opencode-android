@@ -50,7 +50,6 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
@@ -292,12 +291,6 @@ fun ChatHomeScreen(
                         onOpenLocalSetup = onOpenLocalSetup,
                         onOpenRemoteSetup = onOpenRemoteSetup
                     )
-                    state.messages.isEmpty() &&
-                        state.permissions.isEmpty() &&
-                        state.pendingQuestions.isEmpty() &&
-                        state.error == null -> {
-                        EmptyChatState(onSuggestionClick = { onSendMessage(it) })
-                    }
                     else -> {
                         val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
                         LazyColumn(
@@ -377,9 +370,10 @@ fun ChatHomeScreen(
                     },
                     isRunning = state.isRunning,
                     onSend = {
-                        if (input.isNotBlank()) {
+                        if (input.isNotBlank() || state.attachments.isNotEmpty()) {
                             onSendMessage(input)
                             input = ""
+                            attachedImages.clear()
                             showSlashCommands = false
                         }
                     },
@@ -569,6 +563,25 @@ private fun RuntimeSetupRequiredState(
 }
 
 @Composable
+private fun OpenCodeMark() {
+    Surface(
+        modifier = Modifier.size(52.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Default.Terminal,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(27.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun ChatErrorCard(
     error: String,
     kind: ChatErrorKind,
@@ -614,100 +627,6 @@ private fun ChatErrorCard(
             } else {
                 Text(text = error, color = MaterialTheme.colorScheme.error)
             }
-        }
-    }
-}
-
-@Composable
-private fun EmptyChatState(onSuggestionClick: (String) -> Unit) {
-    val prompts = listOf(
-        stringResource(R.string.suggestion_implement_title),
-        stringResource(R.string.suggestion_debug_title),
-        stringResource(R.string.suggestion_organize_title)
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        OpenCodeMark()
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = stringResource(R.string.chat_build_headline),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.chat_build_subtitle_compact),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(22.dp))
-        Column(
-            modifier = Modifier.widthIn(max = 320.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            prompts.forEach { prompt ->
-                PromptSuggestion(text = prompt, onClick = { onSuggestionClick(prompt) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun OpenCodeMark() {
-    Surface(
-        modifier = Modifier.size(52.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = Icons.Default.Terminal,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(27.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun PromptSuggestion(text: String, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Code,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(17.dp)
-            )
-            Text(
-                text = text,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }

@@ -217,10 +217,12 @@ class OpenCodeApiClient(
             request.variant?.takeIf { it.isNotBlank() }?.let { addProperty("variant", it) }
             if (request.noReply) addProperty("noReply", true)
             add("parts", JsonArray().apply {
-                add(JsonObject().apply {
-                    addProperty("type", "text")
-                    addProperty("text", request.text)
-                })
+                if (request.text.isNotBlank()) {
+                    add(JsonObject().apply {
+                        addProperty("type", "text")
+                        addProperty("text", request.text)
+                    })
+                }
                 request.attachments.forEach { attachment ->
                     add(JsonObject().apply {
                         addProperty("type", "file")

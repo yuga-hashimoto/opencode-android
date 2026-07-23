@@ -92,7 +92,6 @@ class UiScreenshotInstrumentedTest {
 
         capture("01-chat-empty", {
             composeRule.onNodeWithText("チャット").assertIsDisplayed()
-            composeRule.onNodeWithText("OpenCodeで開発を進める").assertIsDisplayed()
             composeRule.onNodeWithText("GLM-5").assertIsDisplayed()
             composeRule.onNodeWithText("project").assertIsDisplayed()
         }) { PreviewChatHome() }

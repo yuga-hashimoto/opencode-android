@@ -62,6 +62,9 @@ data class OpenCodePart(
     @SerializedName("messageID") val messageId: String? = null,
     val type: String,
     val text: String? = null,
+    val filename: String? = null,
+    val mime: String? = null,
+    val url: String? = null,
     val tool: String? = null,
     val callID: String? = null,
     val state: Map<String, Any?>? = null
