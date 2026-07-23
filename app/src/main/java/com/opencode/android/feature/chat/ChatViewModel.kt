@@ -200,6 +200,7 @@ class ChatViewModel(
 
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
+    private var contextLimit: Long = 0L
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, ChatPart>>()
 
     init {
@@ -236,7 +237,8 @@ class ChatViewModel(
         _uiState.update { it.copy(selectedWorkspacePath = path) }
     }
 
-    fun selectConfiguration(providerId: String?, modelId: String?, agentId: String?) {
+    fun selectConfiguration(providerId: String?, modelId: String?, agentId: String?, contextLimit: Long = 0L) {
+        this.contextLimit = contextLimit
         _uiState.update {
             it.copy(
                 selectedProviderId = providerId,
@@ -289,11 +291,17 @@ class ChatViewModel(
     private fun refreshContextUsage(sessionId: String) {
         val currentBackend = backend ?: return
         viewModelScope.launch {
-            runCatching { currentBackend.session(sessionId) }
-                .onSuccess { session ->
-                    val used = session.tokens?.contextUsed ?: 0L
-                    _uiState.update { it.copy(contextTokensUsed = used) }
-                }
+            runCatching {
+                val messages = currentBackend.listMessages(sessionId)
+                val latestMessageTokens = messages.asReversed()
+                    .firstNotNullOfOrNull { message ->
+                        message.info.tokens?.contextUsed
+                            ?.takeIf { !message.info.role.equals("user", ignoreCase = true) }
+                    }
+                latestMessageTokens ?: currentBackend.session(sessionId).tokens?.contextUsed ?: 0L
+            }.onSuccess { used ->
+                _uiState.update { it.copy(contextTokensUsed = used) }
+            }
         }
     }
 
@@ -314,10 +322,14 @@ class ChatViewModel(
         viewModelScope.launch {
             runCatching { currentBackend.listMessages(sessionId) }
                 .onSuccess { messages ->
+                    val selectedModel = messages.asReversed()
+                        .firstNotNullOfOrNull { it.info.model }
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
-                            messages = messages.mapNotNull(::toUiMessage)
+                            messages = messages.mapNotNull(::toUiMessage),
+                            selectedProviderId = selectedModel?.providerId ?: it.selectedProviderId,
+                            selectedModelId = selectedModel?.modelId ?: it.selectedModelId
                         )
                     }
                     refreshContextUsage(sessionId)
@@ -396,6 +408,16 @@ class ChatViewModel(
                     }
                     onSessionCreated()
                 }
+                if (existingSessionId != null && shouldSummarizeBeforePrompt()) {
+                    runCatching {
+                        currentBackend.summarizeSession(
+                            sessionId = targetSessionId,
+                            providerId = requireNotNull(_uiState.value.selectedProviderId),
+                            modelId = requireNotNull(_uiState.value.selectedModelId)
+                        )
+                    }
+                    refreshContextUsage(targetSessionId)
+                }
                 val assistantCountBefore = _uiState.value.messages.count { !it.isUser }
                 currentBackend.sendMessage(
                     targetSessionId,
@@ -417,7 +439,7 @@ class ChatViewModel(
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
                                 val uiMessages = serverMessages.mapNotNull(::toUiMessage)
-                                if (uiMessages != _uiState.value.messages) {
+                                if (uiMessages.isNotEmpty() && uiMessages != _uiState.value.messages) {
                                     _uiState.update { it.copy(messages = uiMessages) }
                                 }
                                 if (uiMessages.count { !it.isUser } > assistantCountBefore) {
@@ -462,6 +484,10 @@ class ChatViewModel(
             }
         }
     }
+
+    private fun shouldSummarizeBeforePrompt(): Boolean =
+        contextLimit > 0L &&
+            _uiState.value.contextTokensUsed.toDouble() / contextLimit.toDouble() >= 0.9
 
     fun respondToPermission(
         permissionId: String,
