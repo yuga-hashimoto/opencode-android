@@ -435,6 +435,7 @@ class ChatViewModel(
                 )
                 _uiState.update { it.copy(attachments = emptyList()) }
                 clearDraft(targetSessionId)
+                var sessionCompleted = false
                 withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
                     while (_uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
@@ -448,22 +449,25 @@ class ChatViewModel(
                         runCatching { currentBackend.session(targetSessionId) }
                             .onSuccess { sessionInfo ->
                                 if (sessionInfo.time.completed != null) {
+                                    sessionCompleted = true
                                     _uiState.update { it.copy(isRunning = false, isThinking = false) }
                                 }
                             }
                     }
                 }
-                runCatching { currentBackend.listMessages(targetSessionId) }
-                    .onSuccess { serverMessages ->
-                        streamedParts.clear()
-                        _uiState.update {
-                            it.copy(
-                                messages = serverMessages.mapNotNull(::toUiMessage),
-                                isRunning = false,
-                                isThinking = false
-                            )
+                if (sessionCompleted) {
+                    runCatching { currentBackend.listMessages(targetSessionId) }
+                        .onSuccess { serverMessages ->
+                            streamedParts.clear()
+                            _uiState.update {
+                                it.copy(
+                                    messages = serverMessages.mapNotNull(::toUiMessage),
+                                    isRunning = false,
+                                    isThinking = false
+                                )
+                            }
                         }
-                    }
+                }
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -737,7 +741,10 @@ class ChatViewModel(
         viewModelScope.launch {
             runCatching { currentBackend.listMessages(sessionId) }
                 .onSuccess { messages ->
-                    _uiState.update { it.copy(messages = messages.mapNotNull(::toUiMessage)) }
+                    val uiMessages = messages.mapNotNull(::toUiMessage)
+                    if (uiMessages.isNotEmpty()) {
+                        _uiState.update { it.copy(messages = uiMessages) }
+                    }
                 }
         }
     }

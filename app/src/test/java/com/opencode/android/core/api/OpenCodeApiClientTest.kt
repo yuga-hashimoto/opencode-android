@@ -98,8 +98,8 @@ class OpenCodeApiClientTest {
 
         val parts = JsonParser.parseString(server.takeRequest().body.readUtf8())
             .asJsonObject.getAsJsonArray("parts")
-        assertEquals("file", parts[1].asJsonObject["type"].asString)
-        assertEquals("file:///workspace/photo.jpg", parts[1].asJsonObject["url"].asString)
+        assertEquals("file", parts[0].asJsonObject["type"].asString)
+        assertEquals("file:///workspace/photo.jpg", parts[0].asJsonObject["url"].asString)
     }
 
     @Test
