@@ -419,6 +419,16 @@ fun ChatHomeScreen(
 
         FocusModeOverlay(isActive = focusMode, onToggle = { focusMode = !focusMode })
 
+        LiveTranscriptOverlay(
+            isRecording = state.isListening,
+            transcript = "",
+            amplitude = 0.5f,
+            onAccept = {},
+            onCancel = {},
+            onAcceptAndSend = {},
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
         AnimatedVisibility(
             visible = showSidePanel,
             enter = slideInHorizontally(initialOffsetX = { it }),
