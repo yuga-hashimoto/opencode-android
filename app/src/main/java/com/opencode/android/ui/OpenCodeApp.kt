@@ -604,6 +604,15 @@ fun OpenCodeApp(
                     onSelectVariant = chatViewModel::selectVariant,
                     onAttach = { attachmentLauncher.launch("*/*") },
                     onRemoveAttachment = chatViewModel::removeAttachment,
+                    onImageAttachment = { bitmap ->
+                        voiceScope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    com.opencode.android.runtime.local.AttachmentImporter(context).import(bitmap)
+                                }
+                            }.onSuccess(chatViewModel::addAttachment)
+                        }
+                    },
                     favoriteModelKeys = settingsState.favoriteModelKeys,
                     recentModelKeys = settingsState.recentModelKeys,
                     onToggleFavorite = settingsViewModel::toggleFavoriteModel,

@@ -10,6 +10,7 @@ import com.opencode.android.core.api.OpenCodeSession
 import com.opencode.android.core.api.OpenCodeTime
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.core.api.PromptRequest
+import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.core.api.ProviderCatalog
 import com.opencode.android.runtime.BackendKind
 import com.opencode.android.runtime.OpenCodeBackend
@@ -70,6 +71,19 @@ class ChatViewModelTest {
         assertEquals("Hello", viewModel.uiState.value.messages.single().text)
         assertTrue(viewModel.uiState.value.messages.single().isUser)
         assertEquals("Hello", backend.sentPrompts.single().second.text)
+    }
+
+    @Test
+    fun `sending attachments without text creates a prompt`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+        viewModel.addAttachment(PromptAttachment("photo.jpg", "image/jpeg", "file:///workspace/photo.jpg"))
+
+        viewModel.sendMessage("")
+        advanceUntilIdle()
+
+        assertEquals(1, backend.sentPrompts.size)
+        assertEquals("photo.jpg", backend.sentPrompts.single().second.attachments.single().filename)
     }
 
     @Test

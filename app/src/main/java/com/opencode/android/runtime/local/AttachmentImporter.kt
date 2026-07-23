@@ -1,6 +1,7 @@
 package com.opencode.android.runtime.local
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.opencode.android.core.api.PromptAttachment
@@ -29,6 +30,15 @@ class AttachmentImporter(
             mime = mime,
             url = "file:///workspace/${destination.name}"
         )
+    }
+
+    fun import(bitmap: Bitmap, filename: String = "image-${System.currentTimeMillis()}.jpg"): PromptAttachment {
+        val workspace = File(runtimeDirectory, "workspace").apply { mkdirs() }
+        val destination = uniqueFile(workspace, sanitize(filename))
+        destination.outputStream().use { output ->
+            check(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)) { "Cannot encode attachment" }
+        }
+        return PromptAttachment(destination.name, "image/jpeg", "file:///workspace/${destination.name}")
     }
 
     private fun queryDisplayName(uri: Uri): String? = runCatching {

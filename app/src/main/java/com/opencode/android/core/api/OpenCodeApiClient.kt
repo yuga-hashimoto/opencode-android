@@ -1,6 +1,7 @@
 package com.opencode.android.core.api
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
@@ -267,7 +268,25 @@ class OpenCodeApiClient(
         )
     }
 
-    suspend fun mcpServers(): List<McpServer> = getList("mcp")
+    suspend fun mcpServers(): List<McpServer> = withContext(Dispatchers.IO) {
+        execute(requestBuilder("mcp").get().build()) { body ->
+            val root = gson.fromJson(body, JsonObject::class.java)
+            root.entrySet().map { (name, value) ->
+                val server = value.asJsonObject.deepCopy().apply {
+                    remove("tools")
+                }
+                val tools = value.asJsonObject.get("tools")?.let { toolsElement ->
+                    when {
+                        toolsElement.isJsonArray -> toolsElement.asJsonArray
+                            .mapNotNull { it.takeIf(JsonElement::isJsonPrimitive)?.asString }
+                        toolsElement.isJsonObject -> toolsElement.asJsonObject.keySet().toList()
+                        else -> emptyList()
+                    }
+                }.orEmpty()
+                gson.fromJson(server, McpServer::class.java).copy(name = name, tools = tools)
+            }
+        }
+    }
 
     suspend fun addMcpServer(body: JsonObject): McpServer =
         post("mcp", body, McpServer::class.java)

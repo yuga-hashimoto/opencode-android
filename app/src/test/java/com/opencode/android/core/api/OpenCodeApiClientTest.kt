@@ -87,6 +87,22 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `sends attachment as a file part`() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+        val client = client()
+
+        client.promptAsync("s1", PromptRequest(
+            text = "",
+            attachments = listOf(PromptAttachment("photo.jpg", "image/jpeg", "file:///workspace/photo.jpg"))
+        ))
+
+        val parts = JsonParser.parseString(server.takeRequest().body.readUtf8())
+            .asJsonObject.getAsJsonArray("parts")
+        assertEquals("file", parts[1].asJsonObject["type"].asString)
+        assertEquals("file:///workspace/photo.jpg", parts[1].asJsonObject["url"].asString)
+    }
+
+    @Test
     fun `responds to permission request`() = runBlocking {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()

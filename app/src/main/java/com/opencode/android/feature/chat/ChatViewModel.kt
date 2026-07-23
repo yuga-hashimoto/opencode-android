@@ -351,7 +351,8 @@ class ChatViewModel(
 
     fun sendMessage(text: String) {
         val normalized = text.trim()
-        if (normalized.isEmpty()) return
+        val pendingAttachments = _uiState.value.attachments
+        if (normalized.isEmpty() && pendingAttachments.isEmpty()) return
         val currentBackend = backend
         if (currentBackend == null) {
             _uiState.update { it.copy(error = "OpenCode connection is not configured") }
@@ -382,7 +383,7 @@ class ChatViewModel(
                 val existingSessionId = _uiState.value.sessionId
                 val session = if (existingSessionId == null) {
                     currentBackend.createSession(
-                        title = normalized.take(60),
+                        title = normalized.take(60).ifBlank { "Attachment" },
                         directory = _uiState.value.selectedWorkspacePath
                     )
                 } else {
@@ -404,7 +405,7 @@ class ChatViewModel(
                         modelId = _uiState.value.selectedModelId,
                         agent = _uiState.value.selectedAgentId,
                         variant = _uiState.value.selectedVariant,
-                        attachments = _uiState.value.attachments
+                        attachments = pendingAttachments
                     )
                 )
                 _uiState.update { it.copy(attachments = emptyList()) }

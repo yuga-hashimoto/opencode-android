@@ -166,7 +166,8 @@ fun ChatHomeScreen(
     onOpenDrawer: () -> Unit,
     contextUsageFraction: Float = 0f,
     subagents: List<SubagentInfo> = emptyList(),
-    githubRefs: List<GitHubReference> = emptyList()
+    githubRefs: List<GitHubReference> = emptyList(),
+    onImageAttachment: (Bitmap) -> Unit = {}
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -188,7 +189,10 @@ fun ChatHomeScreen(
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicturePreview()
     ) { bitmap ->
-        if (bitmap != null) attachedImages.add(bitmap)
+        if (bitmap != null) {
+            attachedImages.add(bitmap)
+            onImageAttachment(bitmap)
+        }
     }
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -198,7 +202,10 @@ fun ChatHomeScreen(
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
-                if (bitmap != null) attachedImages.add(bitmap)
+                if (bitmap != null) {
+                    attachedImages.add(bitmap)
+                    onImageAttachment(bitmap)
+                }
             } catch (_: Exception) {}
         }
     }
@@ -972,7 +979,7 @@ private fun ChatComposer(
                     } else {
                         FilledIconButton(
                             onClick = onSend,
-                            enabled = input.isNotBlank(),
+                            enabled = input.isNotBlank() || attachments.isNotEmpty(),
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
