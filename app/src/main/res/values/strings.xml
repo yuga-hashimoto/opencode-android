@@ -557,4 +557,16 @@
     <string name="agents_md_generate">Generate AGENTS.md</string>
     <string name="agents_md_generated">AGENTS.md generated</string>
     <string name="agents_md_failed">Failed to generate AGENTS.md</string>
+
+    <string name="tab_pr">PR</string>
+    <string name="switch_branch">Switch branch</string>
+    <string name="new_branch">New branch</string>
+    <string name="search_branches">Search branches</string>
+    <string name="create_branch">Create</string>
+    <string name="branch_name_hint">Branch name</string>
+    <string name="commits_title">Commits</string>
+    <string name="no_pr_found">No PR found for this branch</string>
+    <string name="unified_view">Unified</string>
+    <string name="split_view">Split</string>
+    <string name="diff_stat">+%1$d / -%2$d</string>
 </resources>

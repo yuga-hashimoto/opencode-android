@@ -1,5 +1,6 @@
 package com.opencode.android.feature.workspace
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
@@ -25,14 +28,18 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -42,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -50,9 +58,20 @@ import androidx.compose.ui.unit.dp
 import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileNode
+import com.opencode.android.ui.components.FileTypeIcon
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
+data class CommitInfo(
+    val hash: String,
+    val message: String,
+    val author: String,
+    val relativeTime: String
+)
+
+enum class DiffViewMode { UNIFIED, SPLIT }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkspaceExplorerScreen(
     state: WorkspaceExplorerUiState,
@@ -62,13 +81,21 @@ fun WorkspaceExplorerScreen(
     onCloseFile: () -> Unit,
     onNavigateUp: () -> Unit,
     onSearch: (String) -> Unit,
-    onRefreshChanges: () -> Unit
+    onRefreshChanges: () -> Unit,
+    branches: List<String> = emptyList(),
+    onSwitchBranch: (String) -> Unit = {},
+    onCreateBranch: (String) -> Unit = {},
+    commits: List<CommitInfo> = emptyList(),
+    prTitle: String? = null,
+    prStatus: String? = null,
+    prDescription: String? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.tab_files),
         stringResource(R.string.tab_search),
-        stringResource(R.string.tab_changes)
+        stringResource(R.string.tab_changes),
+        stringResource(R.string.tab_pr)
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -117,7 +144,8 @@ fun WorkspaceExplorerScreen(
         when (selectedTab) {
             0 -> FilesTab(state, onOpenNode, onCloseFile, onNavigateUp)
             1 -> SearchTab(state, onSearch)
-            else -> ChangesTab(state)
+            2 -> ChangesTab(state, branches, onSwitchBranch, onCreateBranch, commits)
+            else -> PrTab(prTitle, prStatus, prDescription)
         }
     }
 }
@@ -233,14 +261,9 @@ private fun FilesTab(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            if (node.type == "directory") Icons.Default.Folder else Icons.Default.Description,
-                            contentDescription = null,
-                            tint = if (node.type == "directory") {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.secondary
-                            }
+                        FileTypeIcon(
+                            fileName = node.name,
+                            isDirectory = node.type == "directory"
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(node.name, fontWeight = FontWeight.Medium)
@@ -353,8 +376,18 @@ private fun SearchTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ChangesTab(state: WorkspaceExplorerUiState) {
+private fun ChangesTab(
+    state: WorkspaceExplorerUiState,
+    branches: List<String>,
+    onSwitchBranch: (String) -> Unit,
+    onCreateBranch: (String) -> Unit,
+    commits: List<CommitInfo>
+) {
+    var showBranchSheet by remember { mutableStateOf(false) }
+    var diffViewMode by remember { mutableStateOf(DiffViewMode.UNIFIED) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -374,11 +407,30 @@ private fun ChangesTab(state: WorkspaceExplorerUiState) {
                             state.vcsInfo?.branch?.let { stringResource(R.string.branch_label, it) }
                                 ?: stringResource(R.string.no_git_info),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.clickable { showBranchSheet = true }
                         )
                     }
                     Text(stringResource(R.string.item_count, state.changes.size))
                 }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = diffViewMode == DiffViewMode.UNIFIED,
+                    onClick = { diffViewMode = DiffViewMode.UNIFIED },
+                    label = { Text(stringResource(R.string.unified_view)) }
+                )
+                FilterChip(
+                    selected = diffViewMode == DiffViewMode.SPLIT,
+                    onClick = { diffViewMode = DiffViewMode.SPLIT },
+                    label = { Text(stringResource(R.string.split_view)) }
+                )
             }
         }
 
@@ -393,16 +445,150 @@ private fun ChangesTab(state: WorkspaceExplorerUiState) {
         } else {
             items(state.changes, key = { it.displayPath }) { change ->
                 val detailed = state.diff.firstOrNull { it.displayPath == change.displayPath } ?: change
-                ChangeCard(detailed)
+                ChangeCard(detailed, diffViewMode)
             }
         }
+
+        if (commits.isNotEmpty()) {
+            item { SectionTitle(stringResource(R.string.commits_title), commits.size) }
+            items(commits, key = { it.hash }) { commit ->
+                CommitCard(commit)
+            }
+        }
+
         state.error?.let { item { ErrorCard(it) } }
         item { Spacer(Modifier.height(72.dp)) }
+    }
+
+    if (showBranchSheet) {
+        BranchSwitcherSheet(
+            currentBranch = state.vcsInfo?.branch.orEmpty(),
+            branches = branches,
+            onSwitchBranch = { branch ->
+                onSwitchBranch(branch)
+                showBranchSheet = false
+            },
+            onCreateBranch = { name ->
+                onCreateBranch(name)
+                showBranchSheet = false
+            },
+            onDismiss = { showBranchSheet = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BranchSwitcherSheet(
+    currentBranch: String,
+    branches: List<String>,
+    onSwitchBranch: (String) -> Unit,
+    onCreateBranch: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var searchQuery by remember { mutableStateOf("") }
+    var newBranchName by remember { mutableStateOf("") }
+    var showNewBranchField by remember { mutableStateOf(false) }
+
+    val filteredBranches = if (searchQuery.isBlank()) {
+        branches
+    } else {
+        branches.filter { it.contains(searchQuery, ignoreCase = true) }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                stringResource(R.string.switch_branch),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.search_branches)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true
+            )
+            Spacer(Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().height(300.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(filteredBranches, key = { it }) { branch ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSwitchBranch(branch) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (branch == currentBranch) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Spacer(Modifier.height(24.dp))
+                        }
+                        Text(
+                            branch,
+                            modifier = Modifier.weight(1f),
+                            fontWeight = if (branch == currentBranch) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            if (showNewBranchField) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newBranchName,
+                        onValueChange = { newBranchName = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text(stringResource(R.string.branch_name_hint)) },
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = { if (newBranchName.isNotBlank()) onCreateBranch(newBranchName) },
+                        enabled = newBranchName.isNotBlank()
+                    ) {
+                        Text(stringResource(R.string.create_branch))
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = { showNewBranchField = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(R.string.new_branch))
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun ChangeCard(change: OpenCodeFileChange) {
+private fun ChangeCard(change: OpenCodeFileChange, diffViewMode: DiffViewMode) {
     var expanded by remember(change.displayPath, change.patch) { mutableStateOf(false) }
     SectionCard {
         Row(
@@ -410,14 +596,21 @@ private fun ChangeCard(change: OpenCodeFileChange) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+            FileTypeIcon(fileName = change.displayPath.substringAfterLast('/'))
             Column(modifier = Modifier.weight(1f)) {
                 Text(change.displayPath, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "+${change.additions.toInt()}  -${change.deletions.toInt()}  ${change.status.orEmpty()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.diff_stat, change.additions.toInt(), change.deletions.toInt()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        change.status.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             if (!change.patch.isNullOrBlank()) {
                 OutlinedButton(onClick = { expanded = !expanded }) {
@@ -427,15 +620,177 @@ private fun ChangeCard(change: OpenCodeFileChange) {
         }
         if (expanded && !change.patch.isNullOrBlank()) {
             Spacer(Modifier.height(12.dp))
-            SelectionContainer {
+            when (diffViewMode) {
+                DiffViewMode.UNIFIED -> UnifiedDiffView(change.patch)
+                DiffViewMode.SPLIT -> SplitDiffView(change.patch)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnifiedDiffView(patch: String) {
+    SelectionContainer {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+        ) {
+            patch.lines().forEach { line ->
+                val background = when {
+                    line.startsWith("+") && !line.startsWith("+++") -> Color(0x2A6FCF97)
+                    line.startsWith("-") && !line.startsWith("---") -> Color(0x2AF07178)
+                    else -> Color.Transparent
+                }
                 Text(
-                    change.patch,
+                    line,
                     fontFamily = FontFamily.Monospace,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(background)
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SplitDiffView(patch: String) {
+    val oldLines = mutableListOf<String>()
+    val newLines = mutableListOf<String>()
+    patch.lines().forEach { line ->
+        when {
+            line.startsWith("+") && !line.startsWith("+++") -> {
+                newLines.add(line.removePrefix("+"))
+                oldLines.add("")
+            }
+            line.startsWith("-") && !line.startsWith("---") -> {
+                oldLines.add(line.removePrefix("-"))
+                newLines.add("")
+            }
+            !line.startsWith("@@") && !line.startsWith("+++") && !line.startsWith("---") -> {
+                oldLines.add(line.removePrefix(" "))
+                newLines.add(line.removePrefix(" "))
+            }
+        }
+    }
+
+    SelectionContainer {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                oldLines.forEach { line ->
+                    Text(
+                        line,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (line.isNotEmpty()) Color(0x2AF07178) else Color.Transparent)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                newLines.forEach { line ->
+                    Text(
+                        line,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(if (line.isNotEmpty()) Color(0x2A6FCF97) else Color.Transparent)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommitCard(commit: CommitInfo) {
+    SectionCard(modifier = Modifier.clickable { }) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(commit.message, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${commit.author} · ${commit.relativeTime}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                commit.hash.take(7),
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrTab(
+    prTitle: String?,
+    prStatus: String?,
+    prDescription: String?
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (prTitle == null) {
+            item {
+                SectionCard {
+                    Text(
+                        stringResource(R.string.no_pr_found),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            item {
+                SectionCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                prTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (prStatus != null) {
+                                StatusChip(prStatus, active = prStatus.equals("open", ignoreCase = true))
+                            }
+                        }
+                        if (!prDescription.isNullOrBlank()) {
+                            Text(
+                                prDescription,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item { Spacer(Modifier.height(72.dp)) }
     }
 }
 

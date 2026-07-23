@@ -50,7 +50,7 @@ fun VolumeMeter(
             } else {
                 (amplitude * (if (i == 1) 1f else 0.7f)).coerceIn(0.05f, 1f)
             }
-            val height = 8.dp + barAmplitude * 16.dp
+            val height = 8.dp + 16.dp * barAmplitude
             Box(
                 modifier = Modifier
                     .width(4.dp)

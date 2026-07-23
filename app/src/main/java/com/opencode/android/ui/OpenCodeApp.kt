@@ -76,6 +76,8 @@ import com.opencode.android.feature.settings.GitHubRepo
 import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
 import com.opencode.android.feature.settings.VoiceSettingsScreen
+import com.opencode.android.feature.search.CommandPaletteSheet
+import com.opencode.android.feature.workspace.CodeViewerScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementScreen
 import com.opencode.android.feature.workspace.LocalRuntimeManagementViewModel
 import com.opencode.android.feature.workspace.RemoteConnectionScreen
@@ -83,6 +85,8 @@ import com.opencode.android.feature.workspace.WorkspaceExplorerScreen
 import com.opencode.android.feature.workspace.WorkspaceExplorerViewModel
 import com.opencode.android.feature.workspace.WorkspaceViewModel
 import com.opencode.android.feature.workspace.WorkspacesScreen
+import com.opencode.android.ui.theme.AppTheme
+import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.runtime.local.GitCloneResult
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +109,7 @@ private const val ROUTE_ACTIVITY = "activity"
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
+private const val ROUTE_CODE_VIEWER = "code-viewer"
 
 /** Routes whose top bar exposes the hamburger menu / drawer swipe gesture. */
 private val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULE)
@@ -135,7 +140,11 @@ private fun relativeTimeLabel(context: android.content.Context, epochMillis: Lon
 
 @Composable
 fun OpenCodeApp(
-    onOpenAssistantSettings: () -> Unit
+    onOpenAssistantSettings: () -> Unit,
+    appTheme: AppTheme = AppTheme.DARK,
+    uiFontSize: Int = 16,
+    targetSessionId: String? = null,
+    deepLinkConnectionUrl: String? = null
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as OpenCodeApplication
@@ -147,10 +156,14 @@ fun OpenCodeApp(
     var selectedSession by remember { mutableStateOf<OpenCodeSession?>(null) }
     var notificationsEnabled by remember { mutableStateOf(true) }
     var showCloneDialog by remember { mutableStateOf(false) }
+    var showCommandPalette by remember { mutableStateOf(false) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
     val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
     val preferences by app.preferences.state.collectAsState()
+
+    var sidebarGrouping by remember { mutableStateOf(preferences.sidebarGrouping) }
+    var collapsedSections by remember { mutableStateOf(setOf<String>()) }
 
     val workspaceViewModel: WorkspaceViewModel = viewModel(
         key = "workspaces",
@@ -373,6 +386,19 @@ fun OpenCodeApp(
         }
     }
 
+    LaunchedEffect(targetSessionId) {
+        targetSessionId?.let { id ->
+            pendingSession = id to id
+            navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
+        }
+    }
+
+    LaunchedEffect(deepLinkConnectionUrl) {
+        deepLinkConnectionUrl?.let {
+            navController.navigate(ROUTE_REMOTE_CONNECTION) { launchSingleTop = true }
+        }
+    }
+
     val onHandoff: (String) -> Unit = { targetRuntimeId ->
         val prompt = buildHandoffPrompt(chatState.messages)
         pendingHandoffPrompt = targetRuntimeId to prompt
@@ -416,6 +442,10 @@ fun OpenCodeApp(
         drawerScope.launch { drawerState.close() }
     }
 
+    OpenCodeAndroidTheme(
+        appTheme = AppTheme.fromKey(preferences.theme),
+        uiFontSize = preferences.uiFontSize
+    ) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = currentRoute in DRAWER_ROOT_ROUTES,
@@ -447,7 +477,11 @@ fun OpenCodeApp(
                     },
                     onNavigate = { route ->
                         closeDrawer()
-                        navController.navigate(route) { launchSingleTop = true }
+                        if (route == "command-palette") {
+                            showCommandPalette = true
+                        } else {
+                            navController.navigate(route) { launchSingleTop = true }
+                        }
                     },
                     onDeleteSession = { sessionId ->
                         voiceScope.launch {
@@ -459,6 +493,16 @@ fun OpenCodeApp(
                         voiceScope.launch {
                             runCatching { selectedRuntime?.archiveSession(sessionId) }
                             app.catalogRepository.refreshSessionsOnly()
+                        }
+                    },
+                    sidebarGrouping = sidebarGrouping,
+                    onGroupingChange = { sidebarGrouping = it },
+                    collapsedSections = collapsedSections,
+                    onToggleSection = { section ->
+                        collapsedSections = if (section in collapsedSections) {
+                            collapsedSections - section
+                        } else {
+                            collapsedSections + section
                         }
                     }
                 )
@@ -844,6 +888,15 @@ fun OpenCodeApp(
                     )
                 }
             }
+
+            composable("$ROUTE_CODE_VIEWER?filePath={filePath}") { backStack ->
+                val filePath = backStack.arguments?.getString("filePath").orEmpty()
+                CodeViewerScreen(
+                    fileName = filePath.substringAfterLast('/'),
+                    content = "",
+                    onBack = { navController.popBackStack() }
+                )
+            }
         }
     }
 
@@ -863,6 +916,24 @@ fun OpenCodeApp(
             },
             onDismiss = { showCloneDialog = false }
         )
+    }
+
+    if (showCommandPalette) {
+        CommandPaletteSheet(
+            onDismiss = { showCommandPalette = false },
+            onNavigate = { route ->
+                showCommandPalette = false
+                navController.navigate(route) { launchSingleTop = true }
+            },
+            onOpenSession = { id, title ->
+                showCommandPalette = false
+                app.activityRepository.markSessionRead(id)
+                pendingSession = id to title
+                navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
+            },
+            sessions = activityState.sessions.map { it.id to it.title.ifBlank { it.slug ?: it.id } }
+        )
+    }
     }
 }
 

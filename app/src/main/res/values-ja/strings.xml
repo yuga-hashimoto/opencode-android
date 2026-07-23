@@ -557,4 +557,16 @@
     <string name="agents_md_generate">AGENTS.mdを生成</string>
     <string name="agents_md_generated">AGENTS.mdを生成しました</string>
     <string name="agents_md_failed">AGENTS.mdの生成に失敗しました</string>
+
+    <string name="tab_pr">PR</string>
+    <string name="switch_branch">ブランチを切り替え</string>
+    <string name="new_branch">新しいブランチ</string>
+    <string name="search_branches">ブランチを検索</string>
+    <string name="create_branch">作成</string>
+    <string name="branch_name_hint">ブランチ名</string>
+    <string name="commits_title">コミット</string>
+    <string name="no_pr_found">このブランチにPRが見つかりません</string>
+    <string name="unified_view">統合</string>
+    <string name="split_view">分割</string>
+    <string name="diff_stat">+%1$d / -%2$d</string>
 </resources>
