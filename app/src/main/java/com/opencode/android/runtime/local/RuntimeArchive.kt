@@ -33,8 +33,8 @@ object RuntimeArchive {
         val canonicalRoot = destination.canonicalFile
         GzipCompressorInputStream(input.buffered()).use { gzip ->
             TarArchiveInputStream(gzip).use { tar ->
-                while (true) {
-                    val entry = tar.nextTarEntry ?: break
+                var entry = tar.nextEntry
+                while (entry != null) {
                     val target = File(destination, entry.name).canonicalFile
                     require(target.path == canonicalRoot.path || target.path.startsWith(canonicalRoot.path + File.separator)) {
                         "Archive entry escapes destination: ${entry.name}"
@@ -44,7 +44,13 @@ object RuntimeArchive {
                         entry.isSymbolicLink -> {
                             target.parentFile?.mkdirs()
                             target.delete()
-                            Os.symlink(entry.linkName, target.absolutePath)
+                            val linkTarget = File(target.parentFile, entry.linkName).canonicalFile
+                            if (linkTarget.path.startsWith(canonicalRoot.path + File.separator) ||
+                                linkTarget.path == canonicalRoot.path ||
+                                !entry.linkName.startsWith("/")
+                            ) {
+                                Os.symlink(entry.linkName, target.absolutePath)
+                            }
                         }
                         entry.isLink -> {
                             val source = File(destination, entry.linkName).canonicalFile
@@ -64,6 +70,7 @@ object RuntimeArchive {
                             if (executable) target.setExecutable(true, false)
                         }
                     }
+                    entry = tar.nextEntry
                 }
             }
         }

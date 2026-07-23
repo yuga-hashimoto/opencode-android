@@ -111,7 +111,7 @@ class WakeWordService : Service() {
 
         val pm = getSystemService(PowerManager::class.java)
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-            acquire(WAKELOCK_TIMEOUT)
+            acquire()
         }
 
         listenJob = scope.launch {
@@ -177,7 +177,7 @@ class WakeWordService : Service() {
                     }
                 }
             } finally {
-                record.stop()
+                runCatching { record.stop() }
                 record.release()
                 audioRecord = null
                 Log.i(TAG, "Wake word listening stopped")

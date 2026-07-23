@@ -2,6 +2,7 @@ package com.opencode.android.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -140,7 +141,10 @@ fun OpenCodeAndroidTheme(
         }
     }
 
-    CompositionLocalProvider(LocalThemeColors provides tc) {
+    CompositionLocalProvider(
+        LocalThemeColors provides tc,
+        LocalContentColor provides colorScheme.onSurface
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = typography,

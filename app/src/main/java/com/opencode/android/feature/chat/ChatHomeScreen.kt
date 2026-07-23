@@ -46,7 +46,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -116,8 +116,6 @@ import com.opencode.android.feature.workspace.GitHubReference
 import com.opencode.android.runtime.PermissionResponse
 import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
-import com.opencode.android.ui.components.ContextWindowRing
-import com.opencode.android.ui.components.ProviderIcon
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.components.VolumeMeter
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
@@ -195,9 +193,9 @@ fun ChatHomeScreen(
     ) { uri ->
         if (uri != null) {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
+                val bitmap = context.contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
+                }
                 if (bitmap != null) attachedImages.add(bitmap)
             } catch (_: Exception) {}
         }
@@ -226,13 +224,17 @@ fun ChatHomeScreen(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
+                    val atEdge = change.position.x > size.width - 80f || showSidePanel
+                    if (!atEdge) return@detectHorizontalDragGestures
                     change.consume()
                     dragOffset += dragAmount
                     if (dragOffset < -100f && change.position.x > size.width - 80f) {
                         showSidePanel = true
+                        dragOffset = 0f
                     }
                     if (dragOffset > 100f && showSidePanel) {
                         showSidePanel = false
+                        dragOffset = 0f
                     }
                 }
             }
@@ -287,9 +289,10 @@ fun ChatHomeScreen(
                         state.permissions.isEmpty() &&
                         state.pendingQuestions.isEmpty() &&
                         state.error == null -> {
-                        EmptyChatState(onSuggestionClick = { text -> input = text })
+                        EmptyChatState(onSuggestionClick = { onSendMessage(it) })
                     }
                     else -> {
+                        val lastAssistantId = state.messages.lastOrNull { !it.isUser }?.id
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
@@ -303,7 +306,14 @@ fun ChatHomeScreen(
                                         onLongClick = { showActionSheet = message.id to message.text }
                                     )
                                 ) {
-                                    if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                                    if (message.isUser) {
+                                        MessageBubble(message)
+                                    } else {
+                                        AssistantTimeline(
+                                            message,
+                                            showProcessing = state.isRunning && message.id == lastAssistantId
+                                        )
+                                    }
                                 }
                             }
                             items(state.permissions, key = { "permission-${it.id}" }) { permission ->
@@ -395,8 +405,6 @@ fun ChatHomeScreen(
                         .firstOrNull { it.id == selectedProviderId }
                         ?.models?.get(selectedModelId)
                         ?.limit?.context ?: 0L,
-                    contextUsageFraction = contextUsageFraction,
-                    selectedProviderId = selectedProviderId,
                     showSlashCommands = showSlashCommands,
                     onSlashCommandSelect = { command ->
                         input = command.name + " "
@@ -723,8 +731,6 @@ private fun ChatComposer(
     sendBehavior: String,
     contextTokensUsed: Long,
     contextLimit: Long,
-    contextUsageFraction: Float,
-    selectedProviderId: String?,
     showSlashCommands: Boolean,
     onSlashCommandSelect: (SlashCommand) -> Unit,
     githubRefs: List<GitHubReference>,
@@ -878,7 +884,7 @@ private fun ChatComposer(
                             DropdownMenuItem(
                                 text = { Text("File") },
                                 leadingIcon = {
-                                    Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp))
                                 },
                                 onClick = {
                                     showAttachMenu = false
@@ -907,13 +913,11 @@ private fun ChatComposer(
                             )
                         }
                     }
-                    ProviderIcon(providerId = selectedProviderId.orEmpty(), size = 16)
                     CompactContextButton(
                         label = modelLabel,
                         maxWidth = 84.dp,
                         onClick = onModelChipClick
                     )
-                    ContextWindowRing(usageFraction = contextUsageFraction, size = 24)
                     if (thinkingOptions.isNotEmpty()) {
                         ThinkingChip(
                             options = thinkingOptions,
@@ -1111,7 +1115,7 @@ private fun AttachmentTray(
                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Icon(
-                        Icons.Default.InsertDriveFile,
+                        Icons.AutoMirrored.Filled.InsertDriveFile,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant

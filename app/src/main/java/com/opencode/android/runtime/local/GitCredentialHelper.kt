@@ -25,7 +25,7 @@ class GitCredentialHelper(
     fun install(): File {
         helperFile.parentFile?.mkdirs()
         helperFile.writeText(
-            """#!/data/data/com.termux/files/usr/bin/sh
+            """#!/bin/sh
             case "${'$'}1" in
               get)
                 read protocol

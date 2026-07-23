@@ -387,7 +387,7 @@ fun OpenCodeApp(
         if (chatState.sessionId != null) return@LaunchedEffect
         val currentPath = chatState.selectedWorkspacePath
         val available = workspaceState.workspaces
-        if (available.isNotEmpty() && available.none { it.path == currentPath }) {
+        if (currentPath == null && available.isNotEmpty()) {
             chatViewModel.selectWorkspace(available.first().path)
         }
     }
@@ -449,8 +449,8 @@ fun OpenCodeApp(
     }
 
     OpenCodeAndroidTheme(
-        appTheme = appTheme,
-        uiFontSize = uiFontSize
+        appTheme = AppTheme.fromKey(preferences.theme),
+        uiFontSize = preferences.uiFontSize
     ) {
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -680,7 +680,22 @@ fun OpenCodeApp(
                     onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
                     onOpenDiagnostics = { showDiagnostics = true },
                     onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP) },
-                    onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) }
+                    onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) },
+                    onOpenUsage = { navController.navigate(ROUTE_USAGE) },
+                    currentTheme = preferences.theme,
+                    onThemeChange = { app.preferences.setTheme(it) },
+                    uiFontSize = preferences.uiFontSize,
+                    onUiFontSizeChange = { app.preferences.setUiFontSize(it) },
+                    codeFontSize = preferences.codeFontSize,
+                    onCodeFontSizeChange = { app.preferences.setCodeFontSize(it) },
+                    syntaxTheme = preferences.syntaxTheme,
+                    onSyntaxThemeChange = { app.preferences.setSyntaxTheme(it) },
+                    toolCallDetailLevel = preferences.toolCallDetailLevel,
+                    onToolCallDetailLevelChange = { app.preferences.setToolCallDetailLevel(it) },
+                    autoExpandReasoning = preferences.autoExpandReasoning,
+                    onAutoExpandReasoningChange = { app.preferences.setAutoExpandReasoning(it) },
+                    sendBehavior = preferences.sendBehavior,
+                    onSendBehaviorChange = { app.preferences.setSendBehavior(it) }
                 )
             }
 

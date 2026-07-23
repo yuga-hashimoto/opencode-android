@@ -23,11 +23,15 @@ class GitCloneRepository(
     private val timeoutSeconds: Long = 300L
 ) {
     fun clone(url: String, name: String): GitCloneResult = accessCoordinator.read {
+        val sanitizedName = name.trim().trimStart('.', '/').replace(Regex("[^a-zA-Z0-9._-]"), "_")
+        if (sanitizedName.isBlank() || sanitizedName.contains("..")) {
+            return@read GitCloneResult(1, "", "Invalid repository name: $name")
+        }
         val runtime = installedRuntimeProvider()
             ?: return@read GitCloneResult(127, "", "Runtime is not installed")
         val workspace = File(runtimeDirectory, "workspace").apply { mkdirs() }
         val prootTmp = File(runtimeDirectory, "proot-tmp").apply { mkdirs() }
-        val target = "/workspace/$name"
+        val target = "/workspace/$sanitizedName"
         val outputFile = File.createTempFile(
             "clone-",
             ".log",

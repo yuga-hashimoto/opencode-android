@@ -6,6 +6,7 @@ import com.google.gson.annotations.SerializedName
 import com.opencode.android.feature.workspace.GitHubReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -18,7 +19,9 @@ class GitHubApiClient(private val token: String?) {
         withContext(Dispatchers.IO) {
             try {
                 val request = buildRequest(
-                    "https://api.github.com/repos/$owner/$repo/pulls?head=$owner:$branch"
+                    "https://api.github.com/repos/$owner/$repo/pulls".toHttpUrl().newBuilder()
+                        .addQueryParameter("head", "$owner:$branch")
+                        .build().toString()
                 )
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext emptyList()
@@ -42,12 +45,15 @@ class GitHubApiClient(private val token: String?) {
         withContext(Dispatchers.IO) {
             try {
                 val request = buildRequest(
-                    "https://api.github.com/search/issues?q=repo:$owner/$repo+$query"
+                    "https://api.github.com/search/issues".toHttpUrl().newBuilder()
+                        .addQueryParameter("q", "repo:$owner/$repo $query")
+                        .build().toString()
                 )
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext emptyList()
                     val body = response.body?.string().orEmpty()
                     val result = gson.fromJson(body, GitHubSearchResult::class.java)
+                        ?: return@withContext emptyList()
                     result.items.map { item ->
                         GitHubReference(
                             type = "Issue",
