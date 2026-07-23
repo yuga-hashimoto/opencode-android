@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="runtime_setup_required_title">OpenCode 尚未就绪</string>
+    <string name="runtime_setup_required_body">打开菜单，然后进入设置，安装 Android 运行时或添加到电脑的连接。</string>
+    <string name="runtime_setup_required_body_compact">在此 Android 设备上设置 OpenCode，或连接到已运行 OpenCode 的电脑。</string>
+    <string name="open_settings_action">打开菜单</string>
+    <string name="setup_this_android_action">设置此 Android</string>
+    <string name="connect_pc_mac_action">连接到电脑</string>
+    <string name="setup_short_action">设置</string>
+    <string name="connect_short_action">连接</string>
+    <string name="chat_model_short_default">模型</string>
+    <string name="chat_workspace_short_default">默认</string>
+    <string name="chat_build_subtitle_compact">让 OpenCode 实现、修复或调查。</string>
+    <string name="settings_wake_word_row">唤醒词</string>
+    <string name="settings_wake_word_value">未安装</string>
+    <string name="setup_step_counter">第 %1$d 步，共 %2$d 步</string>
+    <string name="setup_next_action">下一步</string>
+    <string name="setup_back_action">返回</string>
+    <string name="setup_skip_action">暂时跳过</string>
+    <string name="setup_download_description">准备在此设备上直接运行 OpenCode 所需的运行时。</string>
+    <string name="setup_runtime_not_installed">运行时尚未安装。</string>
+    <string name="setup_runtime_ready">运行时已就绪</string>
+    <string name="setup_provider_optional_description">连接 AI 提供商以开始聊天。此步骤为可选——您可以跳过，稍后在设置中连接任何提供商。</string>
+    <string name="setup_provider_loading">加载提供商中…</string>
+    <string name="setup_provider_api_key_only">API 密钥</string>
+    <string name="setup_provider_search_hint">搜索提供商…</string>
+    <string name="setup_provider_no_results">未找到匹配的提供商</string>
+    <string name="remote_connection_intro">输入正在运行 OpenCode 的电脑的连接信息。</string>
+    <string name="remote_connection_unhealthy">OpenCode 服务器未正常响应。</string>
+    <string name="remote_connection_failed">连接失败。</string>
+    <string name="provider_saved_credentials_title">已保存的凭据</string>
+    <string name="provider_add_credentials_title">添加或更新 API 密钥</string>
+    <string name="voice_settings_intro">配置语音输入和语音回复。</string>
+    <string name="voice_conversation_section">语音对话</string>
+    <string name="voice_response_description">朗读 OpenCode 的回复。</string>
+    <string name="wake_word_section_title">唤醒</string>
+    <string name="wake_word_pack_required">可选的唤醒词包尚未安装。</string>
+    <string name="wake_word_description">监听"Hey Mycroft"以免提启动助手。</string>
+    <string name="wake_word_notification_channel">唤醒词检测</string>
+    <string name="wake_word_notification_title">唤醒词已激活</string>
+    <string name="wake_word_notification_text">正在监听"Hey Mycroft"…</string>
+    <string name="wake_word_notification_stop">停止</string>
+</resources>

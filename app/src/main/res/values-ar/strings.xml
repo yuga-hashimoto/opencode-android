@@ -557,4 +557,8 @@
     <string name="unified_view">موحد</string>
     <string name="split_view">مقسم</string>
     <string name="diff_stat">+%1$d / -%2$d</string>
+    <string name="syntax_theme_row">سمة بناء الجملة</string>
+    <string name="syntax_theme_dialog_title">اختيار سمة بناء الجملة</string>
+    <string name="usage_row">الاستخدام</string>
+    <string name="font_size_dialog_title">حجم الخط</string>
 </resources>

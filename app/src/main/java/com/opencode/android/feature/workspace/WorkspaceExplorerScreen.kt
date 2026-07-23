@@ -1,9 +1,12 @@
 package com.opencode.android.feature.workspace
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,11 +26,14 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Source
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -37,10 +43,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +69,7 @@ import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileNode
 import com.opencode.android.ui.components.FileTypeIcon
+import com.opencode.android.ui.components.RetainedPanel
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.components.StatusChip
 
@@ -88,9 +99,12 @@ fun WorkspaceExplorerScreen(
     commits: List<CommitInfo> = emptyList(),
     prTitle: String? = null,
     prStatus: String? = null,
-    prDescription: String? = null
+    prDescription: String? = null,
+    tabManager: WorkspaceTabManager? = null,
+    workspaceDeck: List<String> = emptyList()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showScripts by remember { mutableStateOf(false) }
     val tabs = listOf(
         stringResource(R.string.tab_files),
         stringResource(R.string.tab_search),
@@ -99,6 +113,9 @@ fun WorkspaceExplorerScreen(
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
+        if (workspaceDeck.size > 1) {
+            WorkspaceDeckRow(workspaceDeck, state.workspace.name)
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -123,12 +140,19 @@ fun WorkspaceExplorerScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            IconButton(onClick = { showScripts = true }) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Scripts")
+            }
             IconButton(
                 onClick = if (selectedTab == 2) onRefreshChanges else onRefresh,
                 enabled = !state.isLoadingFiles && !state.isLoadingChanges
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
             }
+        }
+
+        if (tabManager != null) {
+            WorkspaceTabRow(tabManager)
         }
 
         PrimaryTabRow(selectedTabIndex = selectedTab) {
@@ -141,11 +165,190 @@ fun WorkspaceExplorerScreen(
             }
         }
 
-        when (selectedTab) {
-            0 -> FilesTab(state, onOpenNode, onCloseFile, onNavigateUp)
-            1 -> SearchTab(state, onSearch)
-            2 -> ChangesTab(state, branches, onSwitchBranch, onCreateBranch, commits)
-            else -> PrTab(prTitle, prStatus, prDescription)
+        if (tabManager != null) {
+            WorkspaceTabContent(tabManager = tabManager) {
+                when (selectedTab) {
+                    0 -> FilesTab(state, onOpenNode, onCloseFile, onNavigateUp)
+                    1 -> SearchTab(state, onSearch)
+                    2 -> ChangesTab(state, branches, onSwitchBranch, onCreateBranch, commits)
+                    else -> PrTab(prTitle, prStatus, prDescription)
+                }
+            }
+        } else {
+            when (selectedTab) {
+                0 -> FilesTab(state, onOpenNode, onCloseFile, onNavigateUp)
+                1 -> SearchTab(state, onSearch)
+                2 -> ChangesTab(state, branches, onSwitchBranch, onCreateBranch, commits)
+                else -> PrTab(prTitle, prStatus, prDescription)
+            }
+        }
+    }
+
+    if (showScripts) {
+        WorkspaceScriptsSheet(
+            onDismiss = { showScripts = false },
+            scripts = emptyList(),
+            onRunScript = {}
+        )
+    }
+}
+
+@Composable
+private fun WorkspaceDeckRow(workspaces: List<String>, activeName: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        workspaces.forEach { name ->
+            FilterChip(
+                selected = name == activeName,
+                onClick = {},
+                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+private fun WorkspaceTabRow(tabManager: WorkspaceTabManager) {
+    val workspaceTabs by tabManager.tabs.collectAsState()
+    val selectedTabId by tabManager.selectedTabId.collectAsState()
+    var tabDropdownId by remember { mutableStateOf<String?>(null) }
+    var showAddMenu by remember { mutableStateOf(false) }
+
+    if (workspaceTabs.isEmpty()) return
+
+    val selectedIndex = workspaceTabs.indexOfFirst { it.id == selectedTabId }.coerceAtLeast(0)
+
+    Box {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedIndex,
+                modifier = Modifier.weight(1f),
+                edgePadding = 8.dp
+            ) {
+                workspaceTabs.forEach { tab ->
+                    Tab(
+                        selected = tab.id == selectedTabId,
+                        onClick = { tabManager.selectTab(tab.id) },
+                        text = { Text(tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        modifier = Modifier.combinedClickable(
+                            onClick = { tabManager.selectTab(tab.id) },
+                            onLongClick = { tabDropdownId = tab.id }
+                        )
+                    )
+                }
+            }
+            Box {
+                IconButton(onClick = { showAddMenu = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add tab")
+                }
+                DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Agent") },
+                        onClick = {
+                            tabManager.addTab(
+                                WorkspaceTab(
+                                    id = java.util.UUID.randomUUID().toString(),
+                                    type = TabType.AGENT,
+                                    title = "New"
+                                )
+                            )
+                            showAddMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Terminal") },
+                        onClick = {
+                            tabManager.addTab(
+                                WorkspaceTab(
+                                    id = java.util.UUID.randomUUID().toString(),
+                                    type = TabType.TERMINAL,
+                                    title = "Terminal"
+                                )
+                            )
+                            showAddMenu = false
+                        }
+                    )
+                }
+            }
+        }
+        DropdownMenu(expanded = tabDropdownId != null, onDismissRequest = { tabDropdownId = null }) {
+            DropdownMenuItem(
+                text = { Text("Close") },
+                onClick = {
+                    tabDropdownId?.let { tabManager.removeTab(it) }
+                    tabDropdownId = null
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Close Others") },
+                onClick = {
+                    tabDropdownId?.let { tabManager.closeOthers(it) }
+                    tabDropdownId = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceTabContent(
+    tabManager: WorkspaceTabManager,
+    content: @Composable () -> Unit
+) {
+    val workspaceTabs by tabManager.tabs.collectAsState()
+    val selectedTabId by tabManager.selectedTabId.collectAsState()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        workspaceTabs.forEach { tab ->
+            RetainedPanel(visible = selectedTabId == tab.id) {
+                when {
+                    tab.type == TabType.TERMINAL -> TerminalTabPlaceholder()
+                    selectedTabId == tab.id -> content()
+                    else -> Text("Tab content", modifier = Modifier.padding(20.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TerminalTabPlaceholder() {
+    var input by remember { mutableStateOf("") }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF1E1E1E))
+            .padding(12.dp)
+    ) {
+        Column {
+            Text(
+                "$ ",
+                fontFamily = FontFamily.Monospace,
+                color = Color(0xFF6FCF97)
+            )
+            TextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = Color.White
+                )
+            )
         }
     }
 }

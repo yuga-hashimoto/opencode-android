@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="runtime_setup_required_title">OpenCode n\'est pas prêt</string>
+    <string name="runtime_setup_required_body">Ouvrez le menu, puis Paramètres, pour installer le runtime Android ou ajouter une connexion à votre PC ou Mac.</string>
+    <string name="runtime_setup_required_body_compact">Configurez OpenCode sur cet appareil Android, ou connectez-vous à un PC ou Mac exécutant déjà OpenCode.</string>
+    <string name="open_settings_action">Ouvrir le menu</string>
+    <string name="setup_this_android_action">Configurer cet Android</string>
+    <string name="connect_pc_mac_action">Connecter à un PC ou Mac</string>
+    <string name="setup_short_action">Configurer</string>
+    <string name="connect_short_action">Connecter</string>
+    <string name="chat_model_short_default">Modèle</string>
+    <string name="chat_workspace_short_default">Par défaut</string>
+    <string name="chat_build_subtitle_compact">Demandez à OpenCode d\'implémenter, corriger ou investiguer.</string>
+    <string name="settings_wake_word_row">Mot de réveil</string>
+    <string name="settings_wake_word_value">Non installé</string>
+    <string name="setup_step_counter">Étape %1$d sur %2$d</string>
+    <string name="setup_next_action">Suivant</string>
+    <string name="setup_back_action">Retour</string>
+    <string name="setup_skip_action">Passer pour l\'instant</string>
+    <string name="setup_download_description">Préparez le runtime nécessaire pour exécuter OpenCode directement sur cet appareil.</string>
+    <string name="setup_runtime_not_installed">Le runtime n\'est pas encore installé.</string>
+    <string name="setup_runtime_ready">Le runtime est prêt</string>
+    <string name="setup_provider_optional_description">Connectez un fournisseur d\'IA pour commencer à discuter. Cette étape est facultative — vous pouvez la passer et connecter un fournisseur plus tard depuis les Paramètres.</string>
+    <string name="setup_provider_loading">Chargement des fournisseurs…</string>
+    <string name="setup_provider_api_key_only">Clé API</string>
+    <string name="setup_provider_search_hint">Rechercher des fournisseurs…</string>
+    <string name="setup_provider_no_results">Aucun fournisseur correspondant</string>
+    <string name="remote_connection_intro">Entrez les détails de connexion d\'un PC ou Mac exécutant OpenCode.</string>
+    <string name="remote_connection_unhealthy">Le serveur OpenCode n\'a pas répondu correctement.</string>
+    <string name="remote_connection_failed">Échec de la connexion.</string>
+    <string name="provider_saved_credentials_title">Identifiants enregistrés</string>
+    <string name="provider_add_credentials_title">Ajouter ou mettre à jour une clé API</string>
+    <string name="voice_settings_intro">Configurez la saisie vocale et les réponses parlées.</string>
+    <string name="voice_conversation_section">Conversation vocale</string>
+    <string name="voice_response_description">Lire les réponses d\'OpenCode à voix haute.</string>
+    <string name="wake_word_section_title">Invocation</string>
+    <string name="wake_word_pack_required">Le pack de mot de réveil optionnel n\'est pas encore installé.</string>
+    <string name="wake_word_description">Écoutez « Hey Mycroft » pour démarrer l\'assistant en mains libres.</string>
+    <string name="wake_word_notification_channel">Détection du mot de réveil</string>
+    <string name="wake_word_notification_title">Mot de réveil actif</string>
+    <string name="wake_word_notification_text">Écoute de « Hey Mycroft »…</string>
+    <string name="wake_word_notification_stop">Arrêter</string>
+</resources>

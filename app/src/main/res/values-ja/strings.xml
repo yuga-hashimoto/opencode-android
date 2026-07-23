@@ -569,4 +569,8 @@
     <string name="unified_view">統合</string>
     <string name="split_view">分割</string>
     <string name="diff_stat">+%1$d / -%2$d</string>
+    <string name="syntax_theme_row">シンタックステーマ</string>
+    <string name="syntax_theme_dialog_title">シンタックステーマを選択</string>
+    <string name="usage_row">使用量</string>
+    <string name="font_size_dialog_title">フォントサイズ</string>
 </resources>

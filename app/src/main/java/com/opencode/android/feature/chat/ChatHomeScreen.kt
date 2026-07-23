@@ -1,10 +1,20 @@
 package com.opencode.android.feature.chat
 
+import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +30,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,8 +44,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Code
@@ -45,6 +59,7 @@ import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -66,6 +81,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -75,6 +92,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -91,14 +111,18 @@ import com.opencode.android.R
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeProvider
 import com.opencode.android.core.api.PromptAttachment
+import com.opencode.android.feature.workspace.GitHubAutoAttachChips
+import com.opencode.android.feature.workspace.GitHubReference
 import com.opencode.android.runtime.PermissionResponse
 import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
+import com.opencode.android.ui.components.ContextWindowRing
+import com.opencode.android.ui.components.ProviderIcon
 import com.opencode.android.ui.components.StatusChip
+import com.opencode.android.ui.components.VolumeMeter
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 import kotlinx.coroutines.launch
 
-/** Chat-first home screen. Runtime selection remains inside the model picker. */
 @Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -139,7 +163,10 @@ fun ChatHomeScreen(
     onOpenLocalSetup: () -> Unit,
     onOpenRemoteSetup: () -> Unit,
     onRefreshCatalog: () -> Unit = {},
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    contextUsageFraction: Float = 0f,
+    subagents: List<SubagentInfo> = emptyList(),
+    githubRefs: List<GitHubReference> = emptyList()
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -151,6 +178,30 @@ fun ChatHomeScreen(
     var showActionSheet by remember { mutableStateOf<Pair<String, String>?>(null) }
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
+    var showSlashCommands by remember { mutableStateOf(false) }
+    var focusMode by remember { mutableStateOf(false) }
+    var showSidePanel by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val attachedImages = remember { mutableStateListOf<Bitmap>() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) attachedImages.add(bitmap)
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                if (bitmap != null) attachedImages.add(bitmap)
+            } catch (_: Exception) {}
+        }
+    }
 
     LaunchedEffect(listState) {
         snapshotFlow {
@@ -170,153 +221,231 @@ fun ChatHomeScreen(
         if (state.partialText.isNotBlank()) input = state.partialText
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    change.consume()
+                    dragOffset += dragAmount
+                    if (dragOffset < -100f && change.position.x > size.width - 80f) {
+                        showSidePanel = true
+                    }
+                    if (dragOffset > 100f && showSidePanel) {
+                        showSidePanel = false
+                    }
+                }
+            }
     ) {
-        CenterAlignedTopAppBar(
-            title = {
-                Text(
-                    text = state.sessionTitle.ifBlank { stringResource(R.string.chat_home_title) },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            AnimatedVisibility(
+                visible = !focusMode,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            text = state.sessionTitle.ifBlank { stringResource(R.string.chat_home_title) },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu_description))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onNewChat) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_chat))
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
-            },
-            navigationIcon = {
-                IconButton(onClick = onOpenDrawer) {
-                    Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu_description))
-                }
-            },
-            actions = {
-                IconButton(onClick = onNewChat) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.new_chat))
-                }
-            },
-            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-                titleContentColor = MaterialTheme.colorScheme.onBackground,
-                navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                actionIconContentColor = MaterialTheme.colorScheme.onBackground
-            )
-        )
+            }
 
-        Box(modifier = Modifier.weight(1f)) {
-            when {
-                state.isLoadingHistory -> LoadingState()
-                runtimeNotReady -> RuntimeSetupRequiredState(
-                    onOpenLocalSetup = onOpenLocalSetup,
-                    onOpenRemoteSetup = onOpenRemoteSetup
-                )
-                state.messages.isEmpty() &&
-                    state.permissions.isEmpty() &&
-                    state.pendingQuestions.isEmpty() &&
-                    state.error == null -> {
-                    EmptyChatState(onSuggestionClick = { text -> input = text })
-                }
-                else -> {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(state.messages, key = { it.id }) { message ->
-                            Box(
-                                modifier = Modifier.combinedClickable(
-                                    onClick = {},
-                                    onLongClick = { showActionSheet = message.id to message.text }
-                                )
-                            ) {
-                                if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    state.isLoadingHistory -> LoadingState()
+                    runtimeNotReady -> RuntimeSetupRequiredState(
+                        onOpenLocalSetup = onOpenLocalSetup,
+                        onOpenRemoteSetup = onOpenRemoteSetup
+                    )
+                    state.messages.isEmpty() &&
+                        state.permissions.isEmpty() &&
+                        state.pendingQuestions.isEmpty() &&
+                        state.error == null -> {
+                        EmptyChatState(onSuggestionClick = { text -> input = text })
+                    }
+                    else -> {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.messages, key = { it.id }) { message ->
+                                Box(
+                                    modifier = Modifier.combinedClickable(
+                                        onClick = {},
+                                        onLongClick = { showActionSheet = message.id to message.text }
+                                    )
+                                ) {
+                                    if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                                }
                             }
-                        }
-                        items(state.permissions, key = { "permission-${it.id}" }) { permission ->
-                            PermissionCard(permission, onPermission)
-                        }
-                        items(state.pendingQuestions, key = { "question-${it.request.id}" }) { question ->
-                            QuestionCard(
-                                question = question,
-                                onAnswerSelected = onSelectQuestionAnswer,
-                                onSubmit = onSubmitQuestion
-                            )
-                        }
-                        if (state.isThinking) {
-                            item { StatusChip(text = stringResource(R.string.thinking), active = true) }
-                        }
-                        state.error?.let { error ->
-                            item {
-                                ChatErrorCard(
-                                    error = error,
-                                    kind = errorKind ?: ChatErrorKind.GENERIC,
-                                    onOpenLocalSetup = onOpenLocalSetup,
-                                    onOpenRemoteSetup = onOpenRemoteSetup
+                            items(state.permissions, key = { "permission-${it.id}" }) { permission ->
+                                PermissionCard(permission, onPermission)
+                            }
+                            items(state.pendingQuestions, key = { "question-${it.request.id}" }) { question ->
+                                QuestionCard(
+                                    question = question,
+                                    onAnswerSelected = onSelectQuestionAnswer,
+                                    onSubmit = onSubmitQuestion
                                 )
+                            }
+                            if (state.isThinking) {
+                                item { StatusChip(text = stringResource(R.string.thinking), active = true) }
+                            }
+                            state.error?.let { error ->
+                                item {
+                                    ChatErrorCard(
+                                        error = error,
+                                        kind = errorKind ?: ChatErrorKind.GENERIC,
+                                        onOpenLocalSetup = onOpenLocalSetup,
+                                        onOpenRemoteSetup = onOpenRemoteSetup
+                                    )
+                                }
                             }
                         }
                     }
                 }
+
+                if (!isAtBottom.value) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            isAtBottom.value = true
+                            coroutineScope.launch {
+                                val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
+                                if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = null)
+                    }
+                }
             }
 
-            if (!isAtBottom.value) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        isAtBottom.value = true
-                        coroutineScope.launch {
-                            val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
-                            if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+            SubagentsTrack(subagents = subagents, onSubagentClick = {})
+
+            if (!runtimeNotReady) {
+                ChatComposer(
+                    input = input,
+                    onInputChange = {
+                        input = it
+                        showSlashCommands = it.startsWith("/")
+                    },
+                    isRunning = state.isRunning,
+                    onSend = {
+                        if (input.isNotBlank()) {
+                            onSendMessage(input)
+                            input = ""
+                            showSlashCommands = false
                         }
                     },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
-                ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = null)
-                }
+                    onAbort = onAbort,
+                    onMic = onMic,
+                    isListening = state.isListening,
+                    isSpeechProcessing = state.isSpeechProcessing,
+                    modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
+                    onModelChipClick = {
+                        onRefreshCatalog()
+                        showModelPicker = true
+                    },
+                    agents = agents,
+                    selectedAgentId = selectedAgentId,
+                    onSelectAgent = onSelectAgent,
+                    thinkingOptions = providers
+                        .firstOrNull { it.id == selectedProviderId }
+                        ?.models?.get(selectedModelId)
+                        ?.variants?.keys?.toList() ?: emptyList(),
+                    selectedVariant = state.selectedVariant,
+                    onSelectVariant = onSelectVariant,
+                    attachments = state.attachments,
+                    onAttach = onAttach,
+                    onRemoveAttachment = onRemoveAttachment,
+                    autoAcceptPermissions = autoAcceptPermissions,
+                    onToggleAutoAccept = onToggleAutoAccept,
+                    sendBehavior = sendBehavior,
+                    contextTokensUsed = state.contextTokensUsed,
+                    contextLimit = providers
+                        .firstOrNull { it.id == selectedProviderId }
+                        ?.models?.get(selectedModelId)
+                        ?.limit?.context ?: 0L,
+                    contextUsageFraction = contextUsageFraction,
+                    selectedProviderId = selectedProviderId,
+                    showSlashCommands = showSlashCommands,
+                    onSlashCommandSelect = { command ->
+                        input = command.name + " "
+                        showSlashCommands = false
+                    },
+                    githubRefs = githubRefs,
+                    attachedImages = attachedImages,
+                    onRemoveImage = { attachedImages.removeAt(it) },
+                    onCameraLaunch = { cameraLauncher.launch(null) },
+                    onGalleryLaunch = {
+                        galleryLauncher.launch(
+                            androidx.activity.result.PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                            )
+                        )
+                    }
+                )
             }
         }
 
-        if (!runtimeNotReady) {
-            ChatComposer(
-                input = input,
-                onInputChange = { input = it },
-                isRunning = state.isRunning,
-                onSend = {
-                    if (input.isNotBlank()) {
-                        onSendMessage(input)
-                        input = ""
-                    }
-                },
-                onAbort = onAbort,
-                onMic = onMic,
-                isListening = state.isListening,
-                isSpeechProcessing = state.isSpeechProcessing,
-                modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
-                onModelChipClick = {
-                    onRefreshCatalog()
-                    showModelPicker = true
-                },
-                agents = agents,
-                selectedAgentId = selectedAgentId,
-                onSelectAgent = onSelectAgent,
-                thinkingOptions = providers
-                    .firstOrNull { it.id == selectedProviderId }
-                    ?.models?.get(selectedModelId)
-                    ?.variants?.keys?.toList() ?: emptyList(),
-                selectedVariant = state.selectedVariant,
-                onSelectVariant = onSelectVariant,
-                attachments = state.attachments,
-                onAttach = onAttach,
-                onRemoveAttachment = onRemoveAttachment,
-                autoAcceptPermissions = autoAcceptPermissions,
-                onToggleAutoAccept = onToggleAutoAccept,
-                sendBehavior = sendBehavior,
-                contextTokensUsed = state.contextTokensUsed,
-                contextLimit = providers
-                    .firstOrNull { it.id == selectedProviderId }
-                    ?.models?.get(selectedModelId)
-                    ?.limit?.context ?: 0L
-            )
+        FocusModeOverlay(isActive = focusMode, onToggle = { focusMode = !focusMode })
+
+        AnimatedVisibility(
+            visible = showSidePanel,
+            enter = slideInHorizontally(initialOffsetX = { it }),
+            exit = slideOutHorizontally(targetOffsetX = { it }),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .width(280.dp)
+                    .fillMaxSize(),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Files",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "File explorer",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 
@@ -583,14 +712,97 @@ private fun ChatComposer(
     onToggleAutoAccept: (Boolean) -> Unit,
     sendBehavior: String,
     contextTokensUsed: Long,
-    contextLimit: Long
+    contextLimit: Long,
+    contextUsageFraction: Float,
+    selectedProviderId: String?,
+    showSlashCommands: Boolean,
+    onSlashCommandSelect: (SlashCommand) -> Unit,
+    githubRefs: List<GitHubReference>,
+    attachedImages: List<Bitmap>,
+    onRemoveImage: (Int) -> Unit,
+    onCameraLaunch: () -> Unit,
+    onGalleryLaunch: () -> Unit
 ) {
+    var showAttachMenu by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
+        if (showSlashCommands) {
+            val filtered = SlashCommandRegistry.filter(input)
+            if (filtered.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        filtered.forEach { command ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = command.name,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = command.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                onClick = { onSlashCommandSelect(command) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        GitHubAutoAttachChips(
+            references = githubRefs,
+            onAttach = {},
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
+        if (attachedImages.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier.padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                itemsIndexed(attachedImages) { index, bitmap ->
+                    Box {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .align(Alignment.TopEnd)
+                                .clickable { onRemoveImage(index) },
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -647,12 +859,51 @@ private fun ChatComposer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    AttachButton(onClick = onAttach)
+                    Box {
+                        AttachButton(onClick = { showAttachMenu = true })
+                        DropdownMenu(
+                            expanded = showAttachMenu,
+                            onDismissRequest = { showAttachMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("File") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showAttachMenu = false
+                                    onAttach()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Camera") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showAttachMenu = false
+                                    onCameraLaunch()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Gallery") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    showAttachMenu = false
+                                    onGalleryLaunch()
+                                }
+                            )
+                        }
+                    }
+                    ProviderIcon(providerId = selectedProviderId.orEmpty(), size = 16)
                     CompactContextButton(
                         label = modelLabel,
                         maxWidth = 84.dp,
                         onClick = onModelChipClick
                     )
+                    ContextWindowRing(usageFraction = contextUsageFraction, size = 24)
                     if (thinkingOptions.isNotEmpty()) {
                         ThinkingChip(
                             options = thinkingOptions,
@@ -661,6 +912,9 @@ private fun ChatComposer(
                         )
                     }
                     Spacer(Modifier.weight(1f))
+                    if (isListening) {
+                        VolumeMeter(amplitude = 0.5f, idle = true)
+                    }
                     val micContainerColor = if (isListening) {
                         MaterialTheme.colorScheme.primaryContainer
                     } else {

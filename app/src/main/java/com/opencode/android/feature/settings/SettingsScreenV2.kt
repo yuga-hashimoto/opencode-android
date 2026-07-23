@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
@@ -36,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -43,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,12 +79,16 @@ fun SettingsScreenV2(
     onOpenDiagnostics: () -> Unit,
     onOpenMcp: () -> Unit = {},
     onOpenServerInfo: () -> Unit = {},
+    onOpenUsage: () -> Unit = {},
     currentTheme: String = "dark",
     onThemeChange: (String) -> Unit = {},
     uiFontSize: Int = 16,
     onUiFontSizeChange: (Int) -> Unit = {},
     codeFontSize: Int = 12,
     onCodeFontSizeChange: (Int) -> Unit = {},
+    syntaxTheme: String = "one-dark",
+    onSyntaxThemeChange: (String) -> Unit = {},
+    isTablet: Boolean = false,
     toolCallDetailLevel: String = "detailed",
     onToolCallDetailLevelChange: (String) -> Unit = {},
     autoExpandReasoning: Boolean = false,
@@ -89,6 +98,9 @@ fun SettingsScreenV2(
 ) {
     var showAboutDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showUiFontDialog by remember { mutableStateOf(false) }
+    var showCodeFontDialog by remember { mutableStateOf(false) }
+    var showSyntaxThemeDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         CenterAlignedTopAppBar(
@@ -111,171 +123,194 @@ fun SettingsScreenV2(
             )
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            item {
-                SettingsSection(title = stringResource(R.string.section_assistant_settings)) {
-                    SettingsRow(
-                        icon = Icons.Default.Home,
-                        title = stringResource(R.string.settings_home_assistant_row),
-                        trailing = {
-                            StatusPill(
-                                text = if (assistantConfigured) {
-                                    stringResource(R.string.assistant_enabled_pill)
-                                } else {
-                                    stringResource(R.string.assistant_disabled_pill)
-                                },
-                                active = assistantConfigured
-                            )
-                        },
-                        onClick = onOpenAssistantSettings
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Mic,
-                        title = stringResource(R.string.settings_wake_word_row),
-                        value = stringResource(R.string.settings_wake_word_value),
-                        onClick = onOpenVoiceSettings
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.RecordVoiceOver,
-                        title = stringResource(R.string.voice_settings_row),
-                        onClick = onOpenVoiceSettings
-                    )
-                }
+        val settingsListContent: @Composable () -> Unit = {
+            SettingsSection(title = stringResource(R.string.section_assistant_settings)) {
+                SettingsRow(
+                    icon = Icons.Default.Home,
+                    title = stringResource(R.string.settings_home_assistant_row),
+                    trailing = {
+                        StatusPill(
+                            text = if (assistantConfigured) {
+                                stringResource(R.string.assistant_enabled_pill)
+                            } else {
+                                stringResource(R.string.assistant_disabled_pill)
+                            },
+                            active = assistantConfigured
+                        )
+                    },
+                    onClick = onOpenAssistantSettings
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Mic,
+                    title = stringResource(R.string.settings_wake_word_row),
+                    value = stringResource(R.string.settings_wake_word_value),
+                    onClick = onOpenVoiceSettings
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.RecordVoiceOver,
+                    title = stringResource(R.string.voice_settings_row),
+                    onClick = onOpenVoiceSettings
+                )
             }
 
-            item {
-                SettingsSection(title = stringResource(R.string.section_appearance_settings)) {
-                    SettingsRow(
-                        icon = Icons.Default.Palette,
-                        title = stringResource(R.string.theme_row),
-                        value = currentTheme.replaceFirstChar { it.uppercase() },
-                        onClick = { showThemeDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Palette,
-                        title = stringResource(R.string.ui_font_size_row),
-                        value = "${uiFontSize}sp",
-                        onClick = { onUiFontSizeChange(if (uiFontSize >= 20) 12 else uiFontSize + 2) }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Palette,
-                        title = stringResource(R.string.code_font_size_row),
-                        value = "${codeFontSize}sp",
-                        onClick = { onCodeFontSizeChange(if (codeFontSize >= 18) 10 else codeFontSize + 2) }
-                    )
-                }
+            SettingsSection(title = stringResource(R.string.section_appearance_settings)) {
+                SettingsRow(
+                    icon = Icons.Default.Palette,
+                    title = stringResource(R.string.theme_row),
+                    value = currentTheme.replaceFirstChar { it.uppercase() },
+                    onClick = { showThemeDialog = true }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Palette,
+                    title = stringResource(R.string.ui_font_size_row),
+                    value = "${uiFontSize}sp",
+                    onClick = { showUiFontDialog = true }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Palette,
+                    title = stringResource(R.string.code_font_size_row),
+                    value = "${codeFontSize}sp",
+                    onClick = { showCodeFontDialog = true }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Code,
+                    title = stringResource(R.string.syntax_theme_row),
+                    value = syntaxTheme,
+                    onClick = { showSyntaxThemeDialog = true }
+                )
             }
 
-            item {
-                SettingsSection(title = stringResource(R.string.section_chat_settings)) {
-                    SettingsRow(
-                        icon = Icons.Default.Chat,
-                        title = stringResource(R.string.tool_call_detail_row),
-                        value = if (toolCallDetailLevel == "detailed") {
-                            stringResource(R.string.tool_call_detailed)
-                        } else {
-                            stringResource(R.string.tool_call_overview)
-                        },
-                        onClick = {
-                            onToolCallDetailLevelChange(
-                                if (toolCallDetailLevel == "detailed") "overview" else "detailed"
-                            )
-                        }
-                    )
-                    SettingsDivider()
-                    SettingsToggleRow(
-                        icon = Icons.Default.Chat,
-                        title = stringResource(R.string.auto_expand_reasoning_row),
-                        checked = autoExpandReasoning,
-                        onCheckedChange = onAutoExpandReasoningChange
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Chat,
-                        title = stringResource(R.string.send_behavior_row),
-                        value = if (sendBehavior == "interrupt") {
-                            stringResource(R.string.send_behavior_interrupt)
-                        } else {
-                            stringResource(R.string.send_behavior_queue)
-                        },
-                        onClick = {
-                            onSendBehaviorChange(
-                                if (sendBehavior == "interrupt") "queue" else "interrupt"
-                            )
-                        }
-                    )
-                }
+            SettingsSection(title = stringResource(R.string.section_chat_settings)) {
+                SettingsRow(
+                    icon = Icons.Default.Chat,
+                    title = stringResource(R.string.tool_call_detail_row),
+                    value = if (toolCallDetailLevel == "detailed") {
+                        stringResource(R.string.tool_call_detailed)
+                    } else {
+                        stringResource(R.string.tool_call_overview)
+                    },
+                    onClick = {
+                        onToolCallDetailLevelChange(
+                            if (toolCallDetailLevel == "detailed") "overview" else "detailed"
+                        )
+                    }
+                )
+                SettingsDivider()
+                SettingsToggleRow(
+                    icon = Icons.Default.Chat,
+                    title = stringResource(R.string.auto_expand_reasoning_row),
+                    checked = autoExpandReasoning,
+                    onCheckedChange = onAutoExpandReasoningChange
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Chat,
+                    title = stringResource(R.string.send_behavior_row),
+                    value = if (sendBehavior == "interrupt") {
+                        stringResource(R.string.send_behavior_interrupt)
+                    } else {
+                        stringResource(R.string.send_behavior_queue)
+                    },
+                    onClick = {
+                        onSendBehaviorChange(
+                            if (sendBehavior == "interrupt") "queue" else "interrupt"
+                        )
+                    }
+                )
             }
 
-            item {
-                SettingsSection(title = stringResource(R.string.section_system_settings)) {
-                    SettingsRow(
-                        icon = Icons.Default.Key,
-                        title = stringResource(R.string.provider_settings_row),
-                        onClick = onOpenProviderSettings
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Extension,
-                        title = stringResource(R.string.mcp_settings_row),
-                        onClick = onOpenMcp
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Build,
-                        title = stringResource(R.string.server_info_settings_row),
-                        onClick = onOpenServerInfo
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Terminal,
-                        title = stringResource(R.string.settings_local_runtime_row),
-                        onClick = onOpenLocalRuntime
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Router,
-                        title = stringResource(R.string.remote_connection_row),
-                        onClick = onOpenRemoteConnection
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Folder,
-                        title = stringResource(R.string.settings_workspace_row),
-                        onClick = onOpenWorkspaces
-                    )
-                }
+            SettingsSection(title = stringResource(R.string.section_system_settings)) {
+                SettingsRow(
+                    icon = Icons.Default.Key,
+                    title = stringResource(R.string.provider_settings_row),
+                    onClick = onOpenProviderSettings
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Extension,
+                    title = stringResource(R.string.mcp_settings_row),
+                    onClick = onOpenMcp
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Build,
+                    title = stringResource(R.string.server_info_settings_row),
+                    onClick = onOpenServerInfo
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Terminal,
+                    title = stringResource(R.string.settings_local_runtime_row),
+                    onClick = onOpenLocalRuntime
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Router,
+                    title = stringResource(R.string.remote_connection_row),
+                    onClick = onOpenRemoteConnection
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Folder,
+                    title = stringResource(R.string.settings_workspace_row),
+                    onClick = onOpenWorkspaces
+                )
             }
 
-            item {
-                SettingsSection(title = stringResource(R.string.section_app_settings)) {
-                    SettingsToggleRow(
-                        icon = Icons.Default.Notifications,
-                        title = stringResource(R.string.notifications_row),
-                        checked = notificationsEnabled,
-                        onCheckedChange = onToggleNotifications
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.BugReport,
-                        title = stringResource(R.string.diagnostics_row),
-                        onClick = onOpenDiagnostics
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.Info,
-                        title = stringResource(R.string.app_info_row),
-                        onClick = { showAboutDialog = true }
-                    )
+            SettingsSection(title = stringResource(R.string.section_app_settings)) {
+                SettingsToggleRow(
+                    icon = Icons.Default.Notifications,
+                    title = stringResource(R.string.notifications_row),
+                    checked = notificationsEnabled,
+                    onCheckedChange = onToggleNotifications
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.BarChart,
+                    title = stringResource(R.string.usage_row),
+                    onClick = onOpenUsage
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.BugReport,
+                    title = stringResource(R.string.diagnostics_row),
+                    onClick = onOpenDiagnostics
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Default.Info,
+                    title = stringResource(R.string.app_info_row),
+                    onClick = { showAboutDialog = true }
+                )
+            }
+        }
+
+        if (isTablet) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.width(320.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    item { settingsListContent() }
                 }
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                ) {}
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                item { settingsListContent() }
             }
         }
     }
@@ -333,6 +368,111 @@ fun SettingsScreenV2(
             },
             confirmButton = {
                 TextButton(onClick = { showThemeDialog = false }) {
+                    Text(stringResource(R.string.close_description))
+                }
+            }
+        )
+    }
+
+    if (showUiFontDialog) {
+        var sliderValue by remember { mutableFloatStateOf(uiFontSize.toFloat()) }
+        AlertDialog(
+            onDismissRequest = { showUiFontDialog = false },
+            title = { Text(stringResource(R.string.ui_font_size_row)) },
+            text = {
+                Column {
+                    Text("${sliderValue.toInt()}sp")
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        valueRange = 12f..22f,
+                        steps = 9
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUiFontSizeChange(sliderValue.toInt())
+                    showUiFontDialog = false
+                }) {
+                    Text(stringResource(R.string.close_description))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUiFontDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showCodeFontDialog) {
+        var sliderValue by remember { mutableFloatStateOf(codeFontSize.toFloat()) }
+        AlertDialog(
+            onDismissRequest = { showCodeFontDialog = false },
+            title = { Text(stringResource(R.string.code_font_size_row)) },
+            text = {
+                Column {
+                    Text("${sliderValue.toInt()}sp")
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { sliderValue = it },
+                        valueRange = 10f..20f,
+                        steps = 9
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onCodeFontSizeChange(sliderValue.toInt())
+                    showCodeFontDialog = false
+                }) {
+                    Text(stringResource(R.string.close_description))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCodeFontDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showSyntaxThemeDialog) {
+        val syntaxThemes = listOf("one-dark", "monokai", "github-dark", "solarized-dark")
+        AlertDialog(
+            onDismissRequest = { showSyntaxThemeDialog = false },
+            title = { Text(stringResource(R.string.syntax_theme_dialog_title)) },
+            text = {
+                Column {
+                    syntaxThemes.forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSyntaxThemeChange(theme)
+                                    showSyntaxThemeDialog = false
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = syntaxTheme == theme,
+                                onClick = {
+                                    onSyntaxThemeChange(theme)
+                                    showSyntaxThemeDialog = false
+                                }
+                            )
+                            Text(
+                                text = theme,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSyntaxThemeDialog = false }) {
                     Text(stringResource(R.string.close_description))
                 }
             }

@@ -62,6 +62,7 @@ import com.opencode.android.feature.activity.ActivityScreen
 import com.opencode.android.feature.activity.ActivityViewModel
 import com.opencode.android.feature.activity.SessionDetailScreen
 import com.opencode.android.feature.activity.SessionDetailViewModel
+import com.opencode.android.feature.activity.SessionImportSheet
 import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
 import com.opencode.android.feature.chat.ChatHomeScreen
@@ -71,10 +72,12 @@ import com.opencode.android.feature.onboarding.AndroidSetupScreen
 import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
 import com.opencode.android.feature.schedule.ScheduleScreen
 import com.opencode.android.feature.schedule.ScheduleViewModel
+import com.opencode.android.feature.settings.DiagnosticsSheet
 import com.opencode.android.feature.settings.ProviderSettingsScreen
 import com.opencode.android.feature.settings.GitHubRepo
 import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
+import com.opencode.android.feature.settings.UsageScreen
 import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.search.CommandPaletteSheet
 import com.opencode.android.feature.workspace.CodeViewerScreen
@@ -110,6 +113,7 @@ private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
 private const val ROUTE_CODE_VIEWER = "code-viewer"
+private const val ROUTE_USAGE = "usage"
 
 /** Routes whose top bar exposes the hamburger menu / drawer swipe gesture. */
 private val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULE)
@@ -157,6 +161,8 @@ fun OpenCodeApp(
     var notificationsEnabled by remember { mutableStateOf(true) }
     var showCloneDialog by remember { mutableStateOf(false) }
     var showCommandPalette by remember { mutableStateOf(false) }
+    var showSessionImport by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(false) }
 
     val selectedRuntime by app.runtimeRegistry.selected.collectAsState()
     val runtimeTargets by app.runtimeRegistry.targets.collectAsState()
@@ -443,8 +449,8 @@ fun OpenCodeApp(
     }
 
     OpenCodeAndroidTheme(
-        appTheme = AppTheme.fromKey(preferences.theme),
-        uiFontSize = preferences.uiFontSize
+        appTheme = appTheme,
+        uiFontSize = uiFontSize
     ) {
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -479,6 +485,8 @@ fun OpenCodeApp(
                         closeDrawer()
                         if (route == "command-palette") {
                             showCommandPalette = true
+                        } else if (route == "session-import") {
+                            showSessionImport = true
                         } else {
                             navController.navigate(route) { launchSingleTop = true }
                         }
@@ -670,7 +678,7 @@ fun OpenCodeApp(
                     onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
                     onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
                     onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
-                    onOpenDiagnostics = { navController.navigate(ROUTE_ACTIVITY) },
+                    onOpenDiagnostics = { showDiagnostics = true },
                     onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP) },
                     onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) }
                 )
@@ -897,6 +905,10 @@ fun OpenCodeApp(
                     onBack = { navController.popBackStack() }
                 )
             }
+
+            composable(ROUTE_USAGE) {
+                UsageScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 
@@ -932,6 +944,25 @@ fun OpenCodeApp(
                 navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
             },
             sessions = activityState.sessions.map { it.id to it.title.ifBlank { it.slug ?: it.id } }
+        )
+    }
+
+    if (showSessionImport) {
+        SessionImportSheet(
+            onDismiss = { showSessionImport = false },
+            onImport = { _ ->
+                showSessionImport = false
+                navController.navigate(ROUTE_CHAT)
+            }
+        )
+    }
+
+    if (showDiagnostics) {
+        DiagnosticsSheet(
+            onDismiss = { showDiagnostics = false },
+            appVersion = "0.3.0",
+            connectionStatus = "connected",
+            runtimeStatus = "ready"
         )
     }
     }

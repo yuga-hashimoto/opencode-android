@@ -515,6 +515,10 @@
     <string name="theme_dialog_title">Select theme</string>
     <string name="ui_font_size_row">UI font size</string>
     <string name="code_font_size_row">Code font size</string>
+    <string name="syntax_theme_row">Syntax theme</string>
+    <string name="syntax_theme_dialog_title">Select syntax theme</string>
+    <string name="usage_row">Usage</string>
+    <string name="font_size_dialog_title">Font size</string>
     <string name="section_chat_settings">Chat</string>
     <string name="tool_call_detail_row">Tool call detail level</string>
     <string name="tool_call_overview">Overview</string>

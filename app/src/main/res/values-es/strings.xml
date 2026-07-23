@@ -557,4 +557,8 @@
     <string name="unified_view">Unificado</string>
     <string name="split_view">Dividido</string>
     <string name="diff_stat">+%1$d / -%2$d</string>
+    <string name="syntax_theme_row">Tema de sintaxis</string>
+    <string name="syntax_theme_dialog_title">Elegir tema de sintaxis</string>
+    <string name="usage_row">Uso</string>
+    <string name="font_size_dialog_title">Tamaño de fuente</string>
 </resources>

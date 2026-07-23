@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="runtime_setup_required_title">OpenCode не готов</string>
+    <string name="runtime_setup_required_body">Откройте меню, затем Настройки, чтобы установить среду выполнения Android или добавить подключение к ПК или Mac.</string>
+    <string name="runtime_setup_required_body_compact">Настройте OpenCode на этом устройстве Android или подключитесь к ПК или Mac, на котором уже запущен OpenCode.</string>
+    <string name="open_settings_action">Открыть меню</string>
+    <string name="setup_this_android_action">Настроить этот Android</string>
+    <string name="connect_pc_mac_action">Подключиться к ПК или Mac</string>
+    <string name="setup_short_action">Настроить</string>
+    <string name="connect_short_action">Подключить</string>
+    <string name="chat_model_short_default">Модель</string>
+    <string name="chat_workspace_short_default">По умолчанию</string>
+    <string name="chat_build_subtitle_compact">Попросите OpenCode реализовать, исправить или исследовать.</string>
+    <string name="settings_wake_word_row">Ключевое слово</string>
+    <string name="settings_wake_word_value">Не установлено</string>
+    <string name="setup_step_counter">Шаг %1$d из %2$d</string>
+    <string name="setup_next_action">Далее</string>
+    <string name="setup_back_action">Назад</string>
+    <string name="setup_skip_action">Пропустить</string>
+    <string name="setup_download_description">Подготовьте среду выполнения для запуска OpenCode непосредственно на этом устройстве.</string>
+    <string name="setup_runtime_not_installed">Среда выполнения ещё не установлена.</string>
+    <string name="setup_runtime_ready">Среда выполнения готова</string>
+    <string name="setup_provider_optional_description">Подключите провайдера ИИ, чтобы начать общение. Этот шаг необязателен — вы можете пропустить его и подключить любого провайдера позже в Настройках.</string>
+    <string name="setup_provider_loading">Загрузка провайдеров…</string>
+    <string name="setup_provider_api_key_only">Ключ API</string>
+    <string name="setup_provider_search_hint">Поиск провайдеров…</string>
+    <string name="setup_provider_no_results">Провайдеры не найдены</string>
+    <string name="remote_connection_intro">Введите данные подключения к ПК или Mac, на котором запущен OpenCode.</string>
+    <string name="remote_connection_unhealthy">Сервер OpenCode не ответил корректно.</string>
+    <string name="remote_connection_failed">Ошибка подключения.</string>
+    <string name="provider_saved_credentials_title">Сохранённые учётные данные</string>
+    <string name="provider_add_credentials_title">Добавить или обновить ключ API</string>
+    <string name="voice_settings_intro">Настройте голосовой ввод и озвучивание ответов.</string>
+    <string name="voice_conversation_section">Голосовой разговор</string>
+    <string name="voice_response_description">Озвучивать ответы OpenCode.</string>
+    <string name="wake_word_section_title">Активация</string>
+    <string name="wake_word_pack_required">Необязательный пакет ключевого слова ещё не установлен.</string>
+    <string name="wake_word_description">Слушайте «Hey Mycroft», чтобы запустить ассистента без рук.</string>
+    <string name="wake_word_notification_channel">Обнаружение ключевого слова</string>
+    <string name="wake_word_notification_title">Ключевое слово активно</string>
+    <string name="wake_word_notification_text">Слушаю «Hey Mycroft»…</string>
+    <string name="wake_word_notification_stop">Остановить</string>
+</resources>

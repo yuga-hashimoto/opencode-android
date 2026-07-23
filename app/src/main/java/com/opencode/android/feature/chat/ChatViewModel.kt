@@ -11,6 +11,8 @@ import com.opencode.android.core.api.PromptAttachment
 import com.opencode.android.core.api.PromptRequest
 import com.opencode.android.core.api.QuestionPrompt
 import com.opencode.android.core.api.QuestionRequest
+import com.opencode.android.data.settings.Draft
+import com.opencode.android.data.settings.DraftRepository
 import com.opencode.android.runtime.OpenCodeBackend
 import com.opencode.android.runtime.PermissionResponse
 import kotlinx.coroutines.Job
@@ -177,7 +179,8 @@ class ChatViewModel(
     private val backend: OpenCodeBackend? = null,
     private val eventFlow: Flow<OpenCodeEvent>? = null,
     private val onPermissionResolved: (String) -> Unit = {},
-    private val onSessionCreated: () -> Unit = {}
+    private val onSessionCreated: () -> Unit = {},
+    private val draftRepo: DraftRepository? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         ChatUiState(backendName = backend?.displayName.orEmpty())
@@ -186,6 +189,12 @@ class ChatViewModel(
 
     private val _sendBehavior = MutableStateFlow("interrupt")
     val sendBehavior: StateFlow<String> = _sendBehavior.asStateFlow()
+
+    private val _autoExpandReasoning = MutableStateFlow(false)
+    val autoExpandReasoning: StateFlow<Boolean> = _autoExpandReasoning.asStateFlow()
+
+    private val _workspaceTitleSource = MutableStateFlow("title")
+    val workspaceTitleSource: StateFlow<String> = _workspaceTitleSource.asStateFlow()
 
     private val messageQueue = MutableStateFlow<List<String>>(emptyList())
 
@@ -243,6 +252,24 @@ class ChatViewModel(
 
     fun setSendBehavior(behavior: String) {
         _sendBehavior.value = behavior
+    }
+
+    fun setAutoExpandReasoning(enabled: Boolean) {
+        _autoExpandReasoning.value = enabled
+    }
+
+    fun setWorkspaceTitleSource(source: String) {
+        _workspaceTitleSource.value = source
+    }
+
+    fun saveDraft(sessionId: String, text: String, model: String?, agent: String?) {
+        draftRepo?.save(sessionId, Draft(text, emptyList(), model, agent))
+    }
+
+    fun loadDraft(sessionId: String): Draft? = draftRepo?.load(sessionId)
+
+    fun clearDraft(sessionId: String) {
+        draftRepo?.clear(sessionId)
     }
 
     fun selectVariant(variant: String?) {
@@ -381,6 +408,7 @@ class ChatViewModel(
                     )
                 )
                 _uiState.update { it.copy(attachments = emptyList()) }
+                clearDraft(targetSessionId)
                 withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
                     while (_uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)

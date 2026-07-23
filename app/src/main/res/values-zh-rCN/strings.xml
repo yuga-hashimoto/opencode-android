@@ -557,4 +557,8 @@
     <string name="unified_view">统一</string>
     <string name="split_view">分栏</string>
     <string name="diff_stat">+%1$d / -%2$d</string>
+    <string name="syntax_theme_row">语法高亮主题</string>
+    <string name="syntax_theme_dialog_title">选择语法主题</string>
+    <string name="usage_row">用量</string>
+    <string name="font_size_dialog_title">字体大小</string>
 </resources>

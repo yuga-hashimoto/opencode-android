@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -67,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -74,6 +76,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -272,6 +275,7 @@ private fun ChatHeader(
     var menuExpanded by remember { mutableStateOf(false) }
     var showHandoffDialog by remember { mutableStateOf(false) }
     val canHandoff = state.sessionId != null && otherRuntimes.isNotEmpty()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -310,6 +314,14 @@ private fun ChatHeader(
                         onClick = {
                             menuExpanded = false
                             showHandoffDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy resume command") },
+                        enabled = state.sessionId != null,
+                        onClick = {
+                            menuExpanded = false
+                            state.sessionId?.let { ResumeCommandHelper.copyToClipboard(context, it) }
                         }
                     )
                 }
@@ -593,22 +605,37 @@ fun AssistantTimeline(message: ChatMessage) {
 }
 
 @Composable
-private fun MarkdownText(text: String) {
+private fun MarkdownText(text: String, onFilePathClick: (String) -> Unit = {}) {
     val blocks = remember(text) { MarkdownLite.parse(text) }
     val codeInlineBackground = MaterialTheme.colorScheme.surfaceVariant
+    val linkColor = MaterialTheme.colorScheme.primary
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEach { block ->
             when (block) {
-                is MarkdownBlock.Heading -> Text(
-                    text = renderInline(block.inlines, codeInlineBackground),
+                is MarkdownBlock.Heading -> ClickableText(
+                    text = annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor),
                     style = when (block.level) {
                         1 -> MaterialTheme.typography.titleLarge
                         2 -> MaterialTheme.typography.titleMedium
                         else -> MaterialTheme.typography.titleSmall
-                    },
-                    fontWeight = FontWeight.SemiBold
+                    }.copy(fontWeight = FontWeight.SemiBold),
+                    onClick = { offset ->
+                        annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor)
+                            .getStringAnnotations("filepath", offset, offset)
+                            .firstOrNull()?.let { onFilePathClick(it.item) }
+                    }
                 )
-                is MarkdownBlock.Paragraph -> Text(text = renderInline(block.inlines, codeInlineBackground))
+                is MarkdownBlock.Paragraph -> ClickableText(
+                    text = annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    onClick = { offset ->
+                        annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor)
+                            .getStringAnnotations("filepath", offset, offset)
+                            .firstOrNull()?.let { onFilePathClick(it.item) }
+                    }
+                )
                 is MarkdownBlock.CodeBlock -> Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
@@ -627,11 +654,37 @@ private fun MarkdownText(text: String) {
                     block.items.forEach { item ->
                         Row {
                             Text("•  ")
-                            Text(renderInline(item, codeInlineBackground))
+                            ClickableText(
+                                text = annotateFilePaths(renderInline(item, codeInlineBackground), linkColor),
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                onClick = { offset ->
+                                    annotateFilePaths(renderInline(item, codeInlineBackground), linkColor)
+                                        .getStringAnnotations("filepath", offset, offset)
+                                        .firstOrNull()?.let { onFilePathClick(it.item) }
+                                }
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private val FILE_PATH_REGEX = Regex("[\\w./-]+\\.\\w+")
+
+private fun annotateFilePaths(source: AnnotatedString, linkColor: Color): AnnotatedString {
+    return buildAnnotatedString {
+        append(source)
+        FILE_PATH_REGEX.findAll(source.text).forEach { match ->
+            addStyle(
+                SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+                match.range.first,
+                match.range.last + 1
+            )
+            addStringAnnotation("filepath", match.value, match.range.first, match.range.last + 1)
         }
     }
 }
@@ -649,8 +702,8 @@ private fun renderInline(inlines: List<MarkdownInline>, codeBackground: Color): 
 }
 
 @Composable
-private fun ReasoningCard(part: ChatPart.Reasoning) {
-    var expanded by remember { mutableStateOf(false) }
+private fun ReasoningCard(part: ChatPart.Reasoning, autoExpand: Boolean = false) {
+    var expanded by remember { mutableStateOf(autoExpand) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
