@@ -168,6 +168,37 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `polling refreshes changed messages while events are unavailable`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        val viewModel = ChatViewModel(backend)
+        viewModel.sendMessage("Hello")
+        advanceUntilIdle()
+
+        backend.historyMessages = listOf(
+            OpenCodeMessage(
+                info = OpenCodeMessageInfo(
+                    id = "m-assistant",
+                    sessionId = "s1",
+                    role = "assistant",
+                    time = OpenCodeTime(created = 2)
+                ),
+                parts = listOf(OpenCodePart(
+                    id = "p1",
+                    sessionId = "s1",
+                    messageId = "m-assistant",
+                    type = "tool",
+                    tool = "bash",
+                    state = mapOf("status" to "running")
+                ))
+            )
+        )
+        viewModel.sendMessage("Next")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.messages.any { it.parts.any { part -> part is ChatPart.Tool } })
+    }
+
+    @Test
     fun `multiple streamed text parts are combined into one assistant message`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)

@@ -417,6 +417,9 @@ class ChatViewModel(
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
                                 val uiMessages = serverMessages.mapNotNull(::toUiMessage)
+                                if (uiMessages != _uiState.value.messages) {
+                                    _uiState.update { it.copy(messages = uiMessages) }
+                                }
                                 if (uiMessages.count { !it.isUser } > assistantCountBefore) {
                                     streamedParts.clear()
                                     _uiState.update {
