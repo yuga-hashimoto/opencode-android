@@ -1,6 +1,8 @@
 package com.opencode.android.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,15 +18,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,8 +73,12 @@ fun AppDrawerContent(
     onSelectProject: (WorkspaceRef) -> Unit,
     onOpenSession: (String, String) -> Unit,
     onNavigate: (String) -> Unit,
+    onDeleteSession: (String) -> Unit = {},
+    onArchiveSession: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var sessionActionTarget by remember { mutableStateOf<DrawerRecentSession?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
             .fillMaxHeight()
@@ -118,7 +132,8 @@ fun AppDrawerContent(
                                 title = session.title.ifBlank { session.id },
                                 isActive = session.isActive,
                                 hasUnread = session.hasUnread,
-                                onClick = { onOpenSession(session.id, session.title) }
+                                onClick = { onOpenSession(session.id, session.title) },
+                                onLongClick = { sessionActionTarget = session }
                             )
                         }
                     }
@@ -133,6 +148,67 @@ fun AppDrawerContent(
             )
             Spacer(Modifier.padding(bottom = 3.dp))
         }
+    }
+
+    sessionActionTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { sessionActionTarget = null },
+            title = { Text(target.title.ifBlank { target.id }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = {
+                            sessionActionTarget = null
+                            onArchiveSession(target.id)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.drawer_archive_session))
+                    }
+                    TextButton(
+                        onClick = {
+                            sessionActionTarget = null
+                            showDeleteConfirm = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.delete_session), color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { sessionActionTarget = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        val target = sessionActionTarget
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(stringResource(R.string.delete_session_title)) },
+            text = { Text(stringResource(R.string.delete_session_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    target?.let { onDeleteSession(it.id) }
+                }) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }
 
@@ -309,17 +385,19 @@ private fun DrawerRecentProjectHeader(label: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerChatRow(
     title: String,
     isActive: Boolean = false,
     hasUnread: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)

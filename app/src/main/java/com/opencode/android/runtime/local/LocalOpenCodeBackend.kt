@@ -146,6 +146,22 @@ class LocalOpenCodeBackend(
         requestId: String,
         answers: List<List<String>>
     ): Boolean = delegate().answerQuestion(sessionId, requestId, answers)
+    override suspend fun archiveSession(sessionId: String): OpenCodeSession =
+        delegate().archiveSession(sessionId)
+    override suspend fun mcpServers(): List<McpServer> = delegate().mcpServers()
+    override suspend fun addMcpServer(body: JsonObject): McpServer = delegate().addMcpServer(body)
+    override suspend fun connectMcpServer(name: String): Boolean = delegate().connectMcpServer(name)
+    override suspend fun disconnectMcpServer(name: String): Boolean = delegate().disconnectMcpServer(name)
+    override suspend fun removeMcpAuth(name: String): Boolean = delegate().removeMcpAuth(name)
+    override suspend fun mcpAuth(name: String): JsonObject = delegate().mcpAuth(name)
+    override suspend fun mcpAuthCallback(name: String, code: String): Boolean =
+        delegate().mcpAuthCallback(name, code)
+    override suspend fun config(): JsonElement = delegate().config()
+    override suspend fun updateConfig(patch: JsonObject): JsonElement = delegate().updateConfig(patch)
+    override suspend fun configProviders(): List<ConfiguredProvider> = delegate().configProviders()
+    override suspend fun commands(): List<OpenCodeCommand> = delegate().commands()
+    override suspend fun skills(): List<OpenCodeSkill> = delegate().skills()
+    override suspend fun initAgentsMd(sessionId: String): Boolean = delegate().initAgentsMd(sessionId)
     override fun events(): Flow<OpenCodeEvent> = delegate().events()
 
     private data class CachedDelegate(

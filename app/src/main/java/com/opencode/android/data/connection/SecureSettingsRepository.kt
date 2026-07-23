@@ -250,5 +250,17 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_GITHUB_TOKEN = "github_token"
         private const val KEY_GITHUB_LOGIN = "github_login"
+        private const val KEY_THEME = "theme"
+        private const val KEY_UI_FONT_SIZE = "ui_font_size"
+        private const val KEY_CODE_FONT_SIZE = "code_font_size"
+        private const val KEY_SYNTAX_THEME = "syntax_theme"
+        private const val KEY_TOOL_CALL_DETAIL_LEVEL = "tool_call_detail_level"
+        private const val KEY_AUTO_EXPAND_REASONING = "auto_expand_reasoning"
+        private const val KEY_SEND_BEHAVIOR = "send_behavior"
+        private const val KEY_SIDEBAR_GROUPING = "sidebar_grouping"
+        private const val KEY_WORKSPACE_TITLE_SOURCE = "workspace_title_source"
+        private const val KEY_LANGUAGE = "language"
+        private const val KEY_LIVE_TRANSCRIPT_ENABLED = "live_transcript_enabled"
+        private const val KEY_COLLAPSED_SIDEBAR_SECTIONS = "collapsed_sidebar_sections"
     }
 }
