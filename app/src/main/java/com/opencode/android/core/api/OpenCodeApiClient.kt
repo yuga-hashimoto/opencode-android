@@ -234,6 +234,16 @@ class OpenCodeApiClient(
         postWithoutResponse("session/${encodePath(sessionId)}/prompt_async", json)
     }
 
+    suspend fun summarizeSession(sessionId: String, providerId: String, modelId: String): Boolean =
+        post(
+            "session/${encodePath(sessionId)}/summarize",
+            JsonObject().apply {
+                addProperty("providerID", providerId)
+                addProperty("modelID", modelId)
+            },
+            Boolean::class.java
+        )
+
     suspend fun abortSession(sessionId: String): Boolean =
         post("session/${encodePath(sessionId)}/abort", JsonObject(), Boolean::class.java)
 

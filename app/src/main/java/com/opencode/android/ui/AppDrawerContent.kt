@@ -148,13 +148,13 @@ fun AppDrawerContent(
                             }
                             if (sidebarGrouping == "status") {
                                 val statusGroups = listOf(
-                                    "Running" to SessionStatus.RUNNING,
-                                    "Waiting" to SessionStatus.WAITING,
-                                    "Done" to SessionStatus.IDLE,
-                                    "Error" to SessionStatus.ERROR
+                                    "Running" to setOf(SessionStatus.RUNNING),
+                                    "Waiting" to setOf(SessionStatus.WAITING),
+                                    "Done" to setOf(SessionStatus.COMPLETED_UNREAD, SessionStatus.IDLE),
+                                    "Error" to setOf(SessionStatus.ERROR)
                                 )
-                                statusGroups.forEach { (label, status) ->
-                                    val sessions = recentSessions.filter { it.status == status }
+                                statusGroups.forEach { (label, statuses) ->
+                                    val sessions = recentSessions.filter { it.status in statuses }
                                     if (sessions.isNotEmpty()) {
                                         val sectionKey = "status_$label"
                                         DrawerRecentProjectHeader(

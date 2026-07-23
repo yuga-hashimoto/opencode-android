@@ -97,6 +97,8 @@ class RemoteOpenCodeBackend(
         client.sessionTodo(sessionId, directory)
     override suspend fun sendMessage(sessionId: String, request: PromptRequest) =
         client.promptAsync(sessionId, request)
+    override suspend fun summarizeSession(sessionId: String, providerId: String, modelId: String): Boolean =
+        client.summarizeSession(sessionId, providerId, modelId)
     override suspend fun abortSession(sessionId: String): Boolean = client.abortSession(sessionId)
     override suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
         client.renameSession(sessionId, title)

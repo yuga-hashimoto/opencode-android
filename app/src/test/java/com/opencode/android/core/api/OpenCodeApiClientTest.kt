@@ -103,6 +103,20 @@ class OpenCodeApiClientTest {
     }
 
     @Test
+    fun `summarizes a session with the selected model`() = runBlocking {
+        server.enqueue(MockResponse().setBody("true"))
+        val client = client()
+
+        assertTrue(client.summarizeSession("s1", "opencode", "model-1"))
+
+        val request = server.takeRequest()
+        assertEquals("/session/s1/summarize", request.path)
+        val json = JsonParser.parseString(request.body.readUtf8()).asJsonObject
+        assertEquals("opencode", json["providerID"].asString)
+        assertEquals("model-1", json["modelID"].asString)
+    }
+
+    @Test
     fun `responds to permission request`() = runBlocking {
         server.enqueue(MockResponse().setBody("true"))
         val client = client()

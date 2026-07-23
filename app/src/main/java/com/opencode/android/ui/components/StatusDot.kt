@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.opencode.android.ui.theme.LocalThemeColors
 
 enum class SessionStatus {
-    RUNNING, WAITING, ERROR, PERMISSION, IDLE
+    RUNNING, WAITING, ERROR, PERMISSION, COMPLETED_UNREAD, IDLE
 }
 
 @Composable
@@ -31,6 +31,7 @@ fun StatusDot(
         SessionStatus.WAITING -> tc.statusWaiting
         SessionStatus.ERROR -> tc.statusError
         SessionStatus.PERMISSION -> tc.statusPermission
+        SessionStatus.COMPLETED_UNREAD -> tc.statusWaiting
         SessionStatus.IDLE -> tc.statusIdle
     }
     val color by animateColorAsState(

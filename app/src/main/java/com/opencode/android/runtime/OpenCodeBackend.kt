@@ -102,6 +102,8 @@ interface OpenCodeBackend {
         directory: String? = null
     ): List<OpenCodeTodo> = unsupported("session todo")
     suspend fun sendMessage(sessionId: String, request: PromptRequest)
+    suspend fun summarizeSession(sessionId: String, providerId: String, modelId: String): Boolean =
+        unsupported("session summarization")
     suspend fun abortSession(sessionId: String): Boolean
     suspend fun renameSession(sessionId: String, title: String): OpenCodeSession =
         unsupported("session rename")

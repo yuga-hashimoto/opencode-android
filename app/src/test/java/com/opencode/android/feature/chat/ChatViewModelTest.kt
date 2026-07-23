@@ -449,6 +449,39 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `opening a session restores the model used by its messages`() = runTest(dispatcher) {
+        val backend = FakeBackend()
+        backend.historyMessages = listOf(
+            OpenCodeMessage(
+                info = OpenCodeMessageInfo(
+                    id = "hist-model",
+                    sessionId = "s1",
+                    role = "assistant",
+                    model = com.opencode.android.core.api.OpenCodeModelReference(
+                        providerId = "provider-from-history",
+                        modelId = "model-from-history"
+                    ),
+                    time = OpenCodeTime(created = 1)
+                ),
+                parts = listOf(OpenCodePart(
+                    id = "p1",
+                    sessionId = "s1",
+                    messageId = "hist-model",
+                    type = "text",
+                    text = "Done"
+                ))
+            )
+        )
+        val viewModel = ChatViewModel(backend)
+
+        viewModel.openSession("s1")
+        advanceUntilIdle()
+
+        assertEquals("provider-from-history", viewModel.uiState.value.selectedProviderId)
+        assertEquals("model-from-history", viewModel.uiState.value.selectedModelId)
+    }
+
+    @Test
     fun `abort stops current session and clears running state`() = runTest(dispatcher) {
         val backend = FakeBackend()
         val viewModel = ChatViewModel(backend)

@@ -52,7 +52,8 @@ data class OpenCodeMessageInfo(
     val role: String,
     val time: OpenCodeTime = OpenCodeTime(),
     val agent: String? = null,
-    val model: OpenCodeModelReference? = null
+    val model: OpenCodeModelReference? = null,
+    val tokens: OpenCodeSessionTokens? = null
 )
 
 data class OpenCodePart(

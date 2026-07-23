@@ -90,6 +90,7 @@ import com.opencode.android.feature.workspace.WorkspaceViewModel
 import com.opencode.android.feature.workspace.WorkspacesScreen
 import com.opencode.android.ui.theme.AppTheme
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
+import com.opencode.android.ui.components.SessionStatus
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.runtime.local.GitCloneResult
 import kotlinx.coroutines.Dispatchers
@@ -371,11 +372,15 @@ fun OpenCodeApp(
         }
     }
 
-    LaunchedEffect(preferences.providerId, preferences.modelId, preferences.agentId) {
+    LaunchedEffect(preferences.providerId, preferences.modelId, preferences.agentId, settingsState.providers) {
         chatViewModel.selectConfiguration(
             preferences.providerId,
             preferences.modelId,
-            preferences.agentId
+            preferences.agentId,
+            settingsState.providers
+                .firstOrNull { it.id == preferences.providerId }
+                ?.models?.get(preferences.modelId)
+                ?.limit?.context ?: 0L
         )
     }
 
@@ -435,7 +440,12 @@ fun OpenCodeApp(
                 relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created),
                 directory = session.directory,
                 isActive = session.id in activityState.activeSessionIds,
-                hasUnread = session.id in activityState.completedSessionIds
+                hasUnread = session.id in activityState.completedSessionIds,
+                status = when {
+                    session.id in activityState.activeSessionIds -> SessionStatus.RUNNING
+                    session.id in activityState.completedSessionIds -> SessionStatus.COMPLETED_UNREAD
+                    else -> SessionStatus.IDLE
+                }
             )
         }
     }
@@ -583,9 +593,9 @@ fun OpenCodeApp(
                     providers = settingsState.providers,
                     agents = settingsState.agents,
                     workspaces = workspaceState.workspaces,
-                    selectedProviderId = settingsState.providerId,
-                    selectedModelId = settingsState.modelId,
-                    selectedAgentId = settingsState.agentId,
+                    selectedProviderId = chatState.selectedProviderId ?: settingsState.providerId,
+                    selectedModelId = chatState.selectedModelId ?: settingsState.modelId,
+                    selectedAgentId = chatState.selectedAgentId ?: settingsState.agentId,
                     runtimeTargets = runtimeTargets,
                     selectedRuntimeId = selectedRuntime?.id,
                     onSelectRuntime = { id ->

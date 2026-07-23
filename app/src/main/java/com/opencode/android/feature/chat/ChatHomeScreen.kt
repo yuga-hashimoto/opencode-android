@@ -1331,7 +1331,9 @@ private fun CompactContextMeter(
     tokensUsed: Long,
     contextLimit: Long
 ) {
-    val fraction = (tokensUsed.toFloat() / contextLimit.toFloat()).coerceIn(0f, 1f)
+    // Session token totals can exceed the model window; the meter represents window usage.
+    val displayedTokens = tokensUsed.coerceIn(0L, contextLimit)
+    val fraction = displayedTokens.toFloat() / contextLimit.toFloat()
     val barColor = when {
         fraction >= 0.9f -> MaterialTheme.colorScheme.error
         fraction >= 0.7f -> MaterialTheme.colorScheme.tertiary
@@ -1352,7 +1354,7 @@ private fun CompactContextMeter(
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         Text(
-            text = "${formatTokenCount(tokensUsed)}/${formatTokenCount(contextLimit)}",
+            text = "${formatTokenCount(displayedTokens)}/${formatTokenCount(contextLimit)}",
             style = MaterialTheme.typography.labelSmall,
             fontSize = 9.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
