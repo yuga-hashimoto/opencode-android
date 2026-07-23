@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 data class ActivityUiState(
     val sessions: List<OpenCodeSession> = emptyList(),
     val activeSessionIds: Set<String> = emptySet(),
+    val completedSessionIds: Set<String> = emptySet(),
     val permissions: List<PermissionRequest> = emptyList(),
     val logs: List<RuntimeEventLog> = emptyList(),
     val isRefreshing: Boolean = false,
@@ -45,6 +46,7 @@ class ActivityViewModel(
         ActivityUiState(
             sessions = runtime.sessions.sortedByDescending { it.time.updated ?: it.time.created },
             activeSessionIds = events.activeSessionIds,
+            completedSessionIds = events.completedSessionIds,
             permissions = events.permissions,
             logs = events.logs,
             isRefreshing = runtime.isRefreshing,

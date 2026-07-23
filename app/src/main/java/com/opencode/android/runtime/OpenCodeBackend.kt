@@ -1,6 +1,11 @@
 package com.opencode.android.runtime
 
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.opencode.android.core.api.ConfiguredProvider
+import com.opencode.android.core.api.McpServer
 import com.opencode.android.core.api.OpenCodeAgent
+import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileContent
@@ -11,6 +16,7 @@ import com.opencode.android.core.api.OpenCodePathInfo
 import com.opencode.android.core.api.OpenCodeProject
 import com.opencode.android.core.api.OpenCodeSearchMatch
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.core.api.OpenCodeSkill
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
@@ -111,6 +117,20 @@ interface OpenCodeBackend {
         requestId: String,
         answers: List<List<String>>
     ): Boolean = unsupported("question answers")
+    suspend fun archiveSession(sessionId: String): OpenCodeSession = unsupported("session archive")
+    suspend fun mcpServers(): List<McpServer> = unsupported("MCP servers")
+    suspend fun addMcpServer(body: JsonObject): McpServer = unsupported("MCP add server")
+    suspend fun connectMcpServer(name: String): Boolean = unsupported("MCP connect")
+    suspend fun disconnectMcpServer(name: String): Boolean = unsupported("MCP disconnect")
+    suspend fun removeMcpAuth(name: String): Boolean = unsupported("MCP remove auth")
+    suspend fun mcpAuth(name: String): JsonObject = unsupported("MCP auth")
+    suspend fun mcpAuthCallback(name: String, code: String): Boolean = unsupported("MCP auth callback")
+    suspend fun config(): JsonElement = unsupported("config")
+    suspend fun updateConfig(patch: JsonObject): JsonElement = unsupported("config update")
+    suspend fun configProviders(): List<ConfiguredProvider> = unsupported("config providers")
+    suspend fun commands(): List<OpenCodeCommand> = unsupported("commands")
+    suspend fun skills(): List<OpenCodeSkill> = unsupported("skills")
+    suspend fun initAgentsMd(sessionId: String): Boolean = unsupported("init AGENTS.md")
     fun events(): Flow<OpenCodeEvent>
 
     private fun unsupported(capability: String): Nothing =

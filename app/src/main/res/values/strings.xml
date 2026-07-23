@@ -415,6 +415,7 @@
     <string name="section_runtime">Runtime</string>
     <string name="section_model">Model</string>
     <string name="section_favorites">Favorites</string>
+    <string name="section_recent">Recent</string>
     <string name="this_android">This Android</string>
     <string name="picker_no_providers">No connected providers yet</string>
 

@@ -415,6 +415,7 @@
     <string name="section_runtime">実行先</string>
     <string name="section_model">モデル</string>
     <string name="section_favorites">お気に入り</string>
+    <string name="section_recent">最近利用</string>
     <string name="this_android">このAndroid</string>
     <string name="picker_no_providers">接続済みのプロバイダがありません</string>
 

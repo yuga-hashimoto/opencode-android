@@ -352,11 +352,9 @@ class ChatViewModel(
                     _uiState.update {
                         it.copy(sessionId = session.id, sessionTitle = session.title)
                     }
-                    // A newly created session is not present in the app's cached
-                    // catalog until it is refreshed. Notify the shell immediately
-                    // so the drawer's recent-chat list reflects the first message.
                     onSessionCreated()
                 }
+                val assistantCountBefore = _uiState.value.messages.count { !it.isUser }
                 currentBackend.sendMessage(
                     targetSessionId,
                     PromptRequest(
@@ -372,11 +370,11 @@ class ChatViewModel(
                 withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
                     while (_uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
-                        if (_uiState.value.messages.any { !it.isUser }) break
+                        if (_uiState.value.messages.count { !it.isUser } > assistantCountBefore) break
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
                                 val uiMessages = serverMessages.mapNotNull(::toUiMessage)
-                                if (uiMessages.any { !it.isUser }) {
+                                if (uiMessages.count { !it.isUser } > assistantCountBefore) {
                                     streamedParts.clear()
                                     _uiState.update {
                                         it.copy(
@@ -388,6 +386,24 @@ class ChatViewModel(
                                 }
                             }
                     }
+                }
+                if (_uiState.value.isRunning) {
+                    runCatching { currentBackend.session(targetSessionId) }
+                        .onSuccess { sessionInfo ->
+                            if (sessionInfo.time.completed != null) {
+                                runCatching { currentBackend.listMessages(targetSessionId) }
+                                    .onSuccess { serverMessages ->
+                                        streamedParts.clear()
+                                        _uiState.update {
+                                            it.copy(
+                                                messages = serverMessages.mapNotNull(::toUiMessage),
+                                                isRunning = false,
+                                                isThinking = false
+                                            )
+                                        }
+                                    }
+                            }
+                        }
                 }
             }.onFailure { error ->
                 _uiState.update {

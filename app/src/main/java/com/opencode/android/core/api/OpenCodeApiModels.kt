@@ -258,6 +258,39 @@ sealed interface OpenCodeEvent {
     data class Unknown(val type: String, val rawJson: String) : OpenCodeEvent
 }
 
+data class McpServer(
+    val name: String,
+    val status: String? = null,
+    val type: String? = null,
+    val command: String? = null,
+    val url: String? = null,
+    val tools: List<String> = emptyList(),
+    val error: String? = null
+)
+
+data class OpenCodeConfig(
+    val config: com.google.gson.JsonElement? = null
+)
+
+data class ConfiguredProvider(
+    val id: String,
+    val name: String = id,
+    @SerializedName("default_model") val defaultModel: String? = null,
+    val connected: Boolean = false
+)
+
+data class OpenCodeCommand(
+    val name: String,
+    val description: String? = null,
+    val template: String? = null
+)
+
+data class OpenCodeSkill(
+    val name: String,
+    val description: String? = null,
+    val location: String? = null
+)
+
 class OpenCodeApiException(
     val statusCode: Int,
     message: String

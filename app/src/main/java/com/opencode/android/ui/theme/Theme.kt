@@ -1,53 +1,153 @@
 package com.opencode.android.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-private val OpenCodeColorScheme = darkColorScheme(
-    primary = OpenCodePrimary,
-    onPrimary = OpenCodeBackground,
-    secondary = OpenCodeSecondary,
-    onSecondary = OpenCodeBackground,
-    background = OpenCodeBackground,
-    onBackground = OpenCodeTextPrimary,
-    surface = OpenCodeSurface,
-    onSurface = OpenCodeTextPrimary,
-    surfaceVariant = OpenCodeSurfaceVariant,
-    onSurfaceVariant = OpenCodeTextSecondary,
-    outline = OpenCodeOutline,
-    error = OpenCodeError,
-    onError = OpenCodeBackground
-)
+val LocalThemeColors = staticCompositionLocalOf { DarkTheme }
+
+enum class AppTheme(val key: String) {
+    DARK("dark"),
+    LIGHT("light"),
+    ZINC("zinc"),
+    MIDNIGHT("midnight"),
+    CLAUDE("claude"),
+    GHOSTTY("ghostty"),
+    AUTO("auto");
+
+    companion object {
+        fun fromKey(key: String?): AppTheme =
+            entries.firstOrNull { it.key == key } ?: DARK
+    }
+}
+
+fun themeColorsFor(theme: AppTheme, systemDark: Boolean): ThemeColors = when (theme) {
+    AppTheme.DARK -> DarkTheme
+    AppTheme.LIGHT -> LightTheme
+    AppTheme.ZINC -> ZincTheme
+    AppTheme.MIDNIGHT -> MidnightTheme
+    AppTheme.CLAUDE -> ClaudeTheme
+    AppTheme.GHOSTTY -> GhosttyTheme
+    AppTheme.AUTO -> if (systemDark) DarkTheme else LightTheme
+}
+
+private fun buildColorScheme(tc: ThemeColors, isDark: Boolean) = if (isDark) {
+    darkColorScheme(
+        primary = tc.accent,
+        onPrimary = tc.accentForeground,
+        secondary = tc.secondary,
+        onSecondary = tc.surface0,
+        background = tc.surface0,
+        onBackground = tc.foreground,
+        surface = tc.surface1,
+        onSurface = tc.foreground,
+        surfaceVariant = tc.surface2,
+        onSurfaceVariant = tc.foregroundMuted,
+        outline = tc.border,
+        error = tc.destructive,
+        onError = tc.surface0,
+        primaryContainer = tc.accent.copy(alpha = 0.14f),
+        onPrimaryContainer = tc.accent,
+        secondaryContainer = tc.secondary.copy(alpha = 0.14f),
+        onSecondaryContainer = tc.secondary,
+        errorContainer = tc.destructive.copy(alpha = 0.14f),
+        onErrorContainer = tc.destructive,
+        inverseSurface = tc.surface4,
+        inverseOnSurface = tc.foreground,
+        scrim = tc.surface0.copy(alpha = 0.6f)
+    )
+} else {
+    lightColorScheme(
+        primary = tc.accent,
+        onPrimary = tc.accentForeground,
+        secondary = tc.secondary,
+        onSecondary = tc.surface0,
+        background = tc.surface0,
+        onBackground = tc.foreground,
+        surface = tc.surface1,
+        onSurface = tc.foreground,
+        surfaceVariant = tc.surface2,
+        onSurfaceVariant = tc.foregroundMuted,
+        outline = tc.border,
+        error = tc.destructive,
+        onError = tc.surface0,
+        primaryContainer = tc.accent.copy(alpha = 0.14f),
+        onPrimaryContainer = tc.accent,
+        secondaryContainer = tc.secondary.copy(alpha = 0.14f),
+        onSecondaryContainer = tc.secondary,
+        errorContainer = tc.destructive.copy(alpha = 0.14f),
+        onErrorContainer = tc.destructive,
+        inverseSurface = tc.surface4,
+        inverseOnSurface = tc.foreground,
+        scrim = tc.surface0.copy(alpha = 0.6f)
+    )
+}
+
+fun buildTypography(uiFontSize: Int = 16, codeFontSize: Int = 12): Typography {
+    val scale = uiFontSize / 16f
+    return Typography(
+        displayLarge = Typography().displayLarge.copy(fontSize = (57 * scale).sp),
+        displayMedium = Typography().displayMedium.copy(fontSize = (45 * scale).sp),
+        displaySmall = Typography().displaySmall.copy(fontSize = (36 * scale).sp),
+        headlineLarge = Typography().headlineLarge.copy(fontSize = (32 * scale).sp),
+        headlineMedium = Typography().headlineMedium.copy(fontSize = (28 * scale).sp),
+        headlineSmall = Typography().headlineSmall.copy(fontSize = (24 * scale).sp),
+        titleLarge = Typography().titleLarge.copy(fontSize = (22 * scale).sp),
+        titleMedium = Typography().titleMedium.copy(fontSize = (16 * scale).sp),
+        titleSmall = Typography().titleSmall.copy(fontSize = (14 * scale).sp),
+        bodyLarge = Typography().bodyLarge.copy(fontSize = (16 * scale).sp),
+        bodyMedium = Typography().bodyMedium.copy(fontSize = (14 * scale).sp),
+        bodySmall = Typography().bodySmall.copy(fontSize = (12 * scale).sp),
+        labelLarge = Typography().labelLarge.copy(fontSize = (14 * scale).sp),
+        labelMedium = Typography().labelMedium.copy(fontSize = (12 * scale).sp),
+        labelSmall = Typography().labelSmall.copy(fontSize = (11 * scale).sp)
+    )
+}
 
 @Composable
-fun OpenCodeAndroidTheme(content: @Composable () -> Unit) {
+fun OpenCodeAndroidTheme(
+    appTheme: AppTheme = AppTheme.DARK,
+    uiFontSize: Int = 16,
+    content: @Composable () -> Unit
+) {
+    val systemDark = isSystemInDarkTheme()
+    val tc = themeColorsFor(appTheme, systemDark)
+    val isDark = appTheme != AppTheme.LIGHT && (appTheme != AppTheme.AUTO || systemDark)
+    val colorScheme = buildColorScheme(tc, isDark)
+    val typography = buildTypography(uiFontSize)
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = OpenCodeColorScheme.background.toArgb()
-            window.navigationBarColor = OpenCodeColorScheme.background.toArgb()
+            window.statusBarColor = tc.surface0.toArgb()
+            window.navigationBarColor = tc.surface0.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = false
-                isAppearanceLightNavigationBars = false
+                isAppearanceLightStatusBars = !isDark
+                isAppearanceLightNavigationBars = !isDark
             }
         }
     }
 
-    MaterialTheme(
-        colorScheme = OpenCodeColorScheme,
-        typography = Typography(),
-        content = content
-    )
+    CompositionLocalProvider(LocalThemeColors provides tc) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content
+        )
+    }
 }
 
-// Mechanical compatibility while old screens are replaced in this branch.
 @Composable
-fun OpenCodeAssistantTheme(content: @Composable () -> Unit) = OpenCodeAndroidTheme(content)
+fun OpenCodeAssistantTheme(content: @Composable () -> Unit) = OpenCodeAndroidTheme(content = content)

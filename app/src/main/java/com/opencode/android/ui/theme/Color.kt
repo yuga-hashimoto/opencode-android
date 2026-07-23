@@ -2,16 +2,210 @@ package com.opencode.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// OpenCode-styled dark theme: near-black background, dark gray surfaces,
-// thin gray outlines, and a restrained soft-blue accent.
-val OpenCodeBackground = Color(0xFF0A0C10)
-val OpenCodeSurface = Color(0xFF14171C)
-val OpenCodeSurfaceVariant = Color(0xFF1C2027)
-val OpenCodePrimary = Color(0xFF8AB4F8)
-val OpenCodeSecondary = Color(0xFF6FA8A3)
-val OpenCodeSuccess = Color(0xFF6FCF97)
-val OpenCodeWarning = Color(0xFFE3B341)
-val OpenCodeError = Color(0xFFF07178)
-val OpenCodeTextPrimary = Color(0xFFECEDEE)
-val OpenCodeTextSecondary = Color(0xFF9AA1AC)
-val OpenCodeOutline = Color(0xFF2A2F37)
+data class ThemeColors(
+    val surface0: Color,
+    val surface1: Color,
+    val surface2: Color,
+    val surface3: Color,
+    val surface4: Color,
+    val surfaceSidebar: Color,
+    val foreground: Color,
+    val foregroundMuted: Color,
+    val foregroundExtraMuted: Color,
+    val border: Color,
+    val borderAccent: Color,
+    val accent: Color,
+    val accentBright: Color,
+    val accentForeground: Color,
+    val secondary: Color,
+    val destructive: Color,
+    val success: Color,
+    val warning: Color,
+    val diffAddition: Color,
+    val diffDeletion: Color,
+    val statusRunning: Color,
+    val statusWaiting: Color,
+    val statusError: Color,
+    val statusPermission: Color,
+    val statusIdle: Color
+)
+
+val DarkTheme = ThemeColors(
+    surface0 = Color(0xFF0A0C10),
+    surface1 = Color(0xFF14171C),
+    surface2 = Color(0xFF1C2027),
+    surface3 = Color(0xFF242830),
+    surface4 = Color(0xFF2C313A),
+    surfaceSidebar = Color(0xFF101318),
+    foreground = Color(0xFFECEDEE),
+    foregroundMuted = Color(0xFF9AA1AC),
+    foregroundExtraMuted = Color(0xFF5C6370),
+    border = Color(0xFF2A2F37),
+    borderAccent = Color(0xFF3A4048),
+    accent = Color(0xFF8AB4F8),
+    accentBright = Color(0xFFAECBFA),
+    accentForeground = Color(0xFF0A0C10),
+    secondary = Color(0xFF6FA8A3),
+    destructive = Color(0xFFF07178),
+    success = Color(0xFF6FCF97),
+    warning = Color(0xFFE3B341),
+    diffAddition = Color(0x2A6FCF97),
+    diffDeletion = Color(0x2AF07178),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF757575)
+)
+
+val LightTheme = ThemeColors(
+    surface0 = Color(0xFFFAFAFA),
+    surface1 = Color(0xFFFFFFFF),
+    surface2 = Color(0xFFF0F0F0),
+    surface3 = Color(0xFFE8E8E8),
+    surface4 = Color(0xFFE0E0E0),
+    surfaceSidebar = Color(0xFFF5F5F5),
+    foreground = Color(0xFF1A1A1A),
+    foregroundMuted = Color(0xFF666666),
+    foregroundExtraMuted = Color(0xFF999999),
+    border = Color(0xFFE0E0E0),
+    borderAccent = Color(0xFFD0D0D0),
+    accent = Color(0xFF20744A),
+    accentBright = Color(0xFF2E8B57),
+    accentForeground = Color(0xFFFFFFFF),
+    secondary = Color(0xFF4A90A4),
+    destructive = Color(0xFFDC3545),
+    success = Color(0xFF28A745),
+    warning = Color(0xFFFFC107),
+    diffAddition = Color(0x2A28A745),
+    diffDeletion = Color(0x2ADC3545),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF9E9E9E)
+)
+
+val ZincTheme = ThemeColors(
+    surface0 = Color(0xFF18181B),
+    surface1 = Color(0xFF1E1E22),
+    surface2 = Color(0xFF27272A),
+    surface3 = Color(0xFF2E2E33),
+    surface4 = Color(0xFF3F3F46),
+    surfaceSidebar = Color(0xFF141416),
+    foreground = Color(0xFFFAFAFA),
+    foregroundMuted = Color(0xFFA1A1AA),
+    foregroundExtraMuted = Color(0xFF71717A),
+    border = Color(0xFF3F3F46),
+    borderAccent = Color(0xFF52525B),
+    accent = Color(0xFF8AB4F8),
+    accentBright = Color(0xFFAECBFA),
+    accentForeground = Color(0xFF18181B),
+    secondary = Color(0xFFA1A1AA),
+    destructive = Color(0xFFEF4444),
+    success = Color(0xFF22C55E),
+    warning = Color(0xFFEAB308),
+    diffAddition = Color(0x2A22C55E),
+    diffDeletion = Color(0x2AEF4444),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF71717A)
+)
+
+val MidnightTheme = ThemeColors(
+    surface0 = Color(0xFF161820),
+    surface1 = Color(0xFF1C1F2A),
+    surface2 = Color(0xFF232735),
+    surface3 = Color(0xFF2A2F40),
+    surface4 = Color(0xFF33384D),
+    surfaceSidebar = Color(0xFF12141C),
+    foreground = Color(0xFFE8EAF0),
+    foregroundMuted = Color(0xFF8B90A0),
+    foregroundExtraMuted = Color(0xFF5A5F70),
+    border = Color(0xFF2A2F40),
+    borderAccent = Color(0xFF3A4055),
+    accent = Color(0xFF7C9CF8),
+    accentBright = Color(0xFF9DB4FA),
+    accentForeground = Color(0xFF161820),
+    secondary = Color(0xFF6B8AA8),
+    destructive = Color(0xFFE06070),
+    success = Color(0xFF60C090),
+    warning = Color(0xFFD0A840),
+    diffAddition = Color(0x2A60C090),
+    diffDeletion = Color(0x2AE06070),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF5A5F70)
+)
+
+val ClaudeTheme = ThemeColors(
+    surface0 = Color(0xFF1E1C1A),
+    surface1 = Color(0xFF262422),
+    surface2 = Color(0xFF2E2C29),
+    surface3 = Color(0xFF383532),
+    surface4 = Color(0xFF44403C),
+    surfaceSidebar = Color(0xFF1A1816),
+    foreground = Color(0xFFF0EDE8),
+    foregroundMuted = Color(0xFFA8A29E),
+    foregroundExtraMuted = Color(0xFF78716C),
+    border = Color(0xFF383532),
+    borderAccent = Color(0xFF4A4540),
+    accent = Color(0xFFD97757),
+    accentBright = Color(0xFFE8956F),
+    accentForeground = Color(0xFF1E1C1A),
+    secondary = Color(0xFFA8A29E),
+    destructive = Color(0xFFE06060),
+    success = Color(0xFF60B080),
+    warning = Color(0xFFD0A040),
+    diffAddition = Color(0x2A60B080),
+    diffDeletion = Color(0x2AE06060),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF78716C)
+)
+
+val GhosttyTheme = ThemeColors(
+    surface0 = Color(0xFF282C34),
+    surface1 = Color(0xFF2C313A),
+    surface2 = Color(0xFF333842),
+    surface3 = Color(0xFF3A404C),
+    surface4 = Color(0xFF444B58),
+    surfaceSidebar = Color(0xFF23272E),
+    foreground = Color(0xFFDCDFE4),
+    foregroundMuted = Color(0xFF9DA5B4),
+    foregroundExtraMuted = Color(0xFF6B7385),
+    border = Color(0xFF3A404C),
+    borderAccent = Color(0xFF4A5262),
+    accent = Color(0xFF89B4FA),
+    accentBright = Color(0xFFA5C8FC),
+    accentForeground = Color(0xFF282C34),
+    secondary = Color(0xFF9DA5B4),
+    destructive = Color(0xFFE06C75),
+    success = Color(0xFF98C379),
+    warning = Color(0xFFE5C07B),
+    diffAddition = Color(0x2A98C379),
+    diffDeletion = Color(0x2AE06C75),
+    statusRunning = Color(0xFF4CAF50),
+    statusWaiting = Color(0xFF2196F3),
+    statusError = Color(0xFFF44336),
+    statusPermission = Color(0xFFFFC107),
+    statusIdle = Color(0xFF6B7385)
+)
+
+val OpenCodeBackground get() = DarkTheme.surface0
+val OpenCodeSurface get() = DarkTheme.surface1
+val OpenCodeSurfaceVariant get() = DarkTheme.surface2
+val OpenCodePrimary get() = DarkTheme.accent
+val OpenCodeSecondary get() = DarkTheme.secondary
+val OpenCodeSuccess get() = DarkTheme.success
+val OpenCodeWarning get() = DarkTheme.warning
+val OpenCodeError get() = DarkTheme.destructive
+val OpenCodeTextPrimary get() = DarkTheme.foreground
+val OpenCodeTextSecondary get() = DarkTheme.foregroundMuted
+val OpenCodeOutline get() = DarkTheme.border

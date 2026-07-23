@@ -87,6 +87,18 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getStringSet(KEY_FAVORITE_MODELS, emptySet()).orEmpty()
         set(value) = preferences.edit().putStringSet(KEY_FAVORITE_MODELS, value).apply()
 
+    var recentModelKeys: List<String>
+        get() = preferences.getString(KEY_RECENT_MODELS, null)
+            ?.split('\n')
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        set(value) {
+            preferences.edit()
+                .putString(KEY_RECENT_MODELS, value.take(MAX_RECENT_MODELS).joinToString("\n"))
+                .apply()
+        }
+
     var providerApiKeys: Map<String, String>
         get() = providerApiKeys()
         set(value) {
@@ -166,6 +178,54 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         get() = preferences.getString(KEY_GITHUB_LOGIN, null)
         set(value) = preferences.edit().putString(KEY_GITHUB_LOGIN, value).apply()
 
+    var theme: String
+        get() = preferences.getString(KEY_THEME, "dark") ?: "dark"
+        set(value) = preferences.edit().putString(KEY_THEME, value).apply()
+
+    var uiFontSize: Int
+        get() = preferences.getInt(KEY_UI_FONT_SIZE, 16)
+        set(value) = preferences.edit().putInt(KEY_UI_FONT_SIZE, value).apply()
+
+    var codeFontSize: Int
+        get() = preferences.getInt(KEY_CODE_FONT_SIZE, 12)
+        set(value) = preferences.edit().putInt(KEY_CODE_FONT_SIZE, value).apply()
+
+    var syntaxTheme: String
+        get() = preferences.getString(KEY_SYNTAX_THEME, "one-dark") ?: "one-dark"
+        set(value) = preferences.edit().putString(KEY_SYNTAX_THEME, value).apply()
+
+    var toolCallDetailLevel: String
+        get() = preferences.getString(KEY_TOOL_CALL_DETAIL_LEVEL, "detailed") ?: "detailed"
+        set(value) = preferences.edit().putString(KEY_TOOL_CALL_DETAIL_LEVEL, value).apply()
+
+    var autoExpandReasoning: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_EXPAND_REASONING, false)
+        set(value) = preferences.edit().putBoolean(KEY_AUTO_EXPAND_REASONING, value).apply()
+
+    var sendBehavior: String
+        get() = preferences.getString(KEY_SEND_BEHAVIOR, "interrupt") ?: "interrupt"
+        set(value) = preferences.edit().putString(KEY_SEND_BEHAVIOR, value).apply()
+
+    var sidebarGrouping: String
+        get() = preferences.getString(KEY_SIDEBAR_GROUPING, "project") ?: "project"
+        set(value) = preferences.edit().putString(KEY_SIDEBAR_GROUPING, value).apply()
+
+    var workspaceTitleSource: String
+        get() = preferences.getString(KEY_WORKSPACE_TITLE_SOURCE, "title") ?: "title"
+        set(value) = preferences.edit().putString(KEY_WORKSPACE_TITLE_SOURCE, value).apply()
+
+    var language: String
+        get() = preferences.getString(KEY_LANGUAGE, "system") ?: "system"
+        set(value) = preferences.edit().putString(KEY_LANGUAGE, value).apply()
+
+    var liveTranscriptEnabled: Boolean
+        get() = preferences.getBoolean(KEY_LIVE_TRANSCRIPT_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_LIVE_TRANSCRIPT_ENABLED, value).apply()
+
+    var collapsedSidebarSections: Set<String>
+        get() = preferences.getStringSet(KEY_COLLAPSED_SIDEBAR_SECTIONS, emptySet()).orEmpty()
+        set(value) = preferences.edit().putStringSet(KEY_COLLAPSED_SIDEBAR_SECTIONS, value).apply()
+
     companion object {
         private const val PREFS_NAME = "opencode_android_secure_settings"
         private const val KEY_CONNECTIONS = "connections"
@@ -179,6 +239,8 @@ class SecureSettingsRepository(context: Context) : RuntimeConnectionStore {
         private const val KEY_MODEL_ID = "model_id"
         private const val KEY_AGENT_ID = "agent_id"
         private const val KEY_FAVORITE_MODELS = "favorite_models"
+        private const val KEY_RECENT_MODELS = "recent_models"
+        private const val MAX_RECENT_MODELS = 5
         private const val KEY_PROVIDER_API_KEYS = "provider_api_keys"
         private const val KEY_MANAGED_PROVIDER_API_KEY_IDS = "managed_provider_api_key_ids"
         private const val KEY_ASSISTANT_RUNTIME_ID = "assistant_runtime_id"

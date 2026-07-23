@@ -113,6 +113,7 @@ fun ChatHomeScreen(
     onAttach: () -> Unit = {},
     onRemoveAttachment: (Int) -> Unit = {},
     favoriteModelKeys: Set<String> = emptySet(),
+    recentModelKeys: List<String> = emptyList(),
     onToggleFavorite: (String, String) -> Unit = { _, _ -> },
     onSelectQuestionAnswer: (String, Int, String) -> Unit,
     onSubmitQuestion: (String) -> Unit,
@@ -289,6 +290,7 @@ fun ChatHomeScreen(
                 showModelPicker = false
             },
             favoriteModelKeys = favoriteModelKeys,
+            recentModelKeys = recentModelKeys,
             onToggleFavorite = onToggleFavorite,
             onDismiss = { showModelPicker = false }
         )

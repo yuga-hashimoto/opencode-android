@@ -28,6 +28,7 @@ data class RuntimeEventLog(
 
 data class RuntimeActivityState(
     val activeSessionIds: Set<String> = emptySet(),
+    val completedSessionIds: Set<String> = emptySet(),
     val permissions: List<PermissionRequest> = emptyList(),
     val logs: List<RuntimeEventLog> = emptyList(),
     val streamError: String? = null
@@ -63,6 +64,7 @@ class RuntimeActivityRepository(
                     mutableState.update {
                         it.copy(
                             activeSessionIds = emptySet(),
+                            completedSessionIds = emptySet(),
                             permissions = emptyList(),
                             streamError = null
                         )
@@ -100,6 +102,12 @@ class RuntimeActivityRepository(
         }
     }
 
+    fun markSessionRead(sessionId: String) {
+        mutableState.update { current ->
+            current.copy(completedSessionIds = current.completedSessionIds - sessionId)
+        }
+    }
+
     private fun handle(event: OpenCodeEvent) {
         when (event) {
             OpenCodeEvent.ServerConnected -> appendLog("イベント接続", "OpenCodeのリアルタイムイベントへ接続しました")
@@ -130,7 +138,10 @@ class RuntimeActivityRepository(
             }
             is OpenCodeEvent.SessionIdle -> {
                 mutableState.update { current ->
-                    current.copy(activeSessionIds = current.activeSessionIds - event.sessionId)
+                    current.copy(
+                        activeSessionIds = current.activeSessionIds - event.sessionId,
+                        completedSessionIds = current.completedSessionIds + event.sessionId
+                    )
                 }
                 appendLog("実行完了", null, event.sessionId)
                 onSessionIdle?.invoke(event.sessionId)

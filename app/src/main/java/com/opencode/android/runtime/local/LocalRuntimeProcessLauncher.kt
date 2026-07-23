@@ -254,5 +254,8 @@ internal fun localRuntimeEnvironment(
     put("XDG_STATE_HOME", "/root/.local/state")
     put("OPENCODE_CONFIG_DIR", "/root/.config/opencode")
     put("OPENCODE_DISABLE_AUTOUPDATE", "true")
-    githubToken?.takeIf(String::isNotBlank)?.let { put("OPENCODE_GITHUB_TOKEN", it) }
+    githubToken?.takeIf(String::isNotBlank)?.let {
+        put("OPENCODE_GITHUB_TOKEN", it)
+        put("GH_TOKEN", it)
+    }
 }

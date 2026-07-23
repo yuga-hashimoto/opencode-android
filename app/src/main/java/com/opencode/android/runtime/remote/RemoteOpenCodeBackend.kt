@@ -1,7 +1,12 @@
 package com.opencode.android.runtime.remote
 
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.opencode.android.core.api.ConfiguredProvider
+import com.opencode.android.core.api.McpServer
 import com.opencode.android.core.api.OpenCodeAgent
 import com.opencode.android.core.api.OpenCodeApiClient
+import com.opencode.android.core.api.OpenCodeCommand
 import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.OpenCodeFileChange
 import com.opencode.android.core.api.OpenCodeFileContent
@@ -12,6 +17,7 @@ import com.opencode.android.core.api.OpenCodePathInfo
 import com.opencode.android.core.api.OpenCodeProject
 import com.opencode.android.core.api.OpenCodeSearchMatch
 import com.opencode.android.core.api.OpenCodeSession
+import com.opencode.android.core.api.OpenCodeSkill
 import com.opencode.android.core.api.OpenCodeTodo
 import com.opencode.android.core.api.OpenCodeVcsInfo
 import com.opencode.android.core.api.PromptRequest
@@ -111,5 +117,21 @@ class RemoteOpenCodeBackend(
         requestId: String,
         answers: List<List<String>>
     ): Boolean = client.answerQuestion(sessionId, requestId, answers)
+    override suspend fun archiveSession(sessionId: String): OpenCodeSession =
+        client.archiveSession(sessionId)
+    override suspend fun mcpServers(): List<McpServer> = client.mcpServers()
+    override suspend fun addMcpServer(body: JsonObject): McpServer = client.addMcpServer(body)
+    override suspend fun connectMcpServer(name: String): Boolean = client.connectMcpServer(name)
+    override suspend fun disconnectMcpServer(name: String): Boolean = client.disconnectMcpServer(name)
+    override suspend fun removeMcpAuth(name: String): Boolean = client.removeMcpAuth(name)
+    override suspend fun mcpAuth(name: String): JsonObject = client.mcpAuth(name)
+    override suspend fun mcpAuthCallback(name: String, code: String): Boolean =
+        client.mcpAuthCallback(name, code)
+    override suspend fun config(): JsonElement = client.config()
+    override suspend fun updateConfig(patch: JsonObject): JsonElement = client.updateConfig(patch)
+    override suspend fun configProviders(): List<ConfiguredProvider> = client.configProviders()
+    override suspend fun commands(): List<OpenCodeCommand> = client.commands()
+    override suspend fun skills(): List<OpenCodeSkill> = client.skills()
+    override suspend fun initAgentsMd(sessionId: String): Boolean = client.initAgentsMd(sessionId)
     override fun events(): Flow<OpenCodeEvent> = client.events()
 }

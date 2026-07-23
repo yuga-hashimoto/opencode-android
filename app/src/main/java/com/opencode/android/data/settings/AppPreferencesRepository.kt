@@ -16,7 +16,19 @@ data class AppPreferences(
     val continuousConversation: Boolean = false,
     val wakeWordEnabled: Boolean = false,
     val autoAcceptPermissions: Boolean = false,
-    val favoriteModelKeys: Set<String> = emptySet()
+    val favoriteModelKeys: Set<String> = emptySet(),
+    val recentModelKeys: List<String> = emptyList(),
+    val theme: String = "dark",
+    val uiFontSize: Int = 16,
+    val codeFontSize: Int = 12,
+    val syntaxTheme: String = "one-dark",
+    val toolCallDetailLevel: String = "detailed",
+    val autoExpandReasoning: Boolean = false,
+    val sendBehavior: String = "interrupt",
+    val sidebarGrouping: String = "project",
+    val workspaceTitleSource: String = "title",
+    val language: String = "system",
+    val liveTranscriptEnabled: Boolean = false
 )
 
 class AppPreferencesRepository(
@@ -31,7 +43,19 @@ class AppPreferencesRepository(
             continuousConversation = settings.continuousConversation,
             wakeWordEnabled = settings.wakeWordEnabled,
             autoAcceptPermissions = settings.autoAcceptPermissions,
-            favoriteModelKeys = settings.favoriteModelKeys
+            favoriteModelKeys = settings.favoriteModelKeys,
+            recentModelKeys = settings.recentModelKeys,
+            theme = settings.theme,
+            uiFontSize = settings.uiFontSize,
+            codeFontSize = settings.codeFontSize,
+            syntaxTheme = settings.syntaxTheme,
+            toolCallDetailLevel = settings.toolCallDetailLevel,
+            autoExpandReasoning = settings.autoExpandReasoning,
+            sendBehavior = settings.sendBehavior,
+            sidebarGrouping = settings.sidebarGrouping,
+            workspaceTitleSource = settings.workspaceTitleSource,
+            language = settings.language,
+            liveTranscriptEnabled = settings.liveTranscriptEnabled
         )
     )
     val state: StateFlow<AppPreferences> = mutableState.asStateFlow()
@@ -40,6 +64,12 @@ class AppPreferencesRepository(
         settings.selectedProviderId = providerId
         settings.selectedModelId = modelId
         mutableState.update { it.copy(providerId = providerId, modelId = modelId) }
+        if (providerId != null && modelId != null) {
+            val key = "$providerId/$modelId"
+            val updated = (listOf(key) + settings.recentModelKeys.filterNot { it == key }).take(5)
+            settings.recentModelKeys = updated
+            mutableState.update { it.copy(recentModelKeys = updated) }
+        }
     }
 
     fun selectAgent(agentId: String?) {
@@ -99,5 +129,60 @@ class AppPreferencesRepository(
         val updated = if (key in current) current - key else current + key
         settings.favoriteModelKeys = updated
         mutableState.update { it.copy(favoriteModelKeys = updated) }
+    }
+
+    fun setTheme(theme: String) {
+        settings.theme = theme
+        mutableState.update { it.copy(theme = theme) }
+    }
+
+    fun setUiFontSize(size: Int) {
+        settings.uiFontSize = size
+        mutableState.update { it.copy(uiFontSize = size) }
+    }
+
+    fun setCodeFontSize(size: Int) {
+        settings.codeFontSize = size
+        mutableState.update { it.copy(codeFontSize = size) }
+    }
+
+    fun setSyntaxTheme(theme: String) {
+        settings.syntaxTheme = theme
+        mutableState.update { it.copy(syntaxTheme = theme) }
+    }
+
+    fun setToolCallDetailLevel(level: String) {
+        settings.toolCallDetailLevel = level
+        mutableState.update { it.copy(toolCallDetailLevel = level) }
+    }
+
+    fun setAutoExpandReasoning(enabled: Boolean) {
+        settings.autoExpandReasoning = enabled
+        mutableState.update { it.copy(autoExpandReasoning = enabled) }
+    }
+
+    fun setSendBehavior(behavior: String) {
+        settings.sendBehavior = behavior
+        mutableState.update { it.copy(sendBehavior = behavior) }
+    }
+
+    fun setSidebarGrouping(grouping: String) {
+        settings.sidebarGrouping = grouping
+        mutableState.update { it.copy(sidebarGrouping = grouping) }
+    }
+
+    fun setWorkspaceTitleSource(source: String) {
+        settings.workspaceTitleSource = source
+        mutableState.update { it.copy(workspaceTitleSource = source) }
+    }
+
+    fun setLanguage(language: String) {
+        settings.language = language
+        mutableState.update { it.copy(language = language) }
+    }
+
+    fun setLiveTranscriptEnabled(enabled: Boolean) {
+        settings.liveTranscriptEnabled = enabled
+        mutableState.update { it.copy(liveTranscriptEnabled = enabled) }
     }
 }

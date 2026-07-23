@@ -60,6 +60,7 @@ fun ModelAndRuntimePickerSheet(
     selectedModelId: String?,
     onSelectModel: (String, String) -> Unit,
     favoriteModelKeys: Set<String> = emptySet(),
+    recentModelKeys: List<String> = emptyList(),
     onToggleFavorite: (String, String) -> Unit = { _, _ -> },
     onDismiss: () -> Unit
 ) {
@@ -138,6 +139,14 @@ fun ModelAndRuntimePickerSheet(
                         .map { FavoriteEntry(provider, it) }
                 }
 
+                val recentEntries = recentModelKeys.mapNotNull { key ->
+                    val providerId = key.substringBefore('/')
+                    val modelId = key.substringAfter('/')
+                    val provider = providers.firstOrNull { it.id == providerId } ?: return@mapNotNull null
+                    val model = provider.models[modelId] ?: return@mapNotNull null
+                    FavoriteEntry(provider, model)
+                }.filter { entry -> "${entry.provider.id}/${entry.model.id}" !in favoriteModelKeys }
+
                 if (favoriteEntries.isNotEmpty()) {
                     item {
                         Text(
@@ -152,6 +161,29 @@ fun ModelAndRuntimePickerSheet(
                             model = entry.model,
                             selected = entry.provider.id == selectedProviderId && entry.model.id == selectedModelId,
                             isFavorite = true,
+                            onClick = { onSelectModel(entry.provider.id, entry.model.id) },
+                            onToggleFavorite = { onToggleFavorite(entry.provider.id, entry.model.id) }
+                        )
+                    }
+                    item {
+                        HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+
+                if (recentEntries.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.section_recent),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(recentEntries, key = { "recent-${it.provider.id}-${it.model.id}" }) { entry ->
+                        ModelRow(
+                            model = entry.model,
+                            selected = entry.provider.id == selectedProviderId && entry.model.id == selectedModelId,
+                            isFavorite = "${entry.provider.id}/${entry.model.id}" in favoriteModelKeys,
                             onClick = { onSelectModel(entry.provider.id, entry.model.id) },
                             onToggleFavorite = { onToggleFavorite(entry.provider.id, entry.model.id) }
                         )

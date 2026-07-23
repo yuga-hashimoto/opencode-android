@@ -393,13 +393,15 @@ fun OpenCodeApp(
         }.getOrNull().orEmpty()
     }
 
-    val recentSessions = remember(activityState.sessions) {
+    val recentSessions = remember(activityState.sessions, activityState.activeSessionIds, activityState.completedSessionIds) {
         activityState.sessions.take(25).map { session ->
             DrawerRecentSession(
                 id = session.id,
                 title = session.title.ifBlank { session.slug ?: session.id },
                 relativeTime = relativeTimeLabel(context, session.time.updated ?: session.time.created),
-                directory = session.directory
+                directory = session.directory,
+                isActive = session.id in activityState.activeSessionIds,
+                hasUnread = session.id in activityState.completedSessionIds
             )
         }
     }
@@ -437,6 +439,7 @@ fun OpenCodeApp(
                     },
                     onOpenSession = { id, title ->
                         closeDrawer()
+                        app.activityRepository.markSessionRead(id)
                         pendingSession = id to title
                         navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },
@@ -536,6 +539,7 @@ fun OpenCodeApp(
                     onAttach = { attachmentLauncher.launch("*/*") },
                     onRemoveAttachment = chatViewModel::removeAttachment,
                     favoriteModelKeys = settingsState.favoriteModelKeys,
+                    recentModelKeys = settingsState.recentModelKeys,
                     onToggleFavorite = settingsViewModel::toggleFavoriteModel,
                     onSelectQuestionAnswer = chatViewModel::selectQuestionAnswer,
                     onSubmitQuestion = chatViewModel::submitQuestion,
@@ -772,6 +776,7 @@ fun OpenCodeApp(
                         navController.navigate(SESSION_DETAIL_ROUTE)
                     },
                     onOpenSession = { id, title ->
+                        app.activityRepository.markSessionRead(id)
                         pendingSession = id to title
                         navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     },

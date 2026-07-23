@@ -257,6 +257,64 @@ class OpenCodeApiClient(
             query("directory" to directory)
         )
 
+    suspend fun archiveSession(sessionId: String, directory: String? = null): OpenCodeSession {
+        val body = JsonObject().apply { addProperty("archive", true) }
+        return patch(
+            "session/${encodePath(sessionId)}",
+            body,
+            OpenCodeSession::class.java,
+            query("directory" to directory)
+        )
+    }
+
+    suspend fun mcpServers(): List<McpServer> = getList("mcp")
+
+    suspend fun addMcpServer(body: JsonObject): McpServer =
+        post("mcp", body, McpServer::class.java)
+
+    suspend fun connectMcpServer(name: String): Boolean =
+        post("mcp/${encodePath(name)}/connect", JsonObject(), Boolean::class.java)
+
+    suspend fun disconnectMcpServer(name: String): Boolean =
+        post("mcp/${encodePath(name)}/disconnect", JsonObject(), Boolean::class.java)
+
+    suspend fun removeMcpAuth(name: String): Boolean =
+        delete("mcp/${encodePath(name)}/auth", Boolean::class.java)
+
+    suspend fun mcpAuth(name: String): JsonObject =
+        post("mcp/${encodePath(name)}/auth", JsonObject(), JsonObject::class.java)
+
+    suspend fun mcpAuthCallback(name: String, code: String): Boolean {
+        val body = JsonObject().apply { addProperty("code", code) }
+        return post("mcp/${encodePath(name)}/auth/callback", body, Boolean::class.java)
+    }
+
+    suspend fun config(): com.google.gson.JsonElement =
+        withContext(Dispatchers.IO) {
+            execute(requestBuilder("config").get().build()) { body ->
+                gson.fromJson(body, com.google.gson.JsonElement::class.java)
+            }
+        }
+
+    suspend fun updateConfig(patch: JsonObject): com.google.gson.JsonElement =
+        withContext(Dispatchers.IO) {
+            val request = requestBuilder("config")
+                .patch(gson.toJson(patch).toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+            execute(request) { body ->
+                gson.fromJson(body, com.google.gson.JsonElement::class.java)
+            }
+        }
+
+    suspend fun configProviders(): List<ConfiguredProvider> = getList("config/providers")
+
+    suspend fun commands(): List<OpenCodeCommand> = getList("command")
+
+    suspend fun skills(): List<OpenCodeSkill> = getList("skill")
+
+    suspend fun initAgentsMd(sessionId: String): Boolean =
+        post("session/${encodePath(sessionId)}/init", JsonObject(), Boolean::class.java)
+
     suspend fun respondPermission(
         sessionId: String,
         permissionId: String,

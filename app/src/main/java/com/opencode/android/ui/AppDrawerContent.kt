@@ -42,7 +42,9 @@ data class DrawerRecentSession(
     val id: String,
     val title: String,
     val relativeTime: String,
-    val directory: String? = null
+    val directory: String? = null,
+    val isActive: Boolean = false,
+    val hasUnread: Boolean = false
 )
 
 private fun DrawerRecentSession.projectKey(): String =
@@ -114,6 +116,8 @@ fun AppDrawerContent(
                         sessions.forEach { session ->
                             DrawerChatRow(
                                 title = session.title.ifBlank { session.id },
+                                isActive = session.isActive,
+                                hasUnread = session.hasUnread,
                                 onClick = { onOpenSession(session.id, session.title) }
                             )
                         }
@@ -308,18 +312,38 @@ private fun DrawerRecentProjectHeader(label: String) {
 @Composable
 private fun DrawerChatRow(
     title: String,
+    isActive: Boolean = false,
+    hasUnread: Boolean = false,
     onClick: () -> Unit
 ) {
-    Text(
-        text = title,
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        style = MaterialTheme.typography.bodyMedium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (isActive) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else if (hasUnread) {
+            val dotColor = MaterialTheme.colorScheme.primary
+            androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
+                drawCircle(color = dotColor)
+            }
+        }
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable
