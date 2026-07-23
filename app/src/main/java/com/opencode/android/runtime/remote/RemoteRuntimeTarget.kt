@@ -156,6 +156,28 @@ class RemoteRuntimeTarget(
         response: PermissionResponse,
         remember: Boolean
     ): Boolean = backend.respondToPermission(sessionId, permissionId, response, remember)
+    override suspend fun archiveSession(sessionId: String): OpenCodeSession =
+        backend.archiveSession(sessionId)
+    override suspend fun mcpServers(): List<com.opencode.android.core.api.McpServer> =
+        backend.mcpServers()
+    override suspend fun addMcpServer(body: com.google.gson.JsonObject): com.opencode.android.core.api.McpServer =
+        backend.addMcpServer(body)
+    override suspend fun connectMcpServer(name: String): Boolean = backend.connectMcpServer(name)
+    override suspend fun disconnectMcpServer(name: String): Boolean = backend.disconnectMcpServer(name)
+    override suspend fun removeMcpAuth(name: String): Boolean = backend.removeMcpAuth(name)
+    override suspend fun mcpAuth(name: String): com.google.gson.JsonObject = backend.mcpAuth(name)
+    override suspend fun mcpAuthCallback(name: String, code: String): Boolean =
+        backend.mcpAuthCallback(name, code)
+    override suspend fun config(): com.google.gson.JsonElement = backend.config()
+    override suspend fun updateConfig(patch: com.google.gson.JsonObject): com.google.gson.JsonElement =
+        backend.updateConfig(patch)
+    override suspend fun configProviders(): List<com.opencode.android.core.api.ConfiguredProvider> =
+        backend.configProviders()
+    override suspend fun commands(): List<com.opencode.android.core.api.OpenCodeCommand> =
+        backend.commands()
+    override suspend fun skills(): List<com.opencode.android.core.api.OpenCodeSkill> =
+        backend.skills()
+    override suspend fun initAgentsMd(sessionId: String): Boolean = backend.initAgentsMd(sessionId)
 
     override fun events(): Flow<OpenCodeEvent> = backend.events()
 

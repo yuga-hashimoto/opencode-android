@@ -16,20 +16,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,30 +49,23 @@ import androidx.compose.ui.unit.dp
 import com.opencode.android.R
 import com.opencode.android.ui.components.SectionCard
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-private enum class ScheduleFilter { ALL, ENABLED, DISABLED }
-
-/**
- * Schedule / task-automation screen. Backed by the in-memory [ScheduleViewModel]
- * placeholder — see that file for TODOs on wiring real persistence and execution.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleScreen(
     items: List<ScheduleItem>,
+    activeOnly: Boolean,
+    onActiveOnlyChange: (Boolean) -> Unit,
     onToggle: (String) -> Unit,
-    onAdd: (String, String, ScheduleRepeat) -> Unit,
+    onAdd: (String, String, String, String) -> Unit,
+    onDelete: (String) -> Unit,
     onOpenDrawer: () -> Unit
 ) {
-    var filter by remember { mutableStateOf(ScheduleFilter.ALL) }
     var showCreateDialog by remember { mutableStateOf(false) }
-    var overflowExpanded by remember { mutableStateOf(false) }
-
-    val filtered = when (filter) {
-        ScheduleFilter.ALL -> items
-        ScheduleFilter.ENABLED -> items.filter { it.enabled }
-        ScheduleFilter.DISABLED -> items.filter { !it.enabled }
-    }
+    var deleteTarget by remember { mutableStateOf<ScheduleItem?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -86,22 +74,6 @@ fun ScheduleScreen(
                 navigationIcon = {
                     IconButton(onClick = onOpenDrawer) {
                         Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu_description))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.FilterList, contentDescription = stringResource(R.string.filter_description))
-                    }
-                    Box {
-                        IconButton(onClick = { overflowExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.chat_options_description))
-                        }
-                        DropdownMenu(expanded = overflowExpanded, onDismissRequest = { overflowExpanded = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.new_schedule_button)) },
-                                onClick = { overflowExpanded = false; showCreateDialog = true }
-                            )
-                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -122,19 +94,14 @@ fun ScheduleScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
-                    selected = filter == ScheduleFilter.ALL,
-                    onClick = { filter = ScheduleFilter.ALL },
-                    label = { Text(stringResource(R.string.filter_all)) }
+                    selected = activeOnly,
+                    onClick = { onActiveOnlyChange(true) },
+                    label = { Text(stringResource(R.string.filter_active)) }
                 )
                 FilterChip(
-                    selected = filter == ScheduleFilter.ENABLED,
-                    onClick = { filter = ScheduleFilter.ENABLED },
-                    label = { Text(stringResource(R.string.filter_enabled)) }
-                )
-                FilterChip(
-                    selected = filter == ScheduleFilter.DISABLED,
-                    onClick = { filter = ScheduleFilter.DISABLED },
-                    label = { Text(stringResource(R.string.filter_disabled)) }
+                    selected = !activeOnly,
+                    onClick = { onActiveOnlyChange(false) },
+                    label = { Text(stringResource(R.string.filter_ended)) }
                 )
             }
 
@@ -145,8 +112,12 @@ fun ScheduleScreen(
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filtered, key = { it.id }) { scheduleItem ->
-                    ScheduleCard(scheduleItem, onToggle)
+                items(items, key = { it.id }) { scheduleItem ->
+                    ScheduleCard(
+                        item = scheduleItem,
+                        onToggle = onToggle,
+                        onDelete = { deleteTarget = scheduleItem }
+                    )
                 }
                 item { Spacer(Modifier.height(80.dp)) }
             }
@@ -172,16 +143,41 @@ fun ScheduleScreen(
     if (showCreateDialog) {
         CreateScheduleDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, time, repeat ->
-                onAdd(name, time, repeat)
+            onCreate = { name, prompt, cron, workspace ->
+                onAdd(name, prompt, cron, workspace)
                 showCreateDialog = false
+            }
+        )
+    }
+
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(stringResource(R.string.schedule_delete_title)) },
+            text = { Text(stringResource(R.string.schedule_delete_message, target.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(target.id)
+                    deleteTarget = null
+                }) {
+                    Text(stringResource(R.string.delete_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
             }
         )
     }
 }
 
 @Composable
-private fun ScheduleCard(item: ScheduleItem, onToggle: (String) -> Unit) {
+private fun ScheduleCard(
+    item: ScheduleItem,
+    onToggle: (String) -> Unit,
+    onDelete: () -> Unit
+) {
     SectionCard {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Surface(
@@ -206,47 +202,59 @@ private fun ScheduleCard(item: ScheduleItem, onToggle: (String) -> Unit) {
                         modifier = Modifier.height(14.dp)
                     )
                     Text(
-                        text = buildString {
-                            if (item.dayOfWeek != null) append(item.dayOfWeek)
-                            append(item.time)
-                        },
+                        text = item.cronExpression,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(
-                        Icons.Default.Repeat,
+                        Icons.Default.Work,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.height(14.dp)
                     )
                     Text(
-                        text = if (item.repeat == ScheduleRepeat.DAILY) {
-                            stringResource(R.string.schedule_repeat_daily)
-                        } else {
-                            stringResource(R.string.schedule_repeat_weekly)
-                        },
+                        text = item.workspaceId,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                item.nextRunAt?.let { nextRun ->
+                    Text(
+                        text = stringResource(
+                            R.string.schedule_next_run,
+                            SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()).format(Date(nextRun))
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
-            Switch(checked = item.enabled, onCheckedChange = { onToggle(item.id) })
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Switch(checked = item.isActive, onCheckedChange = { onToggle(item.id) })
+                IconButton(onClick = onDelete, modifier = Modifier.height(24.dp)) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.delete_button),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.height(18.dp)
+                    )
+                }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateScheduleDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String, ScheduleRepeat) -> Unit
+    onCreate: (String, String, String, String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("") }
-    var repeat by remember { mutableStateOf(ScheduleRepeat.DAILY) }
-    var repeatMenuExpanded by remember { mutableStateOf(false) }
+    var prompt by remember { mutableStateOf("") }
+    var cronExpression by remember { mutableStateOf("") }
+    var workspace by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -261,50 +269,32 @@ private fun CreateScheduleDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    label = { Text(stringResource(R.string.schedule_time_hint)) },
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    label = { Text(stringResource(R.string.schedule_prompt_hint)) },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = cronExpression,
+                    onValueChange = { cronExpression = it },
+                    label = { Text(stringResource(R.string.schedule_cron_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                ExposedDropdownMenuBox(
-                    expanded = repeatMenuExpanded,
-                    onExpandedChange = { repeatMenuExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = if (repeat == ScheduleRepeat.DAILY) {
-                            stringResource(R.string.schedule_repeat_daily)
-                        } else {
-                            stringResource(R.string.schedule_repeat_weekly)
-                        },
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.schedule_repeat_label)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = repeatMenuExpanded) },
-                        modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = repeatMenuExpanded,
-                        onDismissRequest = { repeatMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.schedule_repeat_daily)) },
-                            onClick = { repeat = ScheduleRepeat.DAILY; repeatMenuExpanded = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.schedule_repeat_weekly)) },
-                            onClick = { repeat = ScheduleRepeat.WEEKLY; repeatMenuExpanded = false }
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    value = workspace,
+                    onValueChange = { workspace = it },
+                    label = { Text(stringResource(R.string.schedule_workspace_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(name, time, repeat) },
-                enabled = name.isNotBlank() && time.isNotBlank()
+                onClick = { onCreate(name, prompt, cronExpression, workspace) },
+                enabled = name.isNotBlank() && prompt.isNotBlank() && cronExpression.isNotBlank()
             ) {
                 Text(stringResource(R.string.save))
             }
@@ -321,11 +311,28 @@ private fun ScheduleScreenPreview() {
     OpenCodeAndroidTheme {
         ScheduleScreen(
             items = listOf(
-                ScheduleItem(name = "デイリー同期", time = "09:00", repeat = ScheduleRepeat.DAILY, enabled = true),
-                ScheduleItem(name = "レポート生成", time = "08:00", repeat = ScheduleRepeat.WEEKLY, dayOfWeek = "月曜", enabled = false)
+                ScheduleItem(
+                    name = "デイリー同期",
+                    prompt = "Sync repos",
+                    cronExpression = "0 9 * * *",
+                    workspaceId = "default",
+                    isActive = true,
+                    nextRunAt = System.currentTimeMillis() + 3_600_000
+                ),
+                ScheduleItem(
+                    name = "レポート生成",
+                    prompt = "Generate report",
+                    cronExpression = "0 8 * * 1",
+                    workspaceId = "reports",
+                    isActive = false,
+                    lastRunAt = System.currentTimeMillis() - 86_400_000
+                )
             ),
+            activeOnly = true,
+            onActiveOnlyChange = {},
             onToggle = {},
-            onAdd = { _, _, _ -> },
+            onAdd = { _, _, _, _ -> },
+            onDelete = {},
             onOpenDrawer = {}
         )
     }

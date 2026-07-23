@@ -98,6 +98,8 @@ private const val ROUTE_SCHEDULE = "schedule"
 private const val ROUTE_SETTINGS = "settings"
 private const val ROUTE_SETTINGS_VOICE = "settings-voice"
 private const val ROUTE_SETTINGS_PROVIDERS = "settings-providers"
+private const val ROUTE_SETTINGS_MCP = "settings-mcp"
+private const val ROUTE_SETTINGS_SERVER_INFO = "settings-server-info"
 private const val ROUTE_WORKSPACES = "workspaces"
 private const val ROUTE_ACTIVITY = "activity"
 private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
@@ -446,6 +448,18 @@ fun OpenCodeApp(
                     onNavigate = { route ->
                         closeDrawer()
                         navController.navigate(route) { launchSingleTop = true }
+                    },
+                    onDeleteSession = { sessionId ->
+                        voiceScope.launch {
+                            runCatching { selectedRuntime?.deleteSession(sessionId) }
+                            app.catalogRepository.refreshSessionsOnly()
+                        }
+                    },
+                    onArchiveSession = { sessionId ->
+                        voiceScope.launch {
+                            runCatching { selectedRuntime?.archiveSession(sessionId) }
+                            app.catalogRepository.refreshSessionsOnly()
+                        }
                     }
                 )
             }
@@ -577,11 +591,15 @@ fun OpenCodeApp(
                     key = "schedule",
                     factory = ViewModelFactory { ScheduleViewModel() }
                 )
-                val scheduleItems by scheduleViewModel.state.collectAsState()
+                val scheduleItems by scheduleViewModel.filteredSchedules.collectAsState()
+                val activeOnly by scheduleViewModel.activeOnly.collectAsState()
                 ScheduleScreen(
                     items = scheduleItems,
-                    onToggle = scheduleViewModel::toggle,
-                    onAdd = scheduleViewModel::add,
+                    activeOnly = activeOnly,
+                    onActiveOnlyChange = scheduleViewModel::setActiveOnly,
+                    onToggle = scheduleViewModel::toggleSchedule,
+                    onAdd = scheduleViewModel::addSchedule,
+                    onDelete = scheduleViewModel::deleteSchedule,
                     onOpenDrawer = { drawerScope.launch { drawerState.open() } }
                 )
             }
@@ -608,7 +626,9 @@ fun OpenCodeApp(
                     onOpenLocalRuntime = { navController.navigate(LOCAL_RUNTIME_MANAGEMENT_ROUTE) },
                     onOpenRemoteConnection = { navController.navigate(ROUTE_REMOTE_CONNECTION) },
                     onOpenWorkspaces = { navController.navigate(ROUTE_WORKSPACES) },
-                    onOpenDiagnostics = { navController.navigate(ROUTE_ACTIVITY) }
+                    onOpenDiagnostics = { navController.navigate(ROUTE_ACTIVITY) },
+                    onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP) },
+                    onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) }
                 )
             }
 
@@ -663,6 +683,20 @@ fun OpenCodeApp(
                             context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
                         }.onFailure { error -> settingsViewModel.reportOAuthError(error.message.orEmpty()) }
                     },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_MCP) {
+                com.opencode.android.feature.settings.McpScreen(
+                    registry = app.runtimeRegistry,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(ROUTE_SETTINGS_SERVER_INFO) {
+                com.opencode.android.feature.settings.ServerInfoScreen(
+                    registry = app.runtimeRegistry,
                     onBack = { navController.popBackStack() }
                 )
             }

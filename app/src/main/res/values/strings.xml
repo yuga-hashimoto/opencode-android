@@ -480,6 +480,15 @@
     <string name="schedule_repeat_label">Repeat</string>
     <string name="schedule_repeat_daily">Daily</string>
     <string name="schedule_repeat_weekly">Weekly</string>
+    <string name="filter_active">Active</string>
+    <string name="filter_ended">Ended</string>
+    <string name="schedule_prompt_hint">Prompt</string>
+    <string name="schedule_cron_hint">Cron expression (e.g. 0 9 * * *)</string>
+    <string name="schedule_workspace_hint">Workspace</string>
+    <string name="schedule_next_run">Next: %1$s</string>
+    <string name="schedule_delete_title">Delete schedule</string>
+    <string name="schedule_delete_message">Delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete_button">Delete</string>
 
     <!-- Redesign: settings V2 -->
     <string name="section_assistant_settings">Assistant settings</string>
@@ -501,4 +510,51 @@
     <string name="privacy_stub_body">This feature is coming soon.</string>
     <string name="diagnostics_row">Diagnostics &amp; logs</string>
     <string name="app_info_row">App info</string>
+    <string name="section_appearance_settings">Appearance</string>
+    <string name="theme_row">Theme</string>
+    <string name="theme_dialog_title">Select theme</string>
+    <string name="ui_font_size_row">UI font size</string>
+    <string name="code_font_size_row">Code font size</string>
+    <string name="section_chat_settings">Chat</string>
+    <string name="tool_call_detail_row">Tool call detail level</string>
+    <string name="tool_call_overview">Overview</string>
+    <string name="tool_call_detailed">Detailed</string>
+    <string name="auto_expand_reasoning_row">Auto-expand reasoning</string>
+    <string name="send_behavior_row">Send behavior</string>
+    <string name="send_behavior_interrupt">Interrupt</string>
+    <string name="send_behavior_queue">Queue</string>
+
+    <!-- Drawer session actions -->
+    <string name="drawer_archive_session">Archive</string>
+
+    <!-- MCP -->
+    <string name="mcp_title">MCP Servers</string>
+    <string name="mcp_add_server">Add server</string>
+    <string name="mcp_no_servers">No MCP servers configured</string>
+    <string name="mcp_connect">Connect</string>
+    <string name="mcp_disconnect">Disconnect</string>
+    <string name="mcp_remove_auth">Remove auth</string>
+    <string name="mcp_tools_count">%1$d tools</string>
+    <string name="mcp_name_hint">Server name</string>
+    <string name="mcp_command_hint">Command (local server)</string>
+    <string name="mcp_url_hint">URL (remote server)</string>
+    <string name="mcp_add_help">Enter a command for a local server or a URL for a remote server.</string>
+    <string name="mcp_settings_row">MCP servers</string>
+
+    <!-- Server info -->
+    <string name="server_info_title">Server info</string>
+    <string name="server_info_tab_config">Config</string>
+    <string name="server_info_tab_providers">Providers</string>
+    <string name="server_info_tab_commands">Commands</string>
+    <string name="server_info_tab_skills">Skills</string>
+    <string name="server_info_edit_config">Edit config</string>
+    <string name="server_info_no_providers">No configured providers</string>
+    <string name="server_info_no_commands">No custom commands</string>
+    <string name="server_info_no_skills">No skills available</string>
+    <string name="server_info_settings_row">Server config &amp; tools</string>
+
+    <!-- AGENTS.md -->
+    <string name="agents_md_generate">Generate AGENTS.md</string>
+    <string name="agents_md_generated">AGENTS.md generated</string>
+    <string name="agents_md_failed">Failed to generate AGENTS.md</string>
 </resources>

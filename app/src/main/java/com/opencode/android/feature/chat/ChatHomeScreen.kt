@@ -1,8 +1,10 @@
 package com.opencode.android.feature.chat
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Psychology
@@ -53,7 +56,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -63,13 +68,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -87,10 +96,11 @@ import com.opencode.android.runtime.RuntimeTarget
 import com.opencode.android.runtime.WorkspaceRef
 import com.opencode.android.ui.components.StatusChip
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
+import kotlinx.coroutines.launch
 
 /** Chat-first home screen. Runtime selection remains inside the model picker. */
 @Suppress("UNUSED_PARAMETER")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatHomeScreen(
     state: ChatUiState,
@@ -119,6 +129,7 @@ fun ChatHomeScreen(
     onSubmitQuestion: (String) -> Unit,
     autoAcceptPermissions: Boolean = false,
     onToggleAutoAccept: (Boolean) -> Unit = {},
+    sendBehavior: String = "interrupt",
     onSendMessage: (String) -> Unit,
     onPermission: (String, PermissionResponse, Boolean) -> Unit,
     onAbort: () -> Unit,
@@ -136,10 +147,23 @@ fun ChatHomeScreen(
     val sheetState = rememberModalBottomSheetState()
     val errorKind = classifyChatError(state.error)
     val runtimeNotReady = errorKind == ChatErrorKind.RUNTIME_NOT_READY && state.messages.isEmpty()
+    val isAtBottom = remember { mutableStateOf(true) }
+    var showActionSheet by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = info.totalItemsCount
+            totalItems == 0 || lastVisible >= totalItems - 1
+        }.collect { atBottom -> isAtBottom.value = atBottom }
+    }
 
     LaunchedEffect(state.messages.size, state.permissions.size, state.pendingQuestions.size) {
         val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
-        if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+        if (totalItems > 0 && isAtBottom.value) listState.animateScrollToItem(totalItems - 1)
     }
 
     LaunchedEffect(state.partialText) {
@@ -200,7 +224,14 @@ fun ChatHomeScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(state.messages, key = { it.id }) { message ->
-                            if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                            Box(
+                                modifier = Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { showActionSheet = message.id to message.text }
+                                )
+                            ) {
+                                if (message.isUser) MessageBubble(message) else AssistantTimeline(message)
+                            }
                         }
                         items(state.permissions, key = { "permission-${it.id}" }) { permission ->
                             PermissionCard(permission, onPermission)
@@ -228,6 +259,21 @@ fun ChatHomeScreen(
                     }
                 }
             }
+
+            if (!isAtBottom.value) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        isAtBottom.value = true
+                        coroutineScope.launch {
+                            val totalItems = state.messages.size + state.permissions.size + state.pendingQuestions.size
+                            if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+                        }
+                    },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = null)
+                }
+            }
         }
 
         if (!runtimeNotReady) {
@@ -247,9 +293,6 @@ fun ChatHomeScreen(
                 isSpeechProcessing = state.isSpeechProcessing,
                 modelLabel = selectedModelId ?: stringResource(R.string.chat_model_short_default),
                 onModelChipClick = {
-                    // Startup synchronization can race the first user interaction.
-                    // Refresh the selected runtime when the picker opens so a
-                    // transient empty catalog never becomes a sticky empty sheet.
                     onRefreshCatalog()
                     showModelPicker = true
                 },
@@ -267,6 +310,7 @@ fun ChatHomeScreen(
                 onRemoveAttachment = onRemoveAttachment,
                 autoAcceptPermissions = autoAcceptPermissions,
                 onToggleAutoAccept = onToggleAutoAccept,
+                sendBehavior = sendBehavior,
                 contextTokensUsed = state.contextTokensUsed,
                 contextLimit = providers
                     .firstOrNull { it.id == selectedProviderId }
@@ -294,6 +338,27 @@ fun ChatHomeScreen(
             onToggleFavorite = onToggleFavorite,
             onDismiss = { showModelPicker = false }
         )
+    }
+
+    showActionSheet?.let { (_, content) ->
+        ModalBottomSheet(onDismissRequest = { showActionSheet = null }) {
+            Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                DropdownMenuItem(
+                    text = { Text("Copy") },
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(content))
+                        showActionSheet = null
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy as Markdown") },
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(content))
+                        showActionSheet = null
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -516,6 +581,7 @@ private fun ChatComposer(
     onRemoveAttachment: (Int) -> Unit,
     autoAcceptPermissions: Boolean,
     onToggleAutoAccept: (Boolean) -> Unit,
+    sendBehavior: String,
     contextTokensUsed: Long,
     contextLimit: Long
 ) {
@@ -623,6 +689,19 @@ private fun ChatComposer(
                         }
                     }
                     if (isRunning) {
+                        if (sendBehavior == "queue") {
+                            Surface(
+                                shape = RoundedCornerShape(100.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ) {
+                                Text(
+                                    text = "Queued",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
                         FilledIconButton(onClick = onAbort, modifier = Modifier.size(38.dp)) {
                             Icon(Icons.Default.Stop, contentDescription = stringResource(R.string.stop_run))
                         }

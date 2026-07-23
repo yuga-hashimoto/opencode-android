@@ -1,9 +1,12 @@
 package com.opencode.android.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,17 +16,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,16 +53,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.opencode.android.R
 import com.opencode.android.runtime.WorkspaceRef
+import com.opencode.android.ui.components.SessionStatus
+import com.opencode.android.ui.components.StatusDot
 import com.opencode.android.ui.theme.OpenCodeAndroidTheme
 
-/** A recent chat entry rendered in the drawer's recent-chat section. */
 data class DrawerRecentSession(
     val id: String,
     val title: String,
     val relativeTime: String,
     val directory: String? = null,
     val isActive: Boolean = false,
-    val hasUnread: Boolean = false
+    val hasUnread: Boolean = false,
+    val status: SessionStatus = SessionStatus.IDLE,
+    val hasAttention: Boolean = false
 )
 
 private fun DrawerRecentSession.projectKey(): String =
@@ -63,7 +74,6 @@ private fun DrawerRecentSession.projectKey(): String =
 private fun DrawerRecentSession.projectLabel(defaultLabel: String): String =
     projectKey().substringAfterLast('/').takeIf { it.isNotBlank() } ?: defaultLabel
 
-/** Project-centric drawer: pick a project to chat in, then browse recent chats. */
 @Composable
 fun AppDrawerContent(
     recentSessions: List<DrawerRecentSession>,
@@ -75,6 +85,10 @@ fun AppDrawerContent(
     onNavigate: (String) -> Unit,
     onDeleteSession: (String) -> Unit = {},
     onArchiveSession: (String) -> Unit = {},
+    sidebarGrouping: String = "project",
+    onGroupingChange: (String) -> Unit = {},
+    collapsedSections: Set<String> = emptySet(),
+    onToggleSection: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var sessionActionTarget by remember { mutableStateOf<DrawerRecentSession?>(null) }
@@ -116,25 +130,93 @@ fun AppDrawerContent(
 
                 if (recentSessions.isNotEmpty()) {
                     val defaultLabel = stringResource(R.string.drawer_project_default)
-                    val grouped = recentSessions
-                        .groupBy { it.projectKey() }
-                        .toList()
-                        .sortedByDescending { (_, sessions) ->
-                            sessions.firstOrNull()?.let { recentSessions.indexOf(it) } ?: Int.MAX_VALUE
-                        }
-                    DrawerSectionHeader(stringResource(R.string.drawer_recent_chats))
-                    grouped.forEach { (_, sessions) ->
-                        DrawerRecentProjectHeader(
-                            label = sessions.first().projectLabel(defaultLabel)
-                        )
-                        sessions.forEach { session ->
-                            DrawerChatRow(
-                                title = session.title.ifBlank { session.id },
-                                isActive = session.isActive,
-                                hasUnread = session.hasUnread,
-                                onClick = { onOpenSession(session.id, session.title) },
-                                onLongClick = { sessionActionTarget = session }
-                            )
+                    DrawerSectionHeader(
+                        text = stringResource(R.string.drawer_recent_chats),
+                        collapsed = collapsedSections.contains("recent"),
+                        onToggle = { onToggleSection("recent") }
+                    )
+                    AnimatedVisibility(visible = !collapsedSections.contains("recent")) {
+                        Column {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = sidebarGrouping == "project",
+                                    onClick = { onGroupingChange("project") },
+                                    label = { Text("Project") }
+                                )
+                                FilterChip(
+                                    selected = sidebarGrouping == "status",
+                                    onClick = { onGroupingChange("status") },
+                                    label = { Text("Status") }
+                                )
+                            }
+                            if (sidebarGrouping == "status") {
+                                val statusGroups = listOf(
+                                    "Running" to SessionStatus.RUNNING,
+                                    "Waiting" to SessionStatus.WAITING,
+                                    "Done" to SessionStatus.IDLE,
+                                    "Error" to SessionStatus.ERROR
+                                )
+                                statusGroups.forEach { (label, status) ->
+                                    val sessions = recentSessions.filter { it.status == status }
+                                    if (sessions.isNotEmpty()) {
+                                        val sectionKey = "status_$label"
+                                        DrawerRecentProjectHeader(
+                                            label = label,
+                                            collapsed = collapsedSections.contains(sectionKey),
+                                            onToggle = { onToggleSection(sectionKey) }
+                                        )
+                                        AnimatedVisibility(visible = !collapsedSections.contains(sectionKey)) {
+                                            Column {
+                                                sessions.forEach { session ->
+                                                    DrawerChatRow(
+                                                        title = session.title.ifBlank { session.id },
+                                                        status = session.status,
+                                                        hasAttention = session.hasAttention,
+                                                        isActive = session.isActive,
+                                                        hasUnread = session.hasUnread,
+                                                        onClick = { onOpenSession(session.id, session.title) },
+                                                        onLongClick = { sessionActionTarget = session }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                val grouped = recentSessions
+                                    .groupBy { it.projectKey() }
+                                    .toList()
+                                    .sortedByDescending { (_, sessions) ->
+                                        sessions.firstOrNull()?.let { recentSessions.indexOf(it) } ?: Int.MAX_VALUE
+                                    }
+                                grouped.forEach { (key, sessions) ->
+                                    val sectionKey = "project_$key"
+                                    val sorted = sessions.sortedByDescending { it.hasAttention }
+                                    DrawerRecentProjectHeader(
+                                        label = sessions.first().projectLabel(defaultLabel),
+                                        collapsed = collapsedSections.contains(sectionKey),
+                                        onToggle = { onToggleSection(sectionKey) }
+                                    )
+                                    AnimatedVisibility(visible = !collapsedSections.contains(sectionKey)) {
+                                        Column {
+                                            sorted.forEach { session ->
+                                                DrawerChatRow(
+                                                    title = session.title.ifBlank { session.id },
+                                                    status = session.status,
+                                                    hasAttention = session.hasAttention,
+                                                    isActive = session.isActive,
+                                                    hasUnread = session.hasUnread,
+                                                    onClick = { onOpenSession(session.id, session.title) },
+                                                    onLongClick = { sessionActionTarget = session }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -268,14 +350,32 @@ private fun NewChatRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DrawerSectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp)
-    )
+private fun DrawerSectionHeader(
+    text: String,
+    collapsed: Boolean = false,
+    onToggle: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(start = 16.dp, end = 16.dp, top = 17.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (collapsed) Icons.Default.ChevronRight else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
 }
 
 @Composable
@@ -360,14 +460,25 @@ private fun DrawerAddProjectRow(onClick: () -> Unit) {
 }
 
 @Composable
-private fun DrawerRecentProjectHeader(label: String) {
+private fun DrawerRecentProjectHeader(
+    label: String,
+    collapsed: Boolean = false,
+    onToggle: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onToggle)
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
+        Icon(
+            imageVector = if (collapsed) Icons.Default.ChevronRight else Icons.Default.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
         Icon(
             Icons.Default.Folder,
             contentDescription = null,
@@ -389,6 +500,8 @@ private fun DrawerRecentProjectHeader(label: String) {
 @Composable
 private fun DrawerChatRow(
     title: String,
+    status: SessionStatus = SessionStatus.IDLE,
+    hasAttention: Boolean = false,
     isActive: Boolean = false,
     hasUnread: Boolean = false,
     onClick: () -> Unit,
@@ -402,18 +515,7 @@ private fun DrawerChatRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (isActive) {
-            androidx.compose.material3.CircularProgressIndicator(
-                modifier = Modifier.size(12.dp),
-                strokeWidth = 1.5.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
-        } else if (hasUnread) {
-            val dotColor = MaterialTheme.colorScheme.primary
-            androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
-                drawCircle(color = dotColor)
-            }
-        }
+        StatusDot(status = status)
         Text(
             text = title,
             modifier = Modifier.weight(1f),
@@ -421,6 +523,14 @@ private fun DrawerChatRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        if (hasAttention) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.error)
+            )
+        }
     }
 }
 

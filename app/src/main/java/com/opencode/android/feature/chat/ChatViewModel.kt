@@ -184,6 +184,11 @@ class ChatViewModel(
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    private val _sendBehavior = MutableStateFlow("interrupt")
+    val sendBehavior: StateFlow<String> = _sendBehavior.asStateFlow()
+
+    private val messageQueue = MutableStateFlow<List<String>>(emptyList())
+
     private var eventJob: Job? = null
     private var tts: TextToSpeech? = null
     private val streamedParts = mutableMapOf<String, LinkedHashMap<String, ChatPart>>()
@@ -234,6 +239,10 @@ class ChatViewModel(
 
     fun setAutoAcceptPermissions(enabled: Boolean) {
         _uiState.update { it.copy(autoAcceptPermissions = enabled) }
+    }
+
+    fun setSendBehavior(behavior: String) {
+        _sendBehavior.value = behavior
     }
 
     fun selectVariant(variant: String?) {
@@ -319,6 +328,11 @@ class ChatViewModel(
         val currentBackend = backend
         if (currentBackend == null) {
             _uiState.update { it.copy(error = "OpenCode connection is not configured") }
+            return
+        }
+
+        if (_sendBehavior.value == "queue" && _uiState.value.isRunning) {
+            messageQueue.update { it + normalized }
             return
         }
 
@@ -651,10 +665,8 @@ class ChatViewModel(
                     )
                 }
                 refreshContextUsage(event.sessionId)
-                // OpenCode may expose the new session in /session only after
-                // the first prompt finishes. Refresh the shell catalog again
-                // at the normal end of a run so recent chats stays current.
                 onSessionCreated()
+                drainQueue()
             }
             is OpenCodeEvent.SessionError -> {
                 if (event.sessionId != null && event.sessionId != activeSession) return
@@ -776,6 +788,17 @@ class ChatViewModel(
     fun stopSpeaking() {
         tts?.stop()
         _uiState.update { it.copy(isSpeaking = false) }
+    }
+
+    fun copyMessageContent(messageId: String): String? {
+        return _uiState.value.messages.firstOrNull { it.id == messageId }?.text
+    }
+
+    private fun drainQueue() {
+        val queued = messageQueue.value
+        if (queued.isEmpty()) return
+        messageQueue.value = emptyList()
+        queued.forEach { sendMessage(it) }
     }
 
     override fun onCleared() {

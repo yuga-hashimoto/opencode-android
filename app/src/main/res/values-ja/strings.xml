@@ -480,6 +480,15 @@
     <string name="schedule_repeat_label">繰り返し</string>
     <string name="schedule_repeat_daily">毎日</string>
     <string name="schedule_repeat_weekly">毎週</string>
+    <string name="filter_active">アクティブ</string>
+    <string name="filter_ended">終了</string>
+    <string name="schedule_prompt_hint">プロンプト</string>
+    <string name="schedule_cron_hint">Cron式 (例: 0 9 * * *)</string>
+    <string name="schedule_workspace_hint">ワークスペース</string>
+    <string name="schedule_next_run">次回: %1$s</string>
+    <string name="schedule_delete_title">スケジュールを削除</string>
+    <string name="schedule_delete_message">「%1$s」を削除しますか？この操作は取り消せません。</string>
+    <string name="delete_button">削除</string>
 
     <!-- Redesign: settings V2 -->
     <string name="section_assistant_settings">アシスタント設定</string>
@@ -501,4 +510,51 @@
     <string name="privacy_stub_body">この機能は準備中です。</string>
     <string name="diagnostics_row">診断・ログ</string>
     <string name="app_info_row">アプリ情報</string>
+    <string name="section_appearance_settings">外観</string>
+    <string name="theme_row">テーマ</string>
+    <string name="theme_dialog_title">テーマを選択</string>
+    <string name="ui_font_size_row">UIフォントサイズ</string>
+    <string name="code_font_size_row">コードフォントサイズ</string>
+    <string name="section_chat_settings">チャット</string>
+    <string name="tool_call_detail_row">ツールコール詳細レベル</string>
+    <string name="tool_call_overview">概要</string>
+    <string name="tool_call_detailed">詳細</string>
+    <string name="auto_expand_reasoning_row">推論の自動展開</string>
+    <string name="send_behavior_row">送信動作</string>
+    <string name="send_behavior_interrupt">割り込み</string>
+    <string name="send_behavior_queue">キュー</string>
+
+    <!-- Drawer session actions -->
+    <string name="drawer_archive_session">アーカイブ</string>
+
+    <!-- MCP -->
+    <string name="mcp_title">MCPサーバー</string>
+    <string name="mcp_add_server">サーバーを追加</string>
+    <string name="mcp_no_servers">MCPサーバーが設定されていません</string>
+    <string name="mcp_connect">接続</string>
+    <string name="mcp_disconnect">切断</string>
+    <string name="mcp_remove_auth">認証を削除</string>
+    <string name="mcp_tools_count">%1$dツール</string>
+    <string name="mcp_name_hint">サーバー名</string>
+    <string name="mcp_command_hint">コマンド（ローカルサーバー）</string>
+    <string name="mcp_url_hint">URL（リモートサーバー）</string>
+    <string name="mcp_add_help">ローカルサーバーにはコマンドを、リモートサーバーにはURLを入力してください。</string>
+    <string name="mcp_settings_row">MCPサーバー</string>
+
+    <!-- Server info -->
+    <string name="server_info_title">サーバー情報</string>
+    <string name="server_info_tab_config">設定</string>
+    <string name="server_info_tab_providers">プロバイダ</string>
+    <string name="server_info_tab_commands">コマンド</string>
+    <string name="server_info_tab_skills">スキル</string>
+    <string name="server_info_edit_config">設定を編集</string>
+    <string name="server_info_no_providers">設定済みプロバイダがありません</string>
+    <string name="server_info_no_commands">カスタムコマンドがありません</string>
+    <string name="server_info_no_skills">利用可能なスキルがありません</string>
+    <string name="server_info_settings_row">サーバー設定・ツール</string>
+
+    <!-- AGENTS.md -->
+    <string name="agents_md_generate">AGENTS.mdを生成</string>
+    <string name="agents_md_generated">AGENTS.mdを生成しました</string>
+    <string name="agents_md_failed">AGENTS.mdの生成に失敗しました</string>
 </resources>
