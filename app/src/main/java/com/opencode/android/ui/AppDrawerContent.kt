@@ -112,12 +112,6 @@ fun AppDrawerContent(
                 NewChatRow(onClick = onNewChat)
 
                 DrawerSectionHeader(stringResource(R.string.drawer_projects_title))
-                DrawerProjectRow(
-                    label = stringResource(R.string.drawer_project_default),
-                    path = null,
-                    selected = selectedWorkspacePath == null,
-                    onClick = onNewChat
-                )
                 workspaces.forEach { workspace ->
                     DrawerProjectRow(
                         label = workspace.name,

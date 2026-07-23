@@ -2,6 +2,7 @@ package com.opencode.android
 
 import android.app.role.RoleManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
                     append("https://")
                     append(host)
                     if (port.isNotBlank()) append(":").append(port)
-                    if (token.isNotBlank()) append("?token=").append(token)
+                    if (token.isNotBlank()) append("?token=").append(Uri.encode(token))
                 }
                 deepLinkConnectionUrl = url
             }

@@ -65,19 +65,25 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import android.content.Intent
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.opencode.android.R
@@ -114,10 +120,20 @@ fun OpenCodeChatScreen(
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val isAtBottom = remember { mutableStateOf(true) }
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = info.totalItemsCount
+            totalItems == 0 || lastVisible >= totalItems - 1
+        }.collect { atBottom -> isAtBottom.value = atBottom }
+    }
 
     LaunchedEffect(state.messages.size, state.permissions.size) {
         val totalItems = state.messages.size + state.permissions.size
-        if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+        if (totalItems > 0 && isAtBottom.value) listState.animateScrollToItem(totalItems - 1)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -579,7 +595,7 @@ fun MessageBubble(message: ChatMessage) {
 
 // Not private: reused by ChatHomeScreen.kt (same package) for the redesigned chat screen.
 @Composable
-fun AssistantTimeline(message: ChatMessage) {
+fun AssistantTimeline(message: ChatMessage, showProcessing: Boolean = false) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -594,7 +610,7 @@ fun AssistantTimeline(message: ChatMessage) {
                 }
             }
         }
-        if (message.isStreaming) {
+        if (showProcessing) {
             Text(
                 text = stringResource(R.string.processing),
                 style = MaterialTheme.typography.labelSmall,
@@ -605,41 +621,65 @@ fun AssistantTimeline(message: ChatMessage) {
 }
 
 @Composable
+private fun InlineText(
+    inlines: List<MarkdownInline>,
+    style: TextStyle,
+    linkColor: Color,
+    codeBackground: Color,
+    onFilePathClick: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val annotated = remember(inlines, linkColor, codeBackground) {
+        annotateFilePaths(renderInline(inlines, codeBackground, linkColor), linkColor)
+    }
+    ClickableText(
+        text = annotated,
+        style = style,
+        onClick = { offset ->
+            annotated.getStringAnnotations("link", offset, offset).firstOrNull()?.let { ann ->
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(ann.item)))
+                }
+            } ?: annotated.getStringAnnotations("filepath", offset, offset).firstOrNull()
+                ?.let { onFilePathClick(it.item) }
+        }
+    )
+}
+
+@Composable
 private fun MarkdownText(text: String, onFilePathClick: (String) -> Unit = {}) {
     val blocks = remember(text) { MarkdownLite.parse(text) }
     val codeInlineBackground = MaterialTheme.colorScheme.surfaceVariant
     val linkColor = MaterialTheme.colorScheme.primary
+    val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
+        color = MaterialTheme.colorScheme.onSurface
+    )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEach { block ->
             when (block) {
-                is MarkdownBlock.Heading -> ClickableText(
-                    text = annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor),
+                is MarkdownBlock.Heading -> InlineText(
+                    inlines = block.inlines,
                     style = when (block.level) {
                         1 -> MaterialTheme.typography.titleLarge
                         2 -> MaterialTheme.typography.titleMedium
                         else -> MaterialTheme.typography.titleSmall
-                    }.copy(fontWeight = FontWeight.SemiBold),
-                    onClick = { offset ->
-                        annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor)
-                            .getStringAnnotations("filepath", offset, offset)
-                            .firstOrNull()?.let { onFilePathClick(it.item) }
-                    }
+                    }.copy(fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface),
+                    linkColor = linkColor,
+                    codeBackground = codeInlineBackground,
+                    onFilePathClick = onFilePathClick
                 )
-                is MarkdownBlock.Paragraph -> ClickableText(
-                    text = annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    onClick = { offset ->
-                        annotateFilePaths(renderInline(block.inlines, codeInlineBackground), linkColor)
-                            .getStringAnnotations("filepath", offset, offset)
-                            .firstOrNull()?.let { onFilePathClick(it.item) }
-                    }
+                is MarkdownBlock.Paragraph -> InlineText(
+                    inlines = block.inlines,
+                    style = bodyStyle,
+                    linkColor = linkColor,
+                    codeBackground = codeInlineBackground,
+                    onFilePathClick = onFilePathClick
                 )
                 is MarkdownBlock.CodeBlock -> Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surface
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
                     Text(
                         text = block.code,
@@ -653,21 +693,87 @@ private fun MarkdownText(text: String, onFilePathClick: (String) -> Unit = {}) {
                 is MarkdownBlock.BulletList -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     block.items.forEach { item ->
                         Row {
-                            Text("•  ")
-                            ClickableText(
-                                text = annotateFilePaths(renderInline(item, codeInlineBackground), linkColor),
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ),
-                                onClick = { offset ->
-                                    annotateFilePaths(renderInline(item, codeInlineBackground), linkColor)
-                                        .getStringAnnotations("filepath", offset, offset)
-                                        .firstOrNull()?.let { onFilePathClick(it.item) }
-                                }
-                            )
+                            Text("•  ", color = MaterialTheme.colorScheme.onSurface)
+                            InlineText(item, bodyStyle, linkColor, codeInlineBackground, onFilePathClick)
                         }
                     }
                 }
+                is MarkdownBlock.OrderedList -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    block.items.forEachIndexed { index, item ->
+                        Row {
+                            Text("${index + 1}.  ", color = MaterialTheme.colorScheme.onSurface)
+                            InlineText(item, bodyStyle, linkColor, codeInlineBackground, onFilePathClick)
+                        }
+                    }
+                }
+                is MarkdownBlock.Blockquote -> Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Box(
+                        modifier = Modifier.padding(
+                            start = 10.dp,
+                            end = 8.dp,
+                            top = 6.dp,
+                            bottom = 6.dp
+                        )
+                    ) {
+                        InlineText(
+                            inlines = block.inlines,
+                            style = bodyStyle.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                            linkColor = linkColor,
+                            codeBackground = codeInlineBackground,
+                            onFilePathClick = onFilePathClick
+                        )
+                    }
+                }
+                is MarkdownBlock.Table -> Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row {
+                            block.headers.forEach { header ->
+                                Text(
+                                    text = header,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 8.dp),
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                        block.rows.forEach { row ->
+                            val padded = row.take(block.headers.size) +
+                                List((block.headers.size - row.size).coerceAtLeast(0)) { "" }
+                            Row {
+                                padded.forEach { cell ->
+                                    Text(
+                                        text = cell,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 8.dp),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                is MarkdownBlock.HorizontalRule -> HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                )
             }
         }
     }
@@ -689,14 +795,25 @@ private fun annotateFilePaths(source: AnnotatedString, linkColor: Color): Annota
     }
 }
 
-private fun renderInline(inlines: List<MarkdownInline>, codeBackground: Color): AnnotatedString = buildAnnotatedString {
+private fun renderInline(inlines: List<MarkdownInline>, codeBackground: Color, linkColor: Color): AnnotatedString = buildAnnotatedString {
     inlines.forEach { inline ->
         when (inline) {
             is MarkdownInline.Plain -> append(inline.text)
             is MarkdownInline.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(inline.text) }
+            is MarkdownInline.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(inline.text) }
+            is MarkdownInline.Strikethrough -> withStyle(
+                SpanStyle(textDecoration = TextDecoration.LineThrough)
+            ) { append(inline.text) }
             is MarkdownInline.Code -> withStyle(
                 SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)
             ) { append(inline.text) }
+            is MarkdownInline.Link -> {
+                val start = length
+                withStyle(
+                    SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)
+                ) { append(inline.text) }
+                addStringAnnotation("link", inline.url, start, length)
+            }
         }
     }
 }
@@ -752,27 +869,39 @@ private fun ToolCard(part: ChatPart.Tool) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded },
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Default.Build, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(part.name, fontWeight = FontWeight.Medium, maxLines = 1)
-                    part.title?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(
+                    Icons.Default.Build,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(15.dp)
+                )
+                Text(
+                    text = part.name,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                part.title?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
                 }
                 ToolStatusChip(part.status)
                 Icon(
                     if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
                 )
             }
             if (expanded) {
@@ -860,14 +989,23 @@ private fun ToolStatusChip(status: ToolStatus) {
 private fun PatchCard(part: ChatPart.Patch) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.padding(horizontal = 4.dp))
-                Text(stringResource(R.string.file_changes_title), fontWeight = FontWeight.Medium)
+                Icon(
+                    Icons.Default.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.padding(horizontal = 3.dp))
+                Text(
+                    stringResource(R.string.file_changes_title),
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             Spacer(Modifier.height(6.dp))
             if (part.files.isEmpty()) {

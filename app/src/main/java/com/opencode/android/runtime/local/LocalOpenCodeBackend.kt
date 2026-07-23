@@ -46,23 +46,27 @@ class LocalOpenCodeBackend(
 
     @Volatile
     private var cached: CachedDelegate? = null
+    private val lock = Any()
 
     internal fun delegate(): RemoteOpenCodeBackend {
         val port = portProvider()
             ?: error("Android local OpenCode runtime is not installed")
         cached?.takeIf { it.port == port }?.let { return it.backend }
 
-        val backend = backendFactory(
-            ConnectionProfile(
-                id = id,
-                name = displayName,
-                baseUrl = "http://127.0.0.1:$port/",
-                username = "opencode",
-                allowInsecureLan = true
+        synchronized(lock) {
+            cached?.takeIf { it.port == port }?.let { return it.backend }
+            val backend = backendFactory(
+                ConnectionProfile(
+                    id = id,
+                    name = displayName,
+                    baseUrl = "http://127.0.0.1:$port/",
+                    username = "opencode",
+                    allowInsecureLan = true
+                )
             )
-        )
-        cached = CachedDelegate(port, backend)
-        return backend
+            cached = CachedDelegate(port, backend)
+            return backend
+        }
     }
 
     fun invalidate() {

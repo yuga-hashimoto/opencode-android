@@ -110,6 +110,7 @@ class OpenWakeWordDetector(private val context: Context) {
 
         interpreter.run(input, output)
 
+        if (nFrames == 0) return FloatArray(32)
         val lastFrame = output[0][nFrames - 1]
         return FloatArray(32) { i ->
             if (i < nBins) lastFrame[i] / 10f + 2f else 2f
@@ -174,6 +175,7 @@ class OpenWakeWordDetector(private val context: Context) {
         val channel = inputStream.channel
         val buffer = channel.map(FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength)
         inputStream.close()
+        fd.close()
         return buffer
     }
 

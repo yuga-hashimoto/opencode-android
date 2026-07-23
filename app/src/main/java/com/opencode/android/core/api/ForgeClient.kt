@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -41,7 +42,11 @@ class GitHubForgeClient(private val token: String?) : ForgeClient {
     override suspend fun getPullRequests(repo: String, branch: String): List<ForgeReference> =
         withContext(Dispatchers.IO) {
             try {
-                val request = buildRequest("https://api.github.com/repos/$repo/pulls?head=$branch")
+                val request = buildRequest(
+                    "https://api.github.com/repos/$repo/pulls".toHttpUrl().newBuilder()
+                        .addQueryParameter("head", branch)
+                        .build().toString()
+                )
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext emptyList()
                     val body = response.body?.string().orEmpty()
@@ -64,11 +69,16 @@ class GitHubForgeClient(private val token: String?) : ForgeClient {
     override suspend fun getIssues(repo: String, query: String): List<ForgeReference> =
         withContext(Dispatchers.IO) {
             try {
-                val request = buildRequest("https://api.github.com/search/issues?q=repo:$repo+$query")
+                val request = buildRequest(
+                    "https://api.github.com/search/issues".toHttpUrl().newBuilder()
+                        .addQueryParameter("q", "repo:$repo $query")
+                        .build().toString()
+                )
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@withContext emptyList()
                     val body = response.body?.string().orEmpty()
                     val result = gson.fromJson(body, GitHubSearchResult::class.java)
+                        ?: return@withContext emptyList()
                     result.items.map { item ->
                         ForgeReference(
                             type = "Issue",
