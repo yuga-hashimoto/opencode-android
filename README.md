@@ -1,10 +1,6 @@
 # OpenCode Android
 
 <p align="center">
-  <img src="docs/screenshot.png" width="280" alt="OpenCode Android screenshot" />
-</p>
-
-<p align="center">
   <a href="https://github.com/yuga-hashimoto/opencode-android/actions/workflows/android.yml"><img src="https://github.com/yuga-hashimoto/opencode-android/actions/workflows/android.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/yuga-hashimoto/opencode-android/releases/latest"><img src="https://img.shields.io/github/v/release/yuga-hashimoto/opencode-android" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/yuga-hashimoto/opencode-android" alt="License: MIT" /></a>
