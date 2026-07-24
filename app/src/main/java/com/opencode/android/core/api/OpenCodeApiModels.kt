@@ -18,12 +18,18 @@ data class OpenCodeSession(
     val id: String,
     val slug: String? = null,
     @SerializedName("projectID") val projectId: String? = null,
+    @SerializedName("parentID") val parentId: String? = null,
     val directory: String? = null,
     val path: String? = null,
     val title: String = "",
     val version: String? = null,
     val time: OpenCodeTime = OpenCodeTime(),
-    val tokens: OpenCodeSessionTokens? = null
+    val tokens: OpenCodeSessionTokens? = null,
+    val share: OpenCodeSessionShare? = null
+)
+
+data class OpenCodeSessionShare(
+    val url: String
 )
 
 data class OpenCodeSessionTokens(

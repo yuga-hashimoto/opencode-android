@@ -14,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Chat
@@ -79,7 +78,6 @@ fun SettingsScreenV2(
     onOpenDiagnostics: () -> Unit,
     onOpenMcp: () -> Unit = {},
     onOpenServerInfo: () -> Unit = {},
-    onOpenUsage: () -> Unit = {},
     currentTheme: String = "dark",
     onThemeChange: (String) -> Unit = {},
     uiFontSize: Int = 16,
@@ -268,12 +266,6 @@ fun SettingsScreenV2(
                     title = stringResource(R.string.notifications_row),
                     checked = notificationsEnabled,
                     onCheckedChange = onToggleNotifications
-                )
-                SettingsDivider()
-                SettingsRow(
-                    icon = Icons.Default.BarChart,
-                    title = stringResource(R.string.usage_row),
-                    onClick = onOpenUsage
                 )
                 SettingsDivider()
                 SettingsRow(

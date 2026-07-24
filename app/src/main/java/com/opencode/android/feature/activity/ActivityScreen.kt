@@ -110,7 +110,7 @@ private fun RunningTab(
     onInspectSession: (OpenCodeSession) -> Unit,
     onOpenSession: (String, String) -> Unit
 ) {
-    val activeSessions = state.sessions.filter { it.id in state.activeSessionIds }
+    val activeSessions = state.sessions.filter { it.parentId == null && it.id in state.activeSessionIds }
     ActivityList(emptyText = stringResource(R.string.no_running_tasks), isEmpty = activeSessions.isEmpty()) {
         items(activeSessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
@@ -198,8 +198,10 @@ private fun SessionsTab(
     var deleting by remember { mutableStateOf<OpenCodeSession?>(null) }
     var menuExpandedFor by remember { mutableStateOf<String?>(null) }
 
-    ActivityList(emptyText = stringResource(R.string.no_sessions), isEmpty = state.sessions.isEmpty()) {
-        items(state.sessions, key = { it.id }) { session ->
+    val topLevelSessions = state.sessions.filter { it.parentId == null }
+
+    ActivityList(emptyText = stringResource(R.string.no_sessions), isEmpty = topLevelSessions.isEmpty()) {
+        items(topLevelSessions, key = { it.id }) { session ->
             SectionCard(modifier = Modifier.clickable { onInspectSession(session) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)

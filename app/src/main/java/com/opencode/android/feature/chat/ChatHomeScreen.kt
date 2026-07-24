@@ -163,6 +163,7 @@ fun ChatHomeScreen(
     onOpenDrawer: () -> Unit,
     contextUsageFraction: Float = 0f,
     subagents: List<SubagentInfo> = emptyList(),
+    onSubagentClick: (String) -> Unit = {},
     githubRefs: List<GitHubReference> = emptyList(),
     onImageAttachment: (Bitmap) -> Unit = {}
 ) {
@@ -359,7 +360,7 @@ fun ChatHomeScreen(
                 }
             }
 
-            SubagentsTrack(subagents = subagents, onSubagentClick = {})
+            SubagentsTrack(subagents = subagents, onSubagentClick = onSubagentClick)
 
             if (!runtimeNotReady) {
                 ChatComposer(

@@ -42,7 +42,7 @@ class HomeViewModel(
             runtimeState = runtime.runtime?.state?.value ?: RuntimeState.Disconnected,
             version = runtime.health?.version,
             workspace = runtime.workspaces.firstOrNull(),
-            sessions = runtime.sessions.sortedByDescending { it.time.updated ?: it.time.created },
+            sessions = runtime.sessions.filter { it.parentId == null }.sortedByDescending { it.time.updated ?: it.time.created },
             providerId = prefs.providerId,
             modelId = prefs.modelId,
             agentId = prefs.agentId,

@@ -67,6 +67,7 @@ import com.opencode.android.feature.assistant.SpeechRecognizerManager
 import com.opencode.android.feature.assistant.SpeechResult
 import com.opencode.android.feature.chat.ChatHomeScreen
 import com.opencode.android.feature.chat.ChatViewModel
+import com.opencode.android.feature.chat.SubagentInfo
 import com.opencode.android.feature.chat.buildHandoffPrompt
 import com.opencode.android.feature.onboarding.AndroidSetupScreen
 import com.opencode.android.feature.onboarding.OnboardingChoiceScreen
@@ -77,7 +78,6 @@ import com.opencode.android.feature.settings.ProviderSettingsScreen
 import com.opencode.android.feature.settings.GitHubRepo
 import com.opencode.android.feature.settings.SettingsScreenV2
 import com.opencode.android.feature.settings.SettingsViewModel
-import com.opencode.android.feature.settings.UsageScreen
 import com.opencode.android.feature.settings.VoiceSettingsScreen
 import com.opencode.android.feature.search.CommandPaletteSheet
 import com.opencode.android.feature.workspace.CodeViewerScreen
@@ -114,7 +114,6 @@ private const val WORKSPACE_DETAIL_ROUTE = "workspace-detail"
 private const val SESSION_DETAIL_ROUTE = "session-detail"
 private const val LOCAL_RUNTIME_MANAGEMENT_ROUTE = "local-runtime-management"
 private const val ROUTE_CODE_VIEWER = "code-viewer"
-private const val ROUTE_USAGE = "usage"
 
 /** Routes whose top bar exposes the hamburger menu / drawer swipe gesture. */
 private val DRAWER_ROOT_ROUTES = setOf(ROUTE_CHAT, ROUTE_SETTINGS, ROUTE_SCHEDULE)
@@ -433,7 +432,9 @@ fun OpenCodeApp(
     }
 
     val recentSessions = remember(activityState.sessions, activityState.activeSessionIds, activityState.completedSessionIds) {
-        activityState.sessions.take(25).map { session ->
+        activityState.sessions
+            .filter { it.parentId == null }
+            .take(25).map { session ->
             DrawerRecentSession(
                 id = session.id,
                 title = session.title.ifBlank { session.slug ?: session.id },
@@ -453,6 +454,23 @@ fun OpenCodeApp(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
     val currentRoute = backStackEntry?.destination?.route
+
+    val subagentInfos = remember(activityState.sessions, chatState.sessionId, activityState.activeSessionIds) {
+        val parentId = chatState.sessionId ?: return@remember emptyList()
+        activityState.sessions
+            .filter { it.parentId == parentId }
+            .map { session ->
+                SubagentInfo(
+                    id = session.id,
+                    name = session.title.ifBlank { session.slug ?: session.id.take(8) },
+                    status = when {
+                        session.id in activityState.activeSessionIds -> "running"
+                        else -> "idle"
+                    },
+                    providerId = ""
+                )
+            }
+    }
 
     fun closeDrawer() {
         drawerScope.launch { drawerState.close() }
@@ -653,6 +671,13 @@ fun OpenCodeApp(
                         // created during this run is visible immediately.
                         app.catalogRepository.refreshSessionsOnly()
                         drawerScope.launch { drawerState.open() }
+                    },
+                    subagents = subagentInfos,
+                    onSubagentClick = { childSessionId ->
+                        val childSession = activityState.sessions.firstOrNull { it.id == childSessionId }
+                        app.activityRepository.markSessionRead(childSessionId)
+                        pendingSession = childSessionId to (childSession?.title ?: childSessionId)
+                        navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
                     }
                 )
             }
@@ -700,7 +725,7 @@ fun OpenCodeApp(
                     onOpenDiagnostics = { showDiagnostics = true },
                     onOpenMcp = { navController.navigate(ROUTE_SETTINGS_MCP) },
                     onOpenServerInfo = { navController.navigate(ROUTE_SETTINGS_SERVER_INFO) },
-                    onOpenUsage = { navController.navigate(ROUTE_USAGE) },
+
                     currentTheme = preferences.theme,
                     onThemeChange = { app.preferences.setTheme(it) },
                     uiFontSize = preferences.uiFontSize,
@@ -940,9 +965,7 @@ fun OpenCodeApp(
                 )
             }
 
-            composable(ROUTE_USAGE) {
-                UsageScreen(onBack = { navController.popBackStack() })
-            }
+
         }
     }
 
@@ -977,7 +1000,7 @@ fun OpenCodeApp(
                 pendingSession = id to title
                 navController.navigate(ROUTE_CHAT) { launchSingleTop = true }
             },
-            sessions = activityState.sessions.map { it.id to it.title.ifBlank { it.slug ?: it.id } }
+            sessions = activityState.sessions.filter { it.parentId == null }.map { it.id to it.title.ifBlank { it.slug ?: it.id } }
         )
     }
 
