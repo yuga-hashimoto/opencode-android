@@ -44,7 +44,11 @@ class RemoteRuntimeTarget(
     override val state: StateFlow<RuntimeState> = mutableState.asStateFlow()
 
     override suspend fun connect(): Result<OpenCodeHealth> {
-        mutableState.value = RuntimeState.Connecting
+        // Re-checking an already connected runtime must not flap the state, or every refresh would
+        // tear down the live event stream that hangs off it.
+        if (mutableState.value !is RuntimeState.Connected) {
+            mutableState.value = RuntimeState.Connecting
+        }
         return runCatching { backend.health() }
             .onSuccess { health ->
                 mutableState.value = if (health.healthy) {

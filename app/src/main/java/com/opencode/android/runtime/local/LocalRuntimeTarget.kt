@@ -71,7 +71,11 @@ class LocalRuntimeTarget(
             return Result.failure(IllegalStateException(state.describe()))
         }
 
-        mutableState.value = RuntimeState.Connecting
+        // Keep an already connected runtime connected while re-checking health, otherwise every
+        // catalog refresh restarts the event stream and drops in-flight replies.
+        if (mutableState.value !is RuntimeState.Connected) {
+            mutableState.value = RuntimeState.Connecting
+        }
         return runCatching { backend.health() }
             .onSuccess { health ->
                 mutableState.value = if (health.healthy) {

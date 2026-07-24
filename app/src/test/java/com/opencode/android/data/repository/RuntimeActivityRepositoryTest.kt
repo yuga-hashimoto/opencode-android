@@ -88,6 +88,54 @@ class RuntimeActivityRepositoryTest {
         assertEquals("イベント接続", repository.state.value.logs.single().title)
     }
 
+    @Test
+    fun `a brief Connecting blip does not restart the event stream`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        RuntimeActivityRepository(registry, TestScope(dispatcher))
+
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+        assertEquals(1, target.eventCalls)
+
+        // A health recheck on an already-connected runtime dips back to Connecting and returns;
+        // the existing SSE connection must survive it rather than being torn down and reopened.
+        target.state.value = RuntimeState.Connecting
+        advanceUntilIdle()
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        assertEquals(1, target.eventCalls)
+    }
+
+    @Test
+    fun `going disconnected then reconnecting does reopen the stream`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val target = FakeTarget()
+        val registry = RuntimeRegistry(
+            store = FakeStore(selectedRuntimeId = target.id),
+            localTarget = target,
+            remoteFactory = { error("unused") }
+        )
+        RuntimeActivityRepository(registry, TestScope(dispatcher))
+
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+        assertEquals(1, target.eventCalls)
+
+        target.state.value = RuntimeState.Disconnected
+        advanceUntilIdle()
+        target.state.value = RuntimeState.Connected("1.18.3")
+        advanceUntilIdle()
+
+        assertEquals(2, target.eventCalls)
+    }
+
     private class FakeStore(
         override var selectedRuntimeId: String?
     ) : RuntimeConnectionStore {

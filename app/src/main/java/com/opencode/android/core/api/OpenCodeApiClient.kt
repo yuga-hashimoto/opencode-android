@@ -7,13 +7,15 @@ import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
 import com.opencode.android.core.security.OpenCodeUrl
 import com.opencode.android.data.connection.ConnectionProfile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
@@ -396,12 +398,13 @@ class OpenCodeApiClient(
         true
     }
 
-    private fun singleEventStream(): Flow<OpenCodeEvent> = callbackFlow {
+    private fun singleEventStream(): Flow<OpenCodeEvent> = channelFlow {
         val eventClient = httpClient.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .build()
         val request = requestBuilder("event")
             .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
             .get()
             .build()
         val call = eventClient.newCall(request)
@@ -422,7 +425,9 @@ class OpenCodeApiClient(
                             when {
                                 line.isEmpty() -> {
                                     if (data.isNotEmpty()) {
-                                        trySend(eventParser.parse(data.toString()))
+                                        // Suspending send (never trySend): a dropped frame loses a
+                                        // chunk of the assistant's reply for good.
+                                        send(eventParser.parse(data.toString()))
                                         data.setLength(0)
                                     }
                                 }
@@ -432,18 +437,22 @@ class OpenCodeApiClient(
                                 }
                             }
                         }
+                        // A stream that ends mid-frame still carries a usable event.
+                        if (data.isNotEmpty()) send(eventParser.parse(data.toString()))
                     }
-                    if (isActive) throw IOException("OpenCode event stream closed")
+                    throw IOException("OpenCode event stream closed")
                 }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
             } catch (error: Throwable) {
-                if (isActive) close(error)
+                close(error)
             }
         }
         awaitClose {
             call.cancel()
             readerJob.cancel()
         }
-    }
+    }.buffer(EVENT_BUFFER_CAPACITY)
 
     private suspend fun <T> get(
         path: String,
@@ -594,6 +603,9 @@ class OpenCodeApiClient(
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val MAX_ERROR_BODY_CHARS = 240
+
+        /** Deep enough that a burst of stream frames is queued rather than dropped. */
+        private const val EVENT_BUFFER_CAPACITY = 512
         private const val PROVIDER_AUTH_TIMEOUT_MINUTES = 6L
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
