@@ -30,9 +30,11 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -85,14 +87,30 @@ fun AppDrawerContent(
     onNavigate: (String) -> Unit,
     onDeleteSession: (String) -> Unit = {},
     onArchiveSession: (String) -> Unit = {},
+    onBatchDelete: (Set<String>) -> Unit = {},
+    onBatchArchive: (Set<String>) -> Unit = {},
     sidebarGrouping: String = "project",
     onGroupingChange: (String) -> Unit = {},
     collapsedSections: Set<String> = emptySet(),
     onToggleSection: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var sessionActionTarget by remember { mutableStateOf<DrawerRecentSession?>(null) }
+    var selectedSessionIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val selectionMode = selectedSessionIds.isNotEmpty()
+
+    fun toggleSelection(id: String) {
+        selectedSessionIds = if (id in selectedSessionIds) {
+            selectedSessionIds - id
+        } else {
+            selectedSessionIds + id
+        }
+    }
+
+    fun enterSelectionMode(id: String) {
+        selectedSessionIds = setOf(id)
+    }
+
     Surface(
         modifier = modifier
             .fillMaxHeight()
@@ -131,6 +149,17 @@ fun AppDrawerContent(
                     )
                     AnimatedVisibility(visible = !collapsedSections.contains("recent")) {
                         Column {
+                            if (selectionMode) {
+                                SelectionActionBar(
+                                    selectedCount = selectedSessionIds.size,
+                                    onCancel = { selectedSessionIds = emptySet() },
+                                    onArchive = {
+                                        onBatchArchive(selectedSessionIds)
+                                        selectedSessionIds = emptySet()
+                                    },
+                                    onDelete = { showDeleteConfirm = true }
+                                )
+                            }
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -171,8 +200,11 @@ fun AppDrawerContent(
                                                         hasAttention = session.hasAttention,
                                                         isActive = session.isActive,
                                                         hasUnread = session.hasUnread,
+                                                        isSelected = session.id in selectedSessionIds,
+                                                        selectionMode = selectionMode,
                                                         onClick = { onOpenSession(session.id, session.title) },
-                                                        onLongClick = { sessionActionTarget = session }
+                                                        onLongClick = { enterSelectionMode(session.id) },
+                                                        onToggleSelection = { toggleSelection(session.id) }
                                                     )
                                                 }
                                             }
@@ -203,8 +235,12 @@ fun AppDrawerContent(
                                                     hasAttention = session.hasAttention,
                                                     isActive = session.isActive,
                                                     hasUnread = session.hasUnread,
-                                                    onClick = { onOpenSession(session.id, session.title) },
-                                                    onLongClick = { sessionActionTarget = session }
+                                                    isSelected = session.id in selectedSessionIds,
+                                                        selectionMode = selectionMode,
+                                                        indented = true,
+                                                        onClick = { onOpenSession(session.id, session.title) },
+                                                    onLongClick = { enterSelectionMode(session.id) },
+                                                    onToggleSelection = { toggleSelection(session.id) }
                                                 )
                                             }
                                         }
@@ -226,55 +262,20 @@ fun AppDrawerContent(
         }
     }
 
-    sessionActionTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { sessionActionTarget = null },
-            title = { Text(target.title.ifBlank { target.id }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(
-                        onClick = {
-                            sessionActionTarget = null
-                            onArchiveSession(target.id)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.drawer_archive_session))
-                    }
-                    TextButton(
-                        onClick = {
-                            sessionActionTarget = null
-                            showDeleteConfirm = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.delete_session), color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { sessionActionTarget = null }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
-    }
-
     if (showDeleteConfirm) {
-        val target = sessionActionTarget
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text(stringResource(R.string.delete_session_title)) },
-            text = { Text(stringResource(R.string.delete_session_body)) },
+            text = {
+                Text(
+                    stringResource(R.string.drawer_delete_selected_body, selectedSessionIds.size)
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
+                    onBatchDelete(selectedSessionIds)
+                    selectedSessionIds = emptySet()
                     showDeleteConfirm = false
-                    target?.let { onDeleteSession(it.id) }
                 }) {
                     Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
@@ -285,6 +286,48 @@ fun AppDrawerContent(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun SelectionActionBar(
+    selectedCount: Int,
+    onCancel: () -> Unit,
+    onArchive: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onCancel) {
+            Text(stringResource(R.string.cancel))
+        }
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = stringResource(R.string.drawer_selected_count, selectedCount),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onArchive) {
+            Icon(
+                Icons.Default.Archive,
+                contentDescription = stringResource(R.string.drawer_archive_session),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.delete_session),
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
@@ -477,13 +520,13 @@ private fun DrawerRecentProjectHeader(
             Icons.Default.Folder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
+            modifier = Modifier.size(18.dp)
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -498,17 +541,37 @@ private fun DrawerChatRow(
     hasAttention: Boolean = false,
     isActive: Boolean = false,
     hasUnread: Boolean = false,
+    isSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    indented: Boolean = false,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    onToggleSelection: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .combinedClickable(
+                onClick = if (selectionMode) onToggleSelection else onClick,
+                onLongClick = if (selectionMode) {} else onLongClick
+            )
+            .padding(
+                start = if (indented) 48.dp else 16.dp,
+                end = 16.dp,
+                top = 8.dp,
+                bottom = 8.dp
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        if (selectionMode) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onToggleSelection() },
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+        }
         StatusDot(status = status)
         Text(
             text = title,

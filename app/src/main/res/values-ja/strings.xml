@@ -526,6 +526,8 @@
 
     <!-- Drawer session actions -->
     <string name="drawer_archive_session">アーカイブ</string>
+    <string name="drawer_selected_count">%1$d件選択中</string>
+    <string name="drawer_delete_selected_body">%1$d件のセッションが完全に削除されます。</string>
 
     <!-- MCP -->
     <string name="mcp_title">MCPサーバー</string>

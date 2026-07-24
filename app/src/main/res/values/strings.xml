@@ -530,6 +530,8 @@
 
     <!-- Drawer session actions -->
     <string name="drawer_archive_session">Archive</string>
+    <string name="drawer_selected_count">%1$d selected</string>
+    <string name="drawer_delete_selected_body">%1$d sessions will be permanently deleted.</string>
 
     <!-- MCP -->
     <string name="mcp_title">MCP Servers</string>

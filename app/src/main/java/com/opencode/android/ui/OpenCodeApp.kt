@@ -531,6 +531,22 @@ fun OpenCodeApp(
                             app.catalogRepository.refreshSessionsOnly()
                         }
                     },
+                    onBatchDelete = { sessionIds ->
+                        voiceScope.launch {
+                            sessionIds.forEach { id ->
+                                runCatching { selectedRuntime?.deleteSession(id) }
+                            }
+                            app.catalogRepository.refreshSessionsOnly()
+                        }
+                    },
+                    onBatchArchive = { sessionIds ->
+                        voiceScope.launch {
+                            sessionIds.forEach { id ->
+                                runCatching { selectedRuntime?.archiveSession(id) }
+                            }
+                            app.catalogRepository.refreshSessionsOnly()
+                        }
+                    },
                     sidebarGrouping = sidebarGrouping,
                     onGroupingChange = { sidebarGrouping = it },
                     collapsedSections = collapsedSections,
