@@ -236,9 +236,9 @@ fun AppDrawerContent(
                                                     isActive = session.isActive,
                                                     hasUnread = session.hasUnread,
                                                     isSelected = session.id in selectedSessionIds,
-                                                        selectionMode = selectionMode,
-                                                        indented = true,
-                                                        onClick = { onOpenSession(session.id, session.title) },
+                                                    selectionMode = selectionMode,
+                                                    indented = true,
+                                                    onClick = { onOpenSession(session.id, session.title) },
                                                     onLongClick = { enterSelectionMode(session.id) },
                                                     onToggleSelection = { toggleSelection(session.id) }
                                                 )
