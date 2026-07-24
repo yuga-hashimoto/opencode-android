@@ -553,7 +553,7 @@ private fun DrawerChatRow(
             .fillMaxWidth()
             .combinedClickable(
                 onClick = if (selectionMode) onToggleSelection else onClick,
-                onLongClick = if (selectionMode) {} else onLongClick
+                onLongClick = if (selectionMode) null else onLongClick
             )
             .padding(
                 start = if (indented) 48.dp else 16.dp,
