@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +70,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import android.content.Intent
@@ -587,6 +590,17 @@ fun MessageBubble(message: ChatMessage) {
             contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
+                    message.imagePreviews.forEach { preview ->
+                        Image(
+                            bitmap = preview.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .widthIn(max = 280.dp)
+                                .heightIn(max = 220.dp)
+                                .padding(bottom = 8.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
                     message.attachments.forEach { attachment ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

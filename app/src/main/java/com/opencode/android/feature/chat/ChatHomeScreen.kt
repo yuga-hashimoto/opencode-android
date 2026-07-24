@@ -223,7 +223,9 @@ fun ChatHomeScreen(
     }
 
     LaunchedEffect(state.partialText) {
-        if (state.partialText.isNotBlank()) input = state.partialText
+        if ((state.isListening || state.isSpeechProcessing) && state.partialText.isNotBlank()) {
+            input = state.partialText
+        }
     }
 
     Box(
@@ -414,7 +416,10 @@ fun ChatHomeScreen(
                     },
                     githubRefs = githubRefs,
                     attachedImages = attachedImages,
-                    onRemoveImage = { attachedImages.removeAt(it) },
+                    onRemoveImage = {
+                        attachedImages.removeAt(it)
+                        onRemoveAttachment(it)
+                    },
                     onCameraLaunch = { cameraLauncher.launch(null) },
                     onGalleryLaunch = {
                         galleryLauncher.launch(

@@ -1,5 +1,6 @@
 package com.opencode.android.feature.chat
 
+import android.graphics.Bitmap
 import android.speech.tts.TextToSpeech
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -51,6 +52,7 @@ data class ChatMessage(
     val isUser: Boolean,
     val parts: List<ChatPart> = emptyList(),
     val attachments: List<PromptAttachment> = emptyList(),
+    val imagePreviews: List<Bitmap> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
     val isStreaming: Boolean = false
 ) {
@@ -169,6 +171,7 @@ data class ChatUiState(
     val contextTokensUsed: Long = 0L,
     val selectedVariant: String? = null,
     val attachments: List<PromptAttachment> = emptyList(),
+    val imagePreviews: List<Bitmap> = emptyList(),
     val selectedProviderId: String? = null,
     val selectedModelId: String? = null,
     val selectedAgentId: String? = null,
@@ -283,9 +286,21 @@ class ChatViewModel(
         _uiState.update { it.copy(attachments = it.attachments + attachment) }
     }
 
+    fun addImageAttachment(attachment: PromptAttachment, preview: Bitmap) {
+        _uiState.update {
+            it.copy(
+                attachments = it.attachments + attachment,
+                imagePreviews = it.imagePreviews + preview
+            )
+        }
+    }
+
     fun removeAttachment(index: Int) {
         _uiState.update { state ->
-            state.copy(attachments = state.attachments.filterIndexed { i, _ -> i != index })
+            state.copy(
+                attachments = state.attachments.filterIndexed { i, _ -> i != index },
+                imagePreviews = state.imagePreviews.filterIndexed { i, _ -> i != index }
+            )
         }
     }
 
@@ -357,6 +372,7 @@ class ChatViewModel(
                 isListening = false,
                 isSpeechProcessing = false,
                 partialText = "",
+                imagePreviews = emptyList(),
                 error = null
             )
         }
@@ -365,6 +381,9 @@ class ChatViewModel(
     fun sendMessage(text: String) {
         val normalized = text.trim()
         val pendingAttachments = _uiState.value.attachments
+        val pendingPreviewsByFilename = pendingAttachments.mapIndexedNotNull { index, attachment ->
+            _uiState.value.imagePreviews.getOrNull(index)?.let { attachment.filename to it }
+        }.toMap()
         if (normalized.isEmpty() && pendingAttachments.isEmpty()) return
         val currentBackend = backend
         if (currentBackend == null) {
@@ -382,7 +401,8 @@ class ChatViewModel(
             parts = normalized.takeIf { it.isNotEmpty() }?.let {
                 listOf(ChatPart.Text(id = UUID.randomUUID().toString(), text = it))
             }.orEmpty(),
-            attachments = pendingAttachments
+            attachments = pendingAttachments,
+            imagePreviews = _uiState.value.imagePreviews
         )
         _uiState.update {
             it.copy(
@@ -433,7 +453,7 @@ class ChatViewModel(
                         attachments = pendingAttachments
                     )
                 )
-                _uiState.update { it.copy(attachments = emptyList()) }
+                _uiState.update { it.copy(attachments = emptyList(), imagePreviews = emptyList()) }
                 clearDraft(targetSessionId)
                 var sessionCompleted = false
                 withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
@@ -441,7 +461,15 @@ class ChatViewModel(
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
-                                val uiMessages = serverMessages.mapNotNull(::toUiMessage)
+                                val previewsById = _uiState.value.messages
+                                    .associate { it.id to it.imagePreviews }
+                                val uiMessages = serverMessages.mapNotNull(::toUiMessage).map { message ->
+                                    val previews = previewsById[message.id].orEmpty().ifEmpty {
+                                        message.attachments
+                                            .mapNotNull { pendingPreviewsByFilename[it.filename] }
+                                    }
+                                    message.copy(imagePreviews = previews)
+                                }
                                 if (uiMessages.isNotEmpty() && uiMessages != _uiState.value.messages) {
                                     _uiState.update { it.copy(messages = uiMessages) }
                                 }

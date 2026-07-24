@@ -51,6 +51,19 @@ class MarkdownLiteTest {
     }
 
     @Test
+    fun `bare https url becomes a link`() {
+        val paragraph = MarkdownLite.parse("Open https://example.com/docs?q=1.").single() as MarkdownBlock.Paragraph
+        assertEquals(
+            listOf(
+                MarkdownInline.Plain("Open "),
+                MarkdownInline.Link("https://example.com/docs?q=1", "https://example.com/docs?q=1"),
+                MarkdownInline.Plain(".")
+            ),
+            paragraph.inlines
+        )
+    }
+
+    @Test
     fun `bold text is extracted`() {
         val blocks = MarkdownLite.parse("This is **important** text")
         val paragraph = blocks.single() as MarkdownBlock.Paragraph

@@ -26,7 +26,8 @@ object MarkdownLite {
             "|\\*\\*([^*]+)\\*\\*" +
             "|~~([^~]+)~~" +
             "|\\[([^\\]]+)\\]\\(([^)\\s]+)\\)" +
-            "|\\*([^*]+)\\*"
+            "|\\*([^*]+)\\*" +
+            "|(?<![\\w@])https?://[A-Za-z0-9][A-Za-z0-9._~:/?#\\[\\]@!&'()*+,;=%-]*"
     )
     private val ORDERED_REGEX = Regex("^\\d+\\.\\s+")
     private val HR_REGEX = Regex("^(-{3,}|\\*{3,}|_{3,})$")
@@ -139,12 +140,20 @@ object MarkdownLite {
             val linkText = match.groups[4]?.value
             val linkUrl = match.groups[5]?.value
             val italic = match.groups[6]?.value
+            val bareUrl = match.groups[7]?.value
             when {
                 code != null -> result += MarkdownInline.Code(code)
                 bold != null -> result += MarkdownInline.Bold(bold)
                 strike != null -> result += MarkdownInline.Strikethrough(strike)
                 linkText != null && linkUrl != null -> result += MarkdownInline.Link(linkText, linkUrl)
                 italic != null -> result += MarkdownInline.Italic(italic)
+                bareUrl != null -> {
+                    val url = bareUrl.trimEnd('.', ',', '!', '?', ':', ';', ')', ']', '}')
+                    result += MarkdownInline.Link(url, url)
+                    if (url.length < bareUrl.length) {
+                        result += MarkdownInline.Plain(bareUrl.substring(url.length))
+                    }
+                }
             }
             lastIndex = match.range.last + 1
         }

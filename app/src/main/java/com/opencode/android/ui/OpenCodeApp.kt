@@ -654,7 +654,9 @@ fun OpenCodeApp(
                                 withContext(Dispatchers.IO) {
                                     com.opencode.android.runtime.local.AttachmentImporter(context).import(bitmap)
                                 }
-                            }.onSuccess(chatViewModel::addAttachment)
+                            }.onSuccess { attachment ->
+                                chatViewModel.addImageAttachment(attachment, bitmap)
+                            }
                         }
                     },
                     favoriteModelKeys = settingsState.favoriteModelKeys,

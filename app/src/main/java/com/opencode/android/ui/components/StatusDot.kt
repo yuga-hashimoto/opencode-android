@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,8 +42,17 @@ fun StatusDot(
     )
     Box(
         modifier = modifier
-            .size(size)
+            .size(if (status == SessionStatus.COMPLETED_UNREAD) size + 2.dp else size)
             .clip(CircleShape)
-            .background(color)
+            .then(
+                if (status == SessionStatus.COMPLETED_UNREAD) {
+                    Modifier.border(2.dp, color, CircleShape)
+                } else {
+                    Modifier
+                }
+            )
+            .background(
+                if (status == SessionStatus.COMPLETED_UNREAD) Color.Transparent else color
+            )
     )
 }
