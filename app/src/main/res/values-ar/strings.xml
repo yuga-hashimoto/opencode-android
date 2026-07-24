@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">قائمة انتظار</string>
 
     <string name="drawer_archive_session">أرشفة</string>
+    <string name="drawer_selected_count">%1$d محدد</string>
+    <string name="drawer_delete_selected_body">سيتم حذف %1$d جلسة بشكل دائم.</string>
 
     <string name="mcp_title">خوادم MCP</string>
     <string name="mcp_add_server">إضافة خادم</string>

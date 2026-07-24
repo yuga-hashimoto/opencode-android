@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">File d\'attente</string>
 
     <string name="drawer_archive_session">Archiver</string>
+    <string name="drawer_selected_count">%1$d sélectionné(s)</string>
+    <string name="drawer_delete_selected_body">%1$d sessions seront supprimées définitivement.</string>
 
     <string name="mcp_title">Serveurs MCP</string>
     <string name="mcp_add_server">Ajouter un serveur</string>

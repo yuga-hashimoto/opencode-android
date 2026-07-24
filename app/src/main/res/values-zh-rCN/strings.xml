@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">排队</string>
 
     <string name="drawer_archive_session">归档</string>
+    <string name="drawer_selected_count">已选 %1$d 项</string>
+    <string name="drawer_delete_selected_body">%1$d 个会话将被永久删除。</string>
 
     <string name="mcp_title">MCP 服务器</string>
     <string name="mcp_add_server">添加服务器</string>

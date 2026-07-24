@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">В очередь</string>
 
     <string name="drawer_archive_session">Архивировать</string>
+    <string name="drawer_selected_count">Выбрано: %1$d</string>
+    <string name="drawer_delete_selected_body">%1$d сеансов будет удалено безвозвратно.</string>
 
     <string name="mcp_title">Серверы MCP</string>
     <string name="mcp_add_server">Добавить сервер</string>

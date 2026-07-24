@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">Fila</string>
 
     <string name="drawer_archive_session">Arquivar</string>
+    <string name="drawer_selected_count">%1$d selecionado(s)</string>
+    <string name="drawer_delete_selected_body">%1$d sessões serão permanentemente excluídas.</string>
 
     <string name="mcp_title">Servidores MCP</string>
     <string name="mcp_add_server">Adicionar servidor</string>

@@ -517,6 +517,8 @@
     <string name="send_behavior_queue">Cola</string>
 
     <string name="drawer_archive_session">Archivar</string>
+    <string name="drawer_selected_count">%1$d seleccionado(s)</string>
+    <string name="drawer_delete_selected_body">%1$d sesiones se eliminarán permanentemente.</string>
 
     <string name="mcp_title">Servidores MCP</string>
     <string name="mcp_add_server">Añadir servidor</string>
