@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -496,6 +497,69 @@ class ChatViewModelTest {
         assertFalse(viewModel.uiState.value.isRunning)
     }
 
+    @Test
+    fun `switching sessions mid-poll does not corrupt the newly opened session`() =
+        runTest(dispatcher) {
+            val backend = FakeBackend()
+            val viewModel = ChatViewModel(backend)
+
+            viewModel.sendMessage("Hello")
+            // Advance only up to the poll loop's first delay() — session s1's background poll is
+            // now parked mid-flight, about to fetch s1's messages once time moves forward.
+            runCurrent()
+
+            backend.historyMessagesBySession = mapOf(
+                "s1" to listOf(sessionAssistantMessage("s1", "m-s1", "Stale reply for the old chat")),
+                "s2" to listOf(sessionAssistantMessage("s2", "m-s2", "Reply for the other chat"))
+            )
+            viewModel.openSession("s2", "Other chat")
+            runCurrent()
+
+            // Let s1's stale poll loop run its course; its updates must all be no-ops now that the
+            // screen has moved on to s2.
+            advanceUntilIdle()
+
+            assertEquals("s2", viewModel.uiState.value.sessionId)
+            assertEquals(
+                listOf("Reply for the other chat"),
+                viewModel.uiState.value.messages.map { it.text }
+            )
+        }
+
+    @Test
+    fun `opening a different session while the previous one is running clears the stop button`() =
+        runTest(dispatcher) {
+            val backend = FakeBackend()
+            val viewModel = ChatViewModel(backend)
+
+            viewModel.sendMessage("Long task")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.isRunning)
+
+            viewModel.openSession("s2", "Another chat")
+
+            assertFalse(viewModel.uiState.value.isRunning)
+        }
+
+    private fun sessionAssistantMessage(sessionId: String, messageId: String, text: String) =
+        OpenCodeMessage(
+            info = OpenCodeMessageInfo(
+                id = messageId,
+                sessionId = sessionId,
+                role = "assistant",
+                time = OpenCodeTime(created = 1)
+            ),
+            parts = listOf(
+                OpenCodePart(
+                    id = "$messageId-p",
+                    sessionId = sessionId,
+                    messageId = messageId,
+                    type = "text",
+                    text = text
+                )
+            )
+        )
+
     private class FakeBackend : OpenCodeBackend {
         override val id: String = "fake"
         override val displayName: String = "Fake"
@@ -504,6 +568,7 @@ class ChatViewModelTest {
         var createSessionCalls = 0
         var lastCreateDirectory: String? = null
         var historyMessages: List<OpenCodeMessage> = emptyList()
+        var historyMessagesBySession: Map<String, List<OpenCodeMessage>> = emptyMap()
         val sentPrompts = mutableListOf<Pair<String, PromptRequest>>()
         val permissionResponses = mutableListOf<PermissionRecord>()
         val abortedSessions = mutableListOf<String>()
@@ -520,7 +585,8 @@ class ChatViewModelTest {
                 time = OpenCodeTime(created = 1)
             )
         }
-        override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> = historyMessages
+        override suspend fun listMessages(sessionId: String): List<OpenCodeMessage> =
+            historyMessagesBySession[sessionId] ?: historyMessages
         override suspend fun listProviders(): ProviderCatalog = ProviderCatalog()
         override suspend fun listAgents(): List<OpenCodeAgent> = emptyList()
         override suspend fun sendMessage(sessionId: String, request: PromptRequest) {

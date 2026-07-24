@@ -4,7 +4,10 @@ import com.opencode.android.core.api.OpenCodeEvent
 import com.opencode.android.core.api.PermissionRequest
 import com.opencode.android.runtime.RuntimeRegistry
 import com.opencode.android.runtime.RuntimeState
+import com.opencode.android.runtime.RuntimeTarget
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,40 +63,57 @@ class RuntimeActivityRepository(
                 mutableState.value = RuntimeActivityState()
                 if (target == null) return@selected
 
-                target.state.collectLatest state@ { runtimeState ->
-                    mutableState.update {
-                        it.copy(
-                            activeSessionIds = emptySet(),
-                            completedSessionIds = emptySet(),
-                            permissions = emptyList(),
-                            streamError = null
-                        )
+                // The event stream is kept alive across transient runtime-state churn (e.g. a
+                // health recheck that briefly reports Connecting). Restarting it on every such
+                // blip used to drop whole replies on the floor.
+                coroutineScope {
+                    var streamJob: Job? = null
+                    target.state.collect { runtimeState ->
+                        when (runtimeState) {
+                            is RuntimeState.Connected -> {
+                                if (streamJob?.isActive != true) {
+                                    streamJob = launch { streamEvents(target) }
+                                }
+                            }
+                            RuntimeState.Connecting -> Unit
+                            else -> {
+                                streamJob?.cancel()
+                                streamJob = null
+                                mutableState.update {
+                                    it.copy(
+                                        activeSessionIds = emptySet(),
+                                        completedSessionIds = emptySet(),
+                                        permissions = emptyList()
+                                    )
+                                }
+                            }
+                        }
                     }
-                    if (runtimeState !is RuntimeState.Connected) return@state
-
-                    flow { emitAll(target.events()) }
-                        .retryWhen { error, attempt ->
-                            mutableState.update {
-                                it.copy(
-                                    streamError = error.message
-                                        ?: "OpenCodeイベント接続に失敗しました"
-                                )
-                            }
-                            if (retryDelayMillis > 0L) {
-                                val backoff = (retryDelayMillis * (1L shl attempt.toInt().coerceAtMost(4)))
-                                    .coerceAtMost(maxRetryDelayMillis)
-                                delay(backoff)
-                            }
-                            true
-                        }
-                        .collect { event ->
-                            mutableState.update { it.copy(streamError = null) }
-                            mutableEvents.emit(event)
-                            handle(event)
-                        }
                 }
             }
         }
+    }
+
+    private suspend fun streamEvents(target: RuntimeTarget) {
+        flow { emitAll(target.events()) }
+            .retryWhen { error, attempt ->
+                mutableState.update {
+                    it.copy(
+                        streamError = error.message ?: "OpenCodeイベント接続に失敗しました"
+                    )
+                }
+                if (retryDelayMillis > 0L) {
+                    val backoff = (retryDelayMillis * (1L shl attempt.toInt().coerceAtMost(4)))
+                        .coerceAtMost(maxRetryDelayMillis)
+                    delay(backoff)
+                }
+                true
+            }
+            .collect { event ->
+                mutableState.update { it.copy(streamError = null) }
+                mutableEvents.emit(event)
+                handle(event)
+            }
     }
 
     fun resolvePermission(permissionId: String) {

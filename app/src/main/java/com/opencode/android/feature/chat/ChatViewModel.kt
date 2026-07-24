@@ -323,6 +323,10 @@ class ChatViewModel(
 
     fun openSession(sessionId: String, title: String = "") {
         val currentBackend = backend ?: return
+        // Switching away from whatever chat was previously loaded here must drop its running
+        // state too — otherwise the composer opens the new chat already stuck on the stop button
+        // because the old chat happened to be mid-turn when the user navigated away.
+        val switchingSession = _uiState.value.sessionId != sessionId
         streamedParts.clear()
         _uiState.update {
             it.copy(
@@ -332,6 +336,8 @@ class ChatViewModel(
                 messages = emptyList(),
                 permissions = emptyList(),
                 pendingQuestions = emptyList(),
+                isRunning = if (switchingSession) false else it.isRunning,
+                isThinking = if (switchingSession) false else it.isThinking,
                 error = null
             )
         }
@@ -416,6 +422,9 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            // Captured once the target session is known so onFailure below can tell whether the
+            // failure still concerns the chat currently on screen.
+            var capturedSessionId: String? = null
             runCatching {
                 val existingSessionId = _uiState.value.sessionId
                 val session = if (existingSessionId == null) {
@@ -427,6 +436,7 @@ class ChatViewModel(
                     null
                 }
                 val targetSessionId = existingSessionId ?: requireNotNull(session).id
+                capturedSessionId = targetSessionId
                 if (session != null) {
                     _uiState.update {
                         it.copy(sessionId = session.id, sessionTitle = session.title)
@@ -457,11 +467,17 @@ class ChatViewModel(
                 _uiState.update { it.copy(attachments = emptyList(), imagePreviews = emptyList()) }
                 clearDraft(targetSessionId)
                 var sessionCompleted = false
+                // Every update below is guarded on the chat still being on screen: if the user
+                // switches to another session, this poll must not keep overwriting its transcript
+                // or clearing its running state with data that belongs to the old one.
+                fun isStillActive() = _uiState.value.sessionId == targetSessionId
                 val pollFinished = withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
-                    while (_uiState.value.isRunning) {
+                    while (isStillActive() && _uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
+                        if (!isStillActive()) return@withTimeoutOrNull
                         runCatching { currentBackend.listMessages(targetSessionId) }
                             .onSuccess { serverMessages ->
+                                if (!isStillActive()) return@onSuccess
                                 val previewsById = _uiState.value.messages
                                     .associate { it.id to it.imagePreviews }
                                 val uiMessages = serverMessages.mapNotNull(::toUiMessage).map { message ->
@@ -475,20 +491,24 @@ class ChatViewModel(
                                     _uiState.update { it.copy(messages = uiMessages) }
                                 }
                             }
+                        if (!isStillActive()) return@withTimeoutOrNull
                         runCatching { currentBackend.session(targetSessionId) }
                             .onSuccess { sessionInfo ->
                                 if (sessionInfo.time.completed != null) {
                                     sessionCompleted = true
-                                    _uiState.update { it.copy(isRunning = false, isThinking = false) }
+                                    if (isStillActive()) {
+                                        _uiState.update { it.copy(isRunning = false, isThinking = false) }
+                                    }
                                 }
                             }
                     }
                 }
                 // Some runtimes deliver the final message but drop session.idle. Do not
                 // leave the UI in the running state when the bounded fallback poll ends.
-                if (sessionCompleted || pollFinished == null) {
+                if (isStillActive() && (sessionCompleted || pollFinished == null)) {
                     runCatching { currentBackend.listMessages(targetSessionId) }
                         .onSuccess { serverMessages ->
+                            if (!isStillActive()) return@onSuccess
                             val hasResponse = serverMessages.any { message ->
                                 message.info.role == "assistant" && message.info.id !in messageIdsBeforeSend
                             }
@@ -507,11 +527,13 @@ class ChatViewModel(
                         }
                 }
             }.onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        isRunning = false,
-                        isThinking = false
-                    )
+                if (capturedSessionId == null || _uiState.value.sessionId == capturedSessionId) {
+                    _uiState.update {
+                        it.copy(
+                            isRunning = false,
+                            isThinking = false
+                        )
+                    }
                 }
                 reportError(error.safeMessage())
             }
@@ -697,11 +719,13 @@ class ChatViewModel(
             }
             is OpenCodeEvent.MessagePartDelta -> {
                 if (event.sessionId != activeSession || event.field != "text") return
-                val messageParts = streamedParts[event.messageId] ?: return
-                val existing = messageParts[event.partId] ?: return
-                val updatedPart = when (existing) {
+                val messageParts = streamedParts.getOrPut(event.messageId) { linkedMapOf() }
+                val updatedPart = when (val existing = messageParts[event.partId]) {
                     is ChatPart.Text -> existing.copy(text = existing.text + event.delta)
                     is ChatPart.Reasoning -> existing.copy(text = existing.text + event.delta)
+                    // A delta can outrun the part event that introduces it; start the part here
+                    // rather than dropping the text on the floor.
+                    null -> ChatPart.Text(event.partId, event.delta)
                     else -> return
                 }
                 messageParts[event.partId] = updatedPart
