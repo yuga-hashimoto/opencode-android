@@ -381,6 +381,7 @@ class ChatViewModel(
     fun sendMessage(text: String) {
         val normalized = text.trim()
         val pendingAttachments = _uiState.value.attachments
+        val messageIdsBeforeSend = _uiState.value.messages.map { it.id }.toSet()
         val pendingPreviewsByFilename = pendingAttachments.mapIndexedNotNull { index, attachment ->
             _uiState.value.imagePreviews.getOrNull(index)?.let { attachment.filename to it }
         }.toMap()
@@ -456,7 +457,7 @@ class ChatViewModel(
                 _uiState.update { it.copy(attachments = emptyList(), imagePreviews = emptyList()) }
                 clearDraft(targetSessionId)
                 var sessionCompleted = false
-                withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
+                val pollFinished = withTimeoutOrNull(RESPONSE_POLL_TIMEOUT_MS) {
                     while (_uiState.value.isRunning) {
                         kotlinx.coroutines.delay(RESPONSE_POLL_INTERVAL_MS)
                         runCatching { currentBackend.listMessages(targetSessionId) }
@@ -483,9 +484,15 @@ class ChatViewModel(
                             }
                     }
                 }
-                if (sessionCompleted) {
+                // Some runtimes deliver the final message but drop session.idle. Do not
+                // leave the UI in the running state when the bounded fallback poll ends.
+                if (sessionCompleted || pollFinished == null) {
                     runCatching { currentBackend.listMessages(targetSessionId) }
                         .onSuccess { serverMessages ->
+                            val hasResponse = serverMessages.any { message ->
+                                message.info.role == "assistant" && message.info.id !in messageIdsBeforeSend
+                            }
+                            if (!sessionCompleted && !hasResponse) return@onSuccess
                             streamedParts.clear()
                             _uiState.update {
                                 it.copy(
@@ -494,6 +501,9 @@ class ChatViewModel(
                                     isThinking = false
                                 )
                             }
+                            // Refresh after the final assistant message is persisted. The
+                            // pre-send refresh only contains the previous turn's tokens.
+                            refreshContextUsage(targetSessionId)
                         }
                 }
             }.onFailure { error ->
